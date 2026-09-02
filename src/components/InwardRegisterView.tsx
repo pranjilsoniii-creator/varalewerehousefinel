@@ -69,7 +69,8 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   // Location Allocation Modal (Move from Inward Area to Line A-01...B-25, R-01...R-160, L-01...L-04)
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [targetPacksForMove, setTargetPacksForMove] = useState<BatteryPack[]>([]);
-  const [selectedLine, setSelectedLine] = useState<string>(WAREHOUSE_LINES[0]);
+  const warehouseLinesList = getStoredWarehouseLines();
+  const [selectedLine, setSelectedLine] = useState<string>(warehouseLinesList[0] || 'A-01');
   const [selectedRack, setSelectedRack] = useState<number>(1);
   const [selectedSlot, setSelectedSlot] = useState<number>(1);
 
@@ -191,6 +192,25 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   };
 
   const handleExecuteLocationMove = () => {
+    // Validate Rack Capacity (Max 4 packs per rack)
+    const existingInTargetRack = packs.filter(
+      (p) => p.status !== 'DISPATCHED' && p.lineId === selectedLine && p.rackNumber === selectedRack
+    );
+    if (existingInTargetRack.length + targetPacksForMove.length > MAX_PACKS_PER_RACK) {
+      alert(
+        'Capacity Warning: Rack ' +
+          selectedRack +
+          ' in Line ' +
+          selectedLine +
+          ' currently has ' +
+          existingInTargetRack.length +
+          ' pack(s). Adding ' +
+          targetPacksForMove.length +
+          ' more would exceed maximum capacity of 4 packs per rack.'
+      );
+      return;
+    }
+
     if (targetPacksForMove.length === 0) return;
     const loc = {
       lineId: selectedLine,
@@ -647,7 +667,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                   onChange={(e) => setSelectedLine(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-bold text-slate-900"
                 >
-                  {WAREHOUSE_LINES.map((l) => (
+                  {warehouseLinesList.map((l) => (
                     <option key={l} value={l}>
                       Line {l}
                     </option>

@@ -19,7 +19,9 @@ import {
   createInitialWarehousePacks,
   createInitialDispatchLots,
   createInitialInwardShipments,
-  WAREHOUSE_LINES,
+  getStoredWarehouseLines,
+  saveStoredWarehouseLines,
+  DEFAULT_WAREHOUSE_LINES,
 } from './data/seedWarehouse';
 import {
   getSupabase,
@@ -35,6 +37,11 @@ const MainAppContent: React.FC = () => {
 
   // Navigation active tab: 'INWARD' | 'INWARD_LOG' | 'TOTAL_STOCK' | 'LINE_INSPECTOR' | 'DISPATCH_CART' | 'INVOICES' | 'ANALYTICS'
   const [activeTab, setActiveTab] = useState<string>('INWARD');
+
+  // Dynamic Warehouse Lines State (Line A-01..A-25, B-01..B-25, and any custom lines)
+  const [warehouseLines, setWarehouseLines] = useState<string[]>(() => {
+    return getStoredWarehouseLines();
+  });
 
   // Core Warehouse State with LocalStorage persistence
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
@@ -109,6 +116,15 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('tata_wms_invoices_v4', JSON.stringify(savedInvoices));
   }, [savedInvoices]);
+
+  // Add new dynamic warehouse line
+  const handleAddNewWarehouseLine = (newLine: string) => {
+    if (!warehouseLines.includes(newLine)) {
+      const nextLines = [...warehouseLines, newLine];
+      setWarehouseLines(nextLines);
+      saveStoredWarehouseLines(nextLines);
+    }
+  };
 
   // SUPABASE REALTIME MULTI-USER CLOUD SYNC
   useEffect(() => {
@@ -192,7 +208,6 @@ const MainAppContent: React.FC = () => {
   const handleSaveAdminLinePacks = (newPacks: BatteryPack[]) => {
     setPacks((prev) => [...newPacks, ...prev]);
     syncPacksToCloud(newPacks);
-    setIsAdminPopulatorOpen(false);
   };
 
   // Supervisor Approval for Single Inward Pack
@@ -363,7 +378,7 @@ const MainAppContent: React.FC = () => {
     );
   };
 
-  // Final Dispatch Approval: Updates pack status to DISPATCHED (Red Flag in Inward Log)
+  // Final Dispatch Approval: Updates pack status to DISPATCHED
   const handleApproveDispatchLot = (newLot: DispatchLot, dispatchedPackIds: string[]) => {
     const idSet = new Set(dispatchedPackIds);
     setDispatchLots((prev) => [newLot, ...prev]);
@@ -481,8 +496,13 @@ const MainAppContent: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
             <LineInspectorView
               packs={packs}
+              warehouseLines={warehouseLines}
+              onAddNewLine={handleAddNewWarehouseLine}
               onOpenPackDetails={(pack) => setInspectingPack(pack)}
               onSendToDispatch={handleAddPackToDispatch}
+              onOpenRackLoader={(line, rack) => {
+                setIsAdminPopulatorOpen(true);
+              }}
             />
           </div>
         )}
@@ -512,13 +532,13 @@ const MainAppContent: React.FC = () => {
             packs={packs}
             dispatchLots={dispatchLots}
             inwardShipments={inwardShipments}
-            warehouseLines={WAREHOUSE_LINES}
+            warehouseLines={warehouseLines}
             onResetToDemoData={handleResetToCleanSlate}
           />
         )}
       </main>
 
-      {/* Professional Polish Standard System Footer */}
+      {/* Professional System Footer */}
       <footer className="h-10 bg-white border-t border-slate-200 px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 font-medium uppercase tracking-wider gap-2 py-2 sm:py-0">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
@@ -562,6 +582,9 @@ const MainAppContent: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
           <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <AdminLineDataPopulator
+              existingPacks={packs}
+              warehouseLines={warehouseLines}
+              onAddNewLine={handleAddNewWarehouseLine}
               onSaveLinePacks={handleSaveAdminLinePacks}
               onClose={() => setIsAdminPopulatorOpen(false)}
             />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Layers,
   Plus,
@@ -9,38 +9,48 @@ import {
   Table,
   Upload,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   Save,
   MapPin,
   RefreshCw,
   X,
+  Lock,
+  ChevronRight,
+  FolderPlus,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
 import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
-import { WAREHOUSE_LINES } from '../data/seedWarehouse';
+import {
+  getStoredWarehouseLines,
+  saveStoredWarehouseLines,
+  MAX_PACKS_PER_RACK,
+  RACKS_PER_LINE,
+} from '../data/seedWarehouse';
 import { useAuth } from '../context/AuthContext';
 
 interface AdminLineDataPopulatorProps {
+  existingPacks: BatteryPack[];
+  warehouseLines: string[];
+  onAddNewLine?: (newLine: string) => void;
   onSaveLinePacks: (newPacks: BatteryPack[]) => void;
   onClose?: () => void;
 }
 
-interface GridRow {
-  id: string;
+interface RackSlotInput {
+  slot: number; // 1, 2, 3, 4
   packNumber: string;
   modelInput: string;
   normalizedModel: BatteryPackType;
-  rackNumber: number;
-  rackSlot: number;
 }
 
-// Shorthand mapper dictionary
+// Shorthand normalization dictionary
 function normalizeShorthand(input: string): BatteryPackType {
   const clean = input.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   if (clean.includes('gen3') || clean === 'g3' || clean === 'k1gen3') return 'Kanger1.0_Gen3';
   if (clean.includes('ckd') || clean === 'k1ckd') return 'Kanger1.0_CKD';
   if (clean.includes('fbu') || clean === 'k1fbu') return 'Kanger1.0_FBU';
-  if (clean.includes('aio') || clean === 'allinone' || clean === 'k1aio' || clean === 'kanger1' || clean === 'k1') return 'Kanger1.0_AIO';
+  if (clean.includes('aio') || clean === 'allinone' || clean === 'k1aio' || clean === 'k1') return 'Kanger1.0_AIO';
   if (clean.includes('k2') || clean.includes('kanger2')) return 'Kanger2.0';
   if (clean.includes('k3') || clean.includes('kanger3')) return 'Kanger3.0';
   if (clean.includes('tamor') || clean.includes('elr')) return 'Tamor_ELR';
@@ -53,121 +63,155 @@ function normalizeShorthand(input: string): BatteryPackType {
 }
 
 export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
+  existingPacks,
+  warehouseLines,
+  onAddNewLine,
   onSaveLinePacks,
   onClose,
 }) => {
-  const { isSuperAdmin, currentUser } = useAuth();
-  const [selectedLine, setSelectedLine] = useState<string>(WAREHOUSE_LINES[0]);
-  const [rows, setRows] = useState<GridRow[]>([
-    { id: 'row-1', packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO', rackNumber: 1, rackSlot: 1 },
-    { id: 'row-2', packNumber: '', modelInput: 'Gen3', normalizedModel: 'Kanger1.0_Gen3', rackNumber: 1, rackSlot: 2 },
-    { id: 'row-3', packNumber: '', modelInput: 'CKD', normalizedModel: 'Kanger1.0_CKD', rackNumber: 1, rackSlot: 3 },
-    { id: 'row-4', packNumber: '', modelInput: 'FBU', normalizedModel: 'Kanger1.0_FBU', rackNumber: 1, rackSlot: 4 },
+  const { currentUser } = useAuth();
+
+  // Mode Tab: 'STEPPER' (Rack-by-Rack Save & Next) vs 'EXCEL_SHEET' (Full Matrix Matching User Photo)
+  const [activeEntryMode, setActiveEntryMode] = useState<'STEPPER' | 'EXCEL_SHEET'>('STEPPER');
+
+  // Selected Line
+  const [selectedLine, setSelectedLine] = useState<string>(warehouseLines[0] || 'A-01');
+
+  // Dynamic New Line Creator State
+  const [isCreatingLine, setIsCreatingLine] = useState(false);
+  const [newLineName, setNewLineName] = useState('');
+
+  // Current active rack number (1 to 160) for Stepper Mode
+  const [activeRackNumber, setActiveRackNumber] = useState<number>(1);
+
+  // 4 Slots for currently active rack (Level 1, 2, 3, 4)
+  const [rackSlots, setRackSlots] = useState<RackSlotInput[]>([
+    { slot: 1, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
+    { slot: 2, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
+    { slot: 3, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
+    { slot: 4, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
   ]);
 
-  const [bulkPasteText, setBulkPasteText] = useState('');
-  const [showBulkPaste, setShowBulkPaste] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Bulk Paste Text for Excel Sheet Matrix Mode
+  const [matrixText, setMatrixText] = useState('');
+  const [showMatrixPaste, setShowMatrixPaste] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'warning' } | null>(null);
 
-  // Add more rows
-  const handleAddRows = (count: number = 5) => {
-    const newRows: GridRow[] = [];
-    const lastRack = rows[rows.length - 1]?.rackNumber || 1;
-    for (let i = 0; i < count; i++) {
-      const idx = rows.length + i;
-      newRows.push({
-        id: 'row-' + Date.now() + '-' + idx,
+  // Check how many packs are already stored in each rack for the selected line
+  const existingRackCounts = useMemo(() => {
+    const counts: Record<number, { count: number; packs: BatteryPack[] }> = {};
+    for (let r = 1; r <= RACKS_PER_LINE; r++) {
+      counts[r] = { count: 0, packs: [] };
+    }
+    existingPacks.forEach((p) => {
+      if (p.status !== 'DISPATCHED' && p.lineId === selectedLine && p.rackNumber) {
+        if (!counts[p.rackNumber]) {
+          counts[p.rackNumber] = { count: 0, packs: [] };
+        }
+        counts[p.rackNumber].count += 1;
+        counts[p.rackNumber].packs.push(p);
+      }
+    });
+    return counts;
+  }, [existingPacks, selectedLine]);
+
+  // Load any existing packs for active rack into slot inputs
+  useEffect(() => {
+    const existing = existingRackCounts[activeRackNumber]?.packs || [];
+    const newSlots: RackSlotInput[] = [1, 2, 3, 4].map((slotNum) => {
+      const foundPack = existing.find((p) => p.rackSlot === slotNum);
+      if (foundPack) {
+        return {
+          slot: slotNum,
+          packNumber: foundPack.packNumber,
+          modelInput: foundPack.packType,
+          normalizedModel: foundPack.packType,
+        };
+      }
+      return {
+        slot: slotNum,
         packNumber: '',
         modelInput: 'AIO',
         normalizedModel: 'Kanger1.0_AIO',
-        rackNumber: Math.min(160, lastRack + Math.floor(idx / 4)),
-        rackSlot: (idx % 4) + 1,
-      });
-    }
-    setRows((prev) => [...prev, ...newRows]);
-  };
-
-  const handleRowChange = (id: string, field: keyof GridRow, value: any) => {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        if (field === 'modelInput') {
-          const norm = normalizeShorthand(value);
-          return { ...r, modelInput: value, normalizedModel: norm };
-        }
-        if (field === 'packNumber') {
-          const numOnly = String(value).replace(/[^0-9]/g, '');
-          return { ...r, packNumber: numOnly };
-        }
-        return { ...r, [field]: value };
-      })
-    );
-  };
-
-  const handleRemoveRow = (id: string) => {
-    if (rows.length <= 1) return;
-    setRows((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  // Bulk Paste parser (Supports 2-column Excel paste: PackNumber [TAB] Model)
-  const handleApplyBulkPaste = () => {
-    if (!bulkPasteText.trim()) return;
-    const lines = bulkPasteText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    const parsed: GridRow[] = [];
-
-    lines.forEach((line, idx) => {
-      const parts = line.split(/[\t,;]+/).map((s) => s.trim());
-      const packNum = parts[0]?.replace(/[^0-9]/g, '') || parts[0] || '';
-      const modelStr = parts[1] || 'AIO';
-      const norm = normalizeShorthand(modelStr);
-      const rackNum = Math.min(160, Math.floor(idx / 4) + 1);
-      const slotNum = (idx % 4) + 1;
-
-      if (packNum) {
-        parsed.push({
-          id: 'paste-' + Date.now() + '-' + idx,
-          packNumber: packNum,
-          modelInput: modelStr,
-          normalizedModel: norm,
-          rackNumber: rackNum,
-          rackSlot: slotNum,
-        });
-      }
+      };
     });
+    setRackSlots(newSlots);
+  }, [activeRackNumber, selectedLine, existingRackCounts]);
 
-    if (parsed.length > 0) {
-      setRows(parsed);
-      setBulkPasteText('');
-      setShowBulkPaste(false);
-    }
+  // Handle slot change
+  const handleSlotChange = (slotIndex: number, field: 'packNumber' | 'modelInput', value: string) => {
+    setRackSlots((prev) => {
+      const next = [...prev];
+      if (field === 'packNumber') {
+        next[slotIndex].packNumber = value.replace(/[^0-9]/g, '');
+      } else if (field === 'modelInput') {
+        next[slotIndex].modelInput = value;
+        next[slotIndex].normalizedModel = normalizeShorthand(value);
+      }
+      return next;
+    });
   };
 
-  // Save all entered packs directly into Warehouse Line & Supabase
-  const handleSaveToLine = () => {
-    const validRows = rows.filter((r) => r.packNumber.trim().length > 0);
-    if (validRows.length === 0) {
-      alert('Please enter at least 1 valid numeric Pack Number.');
+  // Add a new custom warehouse line
+  const handleCreateNewLine = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formatted = newLineName.trim().toUpperCase().replace(/\s+/g, '-');
+    if (!formatted) return;
+
+    if (warehouseLines.includes(formatted)) {
+      alert('Line ' + formatted + ' already exists.');
+      return;
+    }
+
+    const updatedLines = [...warehouseLines, formatted];
+    saveStoredWarehouseLines(updatedLines);
+    if (onAddNewLine) {
+      onAddNewLine(formatted);
+    }
+    setSelectedLine(formatted);
+    setNewLineName('');
+    setIsCreatingLine(false);
+    setNotification({ message: 'Created New Line ' + formatted + ' successfully!', type: 'success' });
+  };
+
+  // SAVE & NEXT RACK ACTION (Core Sequential Flow)
+  const handleSaveAndNextRack = () => {
+    const validSlotEntries = rackSlots.filter((s) => s.packNumber.trim().length > 0);
+    const existingCountInThisRack = existingRackCounts[activeRackNumber]?.count || 0;
+
+    // Check strict max 4 constraint
+    if (validSlotEntries.length > MAX_PACKS_PER_RACK) {
+      alert('Capacity Error: A rack can hold a maximum of 4 packs (Slots 1 to 4).');
+      return;
+    }
+
+    if (validSlotEntries.length === 0) {
+      // Advance to next rack without saving if empty
+      if (activeRackNumber < RACKS_PER_LINE) {
+        setActiveRackNumber((prev) => prev + 1);
+      }
       return;
     }
 
     const nowIso = new Date().toISOString();
     const adminName = currentUser?.name || currentUser?.username || 'Super Admin';
 
-    const newPacks: BatteryPack[] = validRows.map((r, index) => {
-      const locStr = selectedLine + ', R-' + String(r.rackNumber).padStart(2, '0') + ', L-' + String(r.rackSlot).padStart(2, '0');
+    // Create BatteryPack items
+    const newPacks: BatteryPack[] = validSlotEntries.map((slotItem, idx) => {
+      const locStr = selectedLine + ', R-' + String(activeRackNumber).padStart(2, '0') + ', L-0' + slotItem.slot;
       return {
-        id: 'pack-hist-' + Date.now() + '-' + index + '-' + Math.random().toString(36).slice(2, 6),
-        packNumber: r.packNumber.trim(),
-        packType: r.normalizedModel,
+        id: 'pack-line-' + Date.now() + '-' + activeRackNumber + '-' + slotItem.slot + '-' + idx,
+        packNumber: slotItem.packNumber.trim(),
+        packType: slotItem.normalizedModel,
         status: 'IN_STORAGE',
         locationArea: 'Warehouse Storage',
         currentLocation: locStr,
         lineId: selectedLine,
-        rackNumber: Number(r.rackNumber),
-        rackSlot: Number(r.rackSlot),
+        rackNumber: activeRackNumber,
+        rackSlot: slotItem.slot,
         inwardDate: nowIso,
-        documentNo: 'HISTORICAL-POPULATION',
-        dealershipName: 'Varale B300 Historical Stock',
+        documentNo: 'LINE-LOAD-' + selectedLine,
+        dealershipName: 'Varale B300 Line Stock',
         receivedState: 'Maharashtra',
         transportName: 'Direct Line Allocation',
         hasInwardStamp: true,
@@ -176,45 +220,119 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         inwardApprovedAt: nowIso,
         movementHistory: [
           {
-            id: 'mov-hist-' + Date.now() + '-' + index,
+            id: 'mov-' + Date.now() + '-' + idx,
             timestamp: nowIso,
-            fromLocation: 'Legacy Plant Stock',
+            fromLocation: 'Initial Stocking',
             toLocation: locStr,
             movedBy: adminName,
-            reason: 'Super Admin 1-Year Historical Line Population (' + selectedLine + ')',
+            reason: 'Sequential Rack Allocation (Line ' + selectedLine + ', Rack ' + activeRackNumber + ')',
           },
         ],
       };
     });
 
     onSaveLinePacks(newPacks);
-    setSuccessMessage('Successfully populated ' + newPacks.length + ' packs into Line ' + selectedLine + '!');
+    setNotification({
+      message: 'Saved ' + newPacks.length + ' pack(s) into Rack ' + activeRackNumber + ' (Line ' + selectedLine + ')! Moving to next rack...',
+      type: 'success',
+    });
 
-    // Reset grid
-    setRows([
-      { id: 'row-1', packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO', rackNumber: 1, rackSlot: 1 },
-      { id: 'row-2', packNumber: '', modelInput: 'Gen3', normalizedModel: 'Kanger1.0_Gen3', rackNumber: 1, rackSlot: 2 },
-      { id: 'row-3', packNumber: '', modelInput: 'CKD', normalizedModel: 'Kanger1.0_CKD', rackNumber: 1, rackSlot: 3 },
-      { id: 'row-4', packNumber: '', modelInput: 'FBU', normalizedModel: 'Kanger1.0_FBU', rackNumber: 1, rackSlot: 4 },
-    ]);
+    // Advance to next rack (e.g. Rack 1 -> Rack 2 -> Rack 3)
+    if (activeRackNumber < RACKS_PER_LINE) {
+      setActiveRackNumber((prev) => prev + 1);
+    }
   };
 
+  // MULTI-PASTE MATRIX PARSER (Matching the uploaded photo chunking by 4)
+  const handleApplyMatrixPaste = () => {
+    if (!matrixText.trim()) return;
+    const lines = matrixText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+    if (lines.length === 0) return;
+
+    const nowIso = new Date().toISOString();
+    const adminName = currentUser?.name || currentUser?.username || 'Super Admin';
+    const newPacks: BatteryPack[] = [];
+
+    let currentRackIndex = activeRackNumber;
+    let slotInRack = 1;
+
+    lines.forEach((lineText, idx) => {
+      const parts = lineText.split(/[\t,;]+/).map((s) => s.trim());
+      const boxCode = parts[0]?.replace(/[^0-9]/g, '') || parts[0] || '';
+      const modelStr = parts[1] || 'AIO';
+      const normModel = normalizeShorthand(modelStr);
+
+      if (boxCode) {
+        const locStr = selectedLine + ', R-' + String(currentRackIndex).padStart(2, '0') + ', L-0' + slotInRack;
+        newPacks.push({
+          id: 'pack-matrix-' + Date.now() + '-' + currentRackIndex + '-' + slotInRack + '-' + idx,
+          packNumber: boxCode,
+          packType: normModel,
+          status: 'IN_STORAGE',
+          locationArea: 'Warehouse Storage',
+          currentLocation: locStr,
+          lineId: selectedLine,
+          rackNumber: currentRackIndex,
+          rackSlot: slotInRack,
+          inwardDate: nowIso,
+          documentNo: 'MATRIX-LOAD-' + selectedLine,
+          dealershipName: 'Varale B300 Line Stock',
+          receivedState: 'Maharashtra',
+          transportName: 'Direct Line Matrix Allocation',
+          hasInwardStamp: true,
+          inwardBy: adminName,
+          inwardApprovedBy: adminName,
+          inwardApprovedAt: nowIso,
+          movementHistory: [
+            {
+              id: 'mov-mat-' + Date.now() + '-' + idx,
+              timestamp: nowIso,
+              fromLocation: 'Matrix Batch Inward',
+              toLocation: locStr,
+              movedBy: adminName,
+              reason: 'Excel Batch Line Stock (Line ' + selectedLine + ', Rack ' + currentRackIndex + ', Slot ' + slotInRack + ')',
+            },
+          ],
+        });
+
+        // 4 packs per rack increment
+        slotInRack += 1;
+        if (slotInRack > MAX_PACKS_PER_RACK) {
+          slotInRack = 1;
+          currentRackIndex += 1;
+        }
+      }
+    });
+
+    if (newPacks.length > 0) {
+      onSaveLinePacks(newPacks);
+      setNotification({
+        message: 'Successfully populated ' + newPacks.length + ' packs across ' + Math.ceil(newPacks.length / 4) + ' racks into Line ' + selectedLine + '!',
+        type: 'success',
+      });
+      setMatrixText('');
+      setShowMatrixPaste(false);
+    }
+  };
+
+  const isCurrentRackFull = (existingRackCounts[activeRackNumber]?.count || 0) >= MAX_PACKS_PER_RACK;
+
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xl space-y-6 animate-fadeIn max-w-5xl mx-auto text-xs">
-      {/* Header */}
+    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-6 animate-fadeIn max-w-5xl mx-auto text-xs">
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
-              <Table className="w-3.5 h-3.5 text-purple-700" /> Super Admin Historical Tool
+              <Table className="w-3.5 h-3.5 text-purple-700" /> Line & Rack Data Management
             </span>
-            <span className="text-slate-500 font-mono-code font-medium">1-Year Legacy Data Populator</span>
+            <span className="text-slate-500 font-mono-code font-medium">Max 4 Packs / Rack (Capacity Enforced)</span>
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight font-display">
-            Direct Warehouse Line Matrix Populator (Excel-Style Grid)
+            Sequential Rack Loader & Line Stock Matrix
           </h2>
           <p className="text-slate-500 text-xs">
-            Rapidly load 30–40 lines of historical warehouse packs. Type or paste pack numbers with model shorthands.
+            Enter box codes per rack (4 slots max), click "Save & Next Rack", or jump to any specific rack/line directly.
           </p>
         </div>
 
@@ -228,15 +346,16 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         )}
       </div>
 
-      {/* Success Notification */}
-      {successMessage && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 flex items-center justify-between gap-3 animate-fadeIn">
+      {/* Notification Banner */}
+      {notification && (
+        <div className={'p-3.5 rounded-xl border flex items-center justify-between gap-3 animate-fadeIn ' +
+          (notification.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900')}>
           <div className="flex items-center gap-2 font-bold">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>{successMessage}</span>
+            <span>{notification.message}</span>
           </div>
           <button
-            onClick={() => setSuccessMessage(null)}
+            onClick={() => setNotification(null)}
             className="text-xs text-emerald-700 hover:text-emerald-900 font-bold"
           >
             Dismiss
@@ -244,215 +363,314 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         </div>
       )}
 
-      {/* Line Selector & Shorthand Cheat Sheet */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-        <div className="md:col-span-4 p-4 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2">
-          <label className="block font-bold text-purple-900">
-            Select Destination Warehouse Line (50 Lines):
+      {/* Line Selector & Dynamic "+ Create New Line" Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="md:col-span-5 space-y-1.5">
+          <label className="block font-bold text-slate-800">
+            Select Warehouse Line ({warehouseLines.length} Total Lines):
           </label>
-          <select
-            value={selectedLine}
-            onChange={(e) => setSelectedLine(e.target.value)}
-            className="w-full bg-white border border-purple-300 rounded-lg px-3 py-2 text-xs font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          >
-            {WAREHOUSE_LINES.map((l) => (
-              <option key={l} value={l}>
-                Line {l}
-              </option>
-            ))}
-          </select>
-          <p className="text-[11px] text-purple-700">
-            Selected Line: <strong className="font-mono-code">{selectedLine}</strong> (R-01 to R-160, Levels L-01 to L-04)
-          </p>
-        </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedLine}
+              onChange={(e) => {
+                setSelectedLine(e.target.value);
+                setActiveRackNumber(1);
+              }}
+              className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              {warehouseLines.map((l) => (
+                <option key={l} value={l}>
+                  Line {l}
+                </option>
+              ))}
+            </select>
 
-        <div className="md:col-span-8 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-          <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
-            ⚡ Fast Model Shorthands Supported:
-          </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-600">
-            <div><strong className="text-blue-700">AIO</strong> → Kanger1.0_AIO</div>
-            <div><strong className="text-sky-700">Gen3</strong> → Kanger1.0_Gen3</div>
-            <div><strong className="text-teal-700">CKD</strong> → Kanger1.0_CKD</div>
-            <div><strong className="text-emerald-700">FBU</strong> → Kanger1.0_FBU</div>
-            <div><strong className="text-indigo-700">K2</strong> → Kanger2.0</div>
-            <div><strong className="text-purple-700">K3</strong> → Kanger3.0</div>
-            <div><strong className="text-orange-700">Tamor</strong> → Tamor_ELR</div>
-            <div><strong className="text-amber-700">Nova</strong> → Nova_LRP</div>
+            <button
+              type="button"
+              onClick={() => setIsCreatingLine(!isCreatingLine)}
+              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
+              title="Create a new custom warehouse line"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>+ New Line</span>
+            </button>
           </div>
         </div>
+
+        {/* Dynamic New Line Form Popup */}
+        {isCreatingLine && (
+          <div className="md:col-span-7 bg-purple-50 border border-purple-200 p-3 rounded-lg space-y-2 animate-fadeIn">
+            <label className="block font-bold text-purple-950">
+              Enter New Warehouse Line Name (e.g. Line C-01, Line B300-X):
+            </label>
+            <form onSubmit={handleCreateNewLine} className="flex gap-2">
+              <input
+                type="text"
+                value={newLineName}
+                onChange={(e) => setNewLineName(e.target.value)}
+                placeholder="Enter new line name..."
+                className="flex-1 bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-xs font-bold text-purple-900"
+                required
+              />
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold cursor-pointer"
+              >
+                Create Line
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCreatingLine(false)}
+                className="px-2 py-1.5 bg-white border border-purple-200 text-purple-700 rounded-lg font-semibold"
+              >
+                Cancel
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Mode Switcher */}
+        {!isCreatingLine && (
+          <div className="md:col-span-7 flex justify-end">
+            <div className="bg-white p-1 rounded-xl border border-slate-200 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setActiveEntryMode('STEPPER')}
+                className={'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ' +
+                  (activeEntryMode === 'STEPPER'
+                    ? 'bg-purple-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900')}
+              >
+                <ArrowRight className="w-3.5 h-3.5" /> Rack-by-Rack (Save & Next)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveEntryMode('EXCEL_SHEET')}
+                className={'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ' +
+                  (activeEntryMode === 'EXCEL_SHEET'
+                    ? 'bg-purple-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900')}
+              >
+                <Table className="w-3.5 h-3.5" /> Full Sheet Matrix Mode
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Action Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowBulkPaste(!showBulkPaste)}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold flex items-center gap-1.5 cursor-pointer"
-          >
-            <Copy className="w-3.5 h-3.5" />
-            <span>{showBulkPaste ? 'Close Bulk Paste' : 'Paste from Excel'}</span>
-          </button>
-        </div>
+      {/* MODE 1: SEQUENTIAL RACK-BY-RACK STEPPER ("Save & Next Rack") */}
+      {activeEntryMode === 'STEPPER' && (
+        <div className="space-y-5">
+          {/* Direct Rack Jump Navigation Bar */}
+          <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-800 text-sm">
+                  Active Rack: <strong className="text-purple-700 text-base font-mono-code font-extrabold">Rack {activeRackNumber}</strong> of {RACKS_PER_LINE}
+                </span>
+                <span className={'px-2 py-0.5 rounded-full text-[10px] font-bold border ' +
+                  (isCurrentRackFull ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200')}>
+                  {existingRackCounts[activeRackNumber]?.count || 0} / 4 Slots Filled
+                </span>
+              </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => handleAddRows(5)}
-            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold cursor-pointer"
-          >
-            +5 Rows
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAddRows(10)}
-            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold cursor-pointer"
-          >
-            +10 Rows
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAddRows(25)}
-            className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg font-bold cursor-pointer"
-          >
-            +25 Rows
-          </button>
-        </div>
-      </div>
+              {/* Quick Jump Input */}
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 font-bold">Direct Jump to Rack:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={RACKS_PER_LINE}
+                  value={activeRackNumber}
+                  onChange={(e) => setActiveRackNumber(Math.max(1, Math.min(RACKS_PER_LINE, Number(e.target.value))))}
+                  className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-mono-code font-bold text-slate-900 text-center"
+                />
+              </div>
+            </div>
 
-      {/* Bulk Paste Box */}
-      {showBulkPaste && (
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 animate-fadeIn">
-          <label className="block font-bold text-slate-800">
-            Paste Excel Rows (Column 1: Pack Number | Column 2: Shorthand):
-          </label>
-          <textarea
-            value={bulkPasteText}
-            onChange={(e) => setBulkPasteText(e.target.value)}
-            placeholder="5281	AIO&#10;5282	Gen3&#10;5283	CKD&#10;5284	FBU&#10;5285	K2..."
-            rows={4}
-            className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-mono-code text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowBulkPaste(false)}
-              className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg font-semibold cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleApplyBulkPaste}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold cursor-pointer shadow-xs"
-            >
-              Populate Matrix
-            </button>
+            {/* Quick Rack Buttons Carousel */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+              {Array.from({ length: 30 }, (_, i) => i + 1).map((rNum) => {
+                const isSelected = activeRackNumber === rNum;
+                const fillCount = existingRackCounts[rNum]?.count || 0;
+                const isFull = fillCount >= MAX_PACKS_PER_RACK;
+
+                return (
+                  <button
+                    key={rNum}
+                    type="button"
+                    onClick={() => setActiveRackNumber(rNum)}
+                    className={'px-3 py-1.5 rounded-lg font-mono-code font-bold text-xs transition cursor-pointer flex-shrink-0 flex items-center gap-1 ' +
+                      (isSelected
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : isFull
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                        : fillCount > 0
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                        : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100')}
+                  >
+                    <span>R-{rNum}</span>
+                    {fillCount > 0 && (
+                      <span className={'px-1 py-0.2 rounded text-[9px] ' + (isSelected ? 'bg-white text-purple-900' : 'bg-slate-200 text-slate-800')}>
+                        {fillCount}/4
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4 Physical Slots Form for Current Active Rack */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-purple-600" />
+                Physical Slot Levels for Line {selectedLine} • Rack {activeRackNumber} (Max 4 Packs)
+              </h3>
+              <span className="text-slate-500 font-medium">
+                {isCurrentRackFull ? '🔒 Rack Full (4/4)' : (4 - (existingRackCounts[activeRackNumber]?.count || 0)) + ' Slots Available'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {rackSlots.map((slotItem, idx) => {
+                const modelInfo = BATTERY_MODELS[slotItem.normalizedModel];
+
+                return (
+                  <div
+                    key={slotItem.slot}
+                    className="p-4 bg-white border border-slate-200 rounded-xl space-y-2.5 shadow-2xs hover:border-purple-300 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 font-mono-code flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 font-extrabold flex items-center justify-center text-[10px]">
+                          {slotItem.slot}
+                        </span>
+                        <span>Level L-0{slotItem.slot} (Slot {slotItem.slot})</span>
+                      </span>
+
+                      <span className={'px-2 py-0.5 rounded text-[10px] font-bold border ' + (modelInfo?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200')}>
+                        {slotItem.normalizedModel}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-0.5">
+                          Box Code / Numeric Pack Serial
+                        </label>
+                        <input
+                          type="text"
+                          value={slotItem.packNumber}
+                          onChange={(e) => handleSlotChange(idx, 'packNumber', e.target.value)}
+                          placeholder="e.g. 7428, 2741, 16640..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-0.5">
+                          Item Name / Shorthand (AIO, CKD, Gen3, FBU, K2, K3, Tamor...)
+                        </label>
+                        <input
+                          type="text"
+                          value={slotItem.modelInput}
+                          onChange={(e) => handleSlotChange(idx, 'modelInput', e.target.value)}
+                          placeholder="AIO, CKD, Gen3, FBU..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Stepper Action Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                disabled={activeRackNumber <= 1}
+                onClick={() => setActiveRackNumber((prev) => Math.max(1, prev - 1))}
+                className="px-4 py-2 bg-white border border-slate-300 disabled:opacity-40 text-slate-700 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Previous Rack</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveAndNextRack}
+                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save & Next Rack (Rack {activeRackNumber + 1}) ➡️</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Excel Spreadsheet Table */}
-      <div className="overflow-x-auto border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
-        <table className="w-full text-left border-collapse text-xs">
-          <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 z-10 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-            <tr>
-              <th className="p-2.5 w-12 text-center">#</th>
-              <th className="p-2.5">Pack Number (Digits)</th>
-              <th className="p-2.5">Model Input / Shorthand</th>
-              <th className="p-2.5">Normalized Product Name</th>
-              <th className="p-2.5 w-24">Rack (1-160)</th>
-              <th className="p-2.5 w-24">Level (1-4)</th>
-              <th className="p-2.5 text-right w-12">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((row, index) => {
-              const modelInfo = BATTERY_MODELS[row.normalizedModel];
-              return (
-                <tr key={row.id} className="hover:bg-slate-50/80">
-                  <td className="p-2.5 text-center font-mono-code font-bold text-slate-400">
-                    {index + 1}
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={row.packNumber}
-                      onChange={(e) => handleRowChange(row.id, 'packNumber', e.target.value)}
-                      placeholder="e.g. 5284, 12, 101..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={row.modelInput}
-                      onChange={(e) => handleRowChange(row.id, 'modelInput', e.target.value)}
-                      placeholder="AIO, CKD, Gen3, FBU, K2..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </td>
-                  <td className="p-2.5">
-                    <span className={'px-2 py-0.5 rounded font-bold text-[11px] border ' + (modelInfo?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200')}>
-                      {row.normalizedModel}
-                    </span>
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="number"
-                      min={1}
-                      max={160}
-                      value={row.rackNumber}
-                      onChange={(e) => handleRowChange(row.id, 'rackNumber', Number(e.target.value))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono-code font-bold text-slate-900"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <select
-                      value={row.rackSlot}
-                      onChange={(e) => handleRowChange(row.id, 'rackSlot', Number(e.target.value))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-1.5 text-xs font-bold text-slate-900"
-                    >
-                      <option value={1}>L-01</option>
-                      <option value={2}>L-02</option>
-                      <option value={3}>L-03</option>
-                      <option value={4}>L-04</option>
-                    </select>
-                  </td>
-                  <td className="p-2.5 text-right">
-                    {rows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRow(row.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* MODE 2: FULL-LINE EXCEL SHEET MATRIX (Matching Uploaded Image Chunking by 4) */}
+      {activeEntryMode === 'EXCEL_SHEET' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">
+                  Batch Excel Matrix Populator (Line {selectedLine})
+                </h3>
+                <p className="text-slate-500 text-xs">
+                  Paste entire columns from your Excel table (Box Code [TAB] Item Name). The system will automatically chunk 4 packs per rack sequentially (Rack 1 to 4 packs, Rack 2 to 4 packs, Rack 3 to 4 packs...).
+                </p>
+              </div>
 
-      {/* Save Button */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-        <span className="text-slate-500 font-medium">
-          Ready to save <strong>{rows.filter((r) => r.packNumber.trim().length > 0).length}</strong> packs into <strong>Line {selectedLine}</strong>
-        </span>
+              <button
+                type="button"
+                onClick={() => setShowMatrixPaste(!showMatrixPaste)}
+                className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>{showMatrixPaste ? 'Close Matrix Box' : 'Paste from Excel Sheet'}</span>
+              </button>
+            </div>
 
-        <button
-          type="button"
-          onClick={handleSaveToLine}
-          className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-2"
-        >
-          <Save className="w-4 h-4" />
-          <span>Save & Populate Line {selectedLine} 🚀</span>
-        </button>
-      </div>
+            {showMatrixPaste && (
+              <div className="p-4 bg-white border border-purple-200 rounded-xl space-y-2 animate-fadeIn">
+                <label className="block font-bold text-purple-950">
+                  Paste Excel Rows (Box Code [TAB] Item Name / Model):
+                </label>
+                <textarea
+                  value={matrixText}
+                  onChange={(e) => setMatrixText(e.target.value)}
+                  placeholder="7428	AIO&#10;2741	AIO&#10;16640	Gen3&#10;1491	CKD&#10;16220	FBU&#10;1737	AIO&#10;5562	K2..."
+                  rows={6}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 font-mono-code text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMatrixPaste(false)}
+                    className="px-3 py-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyMatrixPaste}
+                    className="px-5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold cursor-pointer shadow-xs"
+                  >
+                    Populate 4-by-4 into Racks
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
