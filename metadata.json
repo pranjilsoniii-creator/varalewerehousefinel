@@ -1,0 +1,6 @@
+{
+  "name": "Tata Lithium Battery Warehouse Management System",
+  "description": "Warehouse management system for Tata Lithium Battery packs with AI OCR inward scanning, line & rack storage locator, relocation, dispatch lots cart, and invoice generation.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
