@@ -556,7 +556,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   type="text"
                   value={consigneeName}
                   onChange={(e) => setConsigneeName(e.target.value)}
-                  placeholder="e.g. Tata Motors EV Assembly Division"
+                  placeholder="Enter Customer / Destination Facility Name..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                   required
                 />
@@ -593,7 +593,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                     type="text"
                     value={newAddressTitle}
                     onChange={(e) => setNewAddressTitle(e.target.value)}
-                    placeholder="Short Title for Address Book (e.g. Tata Sanand Gate 2)..."
+                    placeholder="Enter Short Title for Address Directory..."
                     className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                   />
                 )}
@@ -646,7 +646,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                     type="text"
                     value={vehicleNumber}
                     onChange={(e) => setVehicleNumber(e.target.value)}
-                    placeholder="e.g. MH-14-GH-8291"
+                    placeholder="Enter Vehicle Truck Number..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-mono-code font-bold text-slate-900"
                   />
                 </div>
@@ -659,7 +659,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                     type="text"
                     value={lrNumber}
                     onChange={(e) => setLrNumber(e.target.value)}
-                    placeholder="e.g. LR-94102"
+                    placeholder="Enter LR / Bilty Number..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-mono-code text-slate-900"
                   />
                 </div>
@@ -670,7 +670,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                     type="text"
                     value={transportDocNo}
                     onChange={(e) => setTransportDocNo(e.target.value)}
-                    placeholder="e.g. GP-2026-081"
+                    placeholder="Enter Gate Pass / Doc Number..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-mono-code text-slate-900"
                   />
                 </div>
@@ -682,7 +682,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="e.g. Driver verified, GPS tracking enabled..."
+                  placeholder="Enter driver remarks notes..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900"
                 />
               </div>

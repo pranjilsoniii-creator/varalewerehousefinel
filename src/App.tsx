@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { InwardScanner } from './components/InwardScanner';
 import { InwardRegisterView } from './components/InwardRegisterView';
 import { TotalStockView } from './components/TotalStockView';
+import { LineInspectorView } from './components/LineInspectorView';
 import { DispatchCart } from './components/DispatchCart';
 import { InvoiceGenerator } from './components/InvoiceGenerator';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -11,6 +12,7 @@ import { SupabaseSyncModal } from './components/SupabaseSyncModal';
 import { LoginModal } from './components/LoginModal';
 import { LoginScreen } from './components/LoginScreen';
 import { UserManagementModal } from './components/UserManagementModal';
+import { AdminLineDataPopulator } from './components/AdminLineDataPopulator';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BatteryPack, DispatchLot, InwardShipmentRecord, Invoice } from './types';
 import {
@@ -19,16 +21,24 @@ import {
   createInitialInwardShipments,
   WAREHOUSE_LINES,
 } from './data/seedWarehouse';
+import {
+  getSupabase,
+  fetchPacksFromCloud,
+  syncPacksToCloud,
+  syncLotToCloud,
+  syncInwardToCloud,
+  mapRowToPack,
+} from './lib/supabaseClient';
 
 const MainAppContent: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isSuperAdmin } = useAuth();
 
-  // Navigation active tab: 'INWARD' | 'INWARD_LOG' | 'TOTAL_STOCK' | 'DISPATCH_CART' | 'INVOICES' | 'ANALYTICS'
+  // Navigation active tab: 'INWARD' | 'INWARD_LOG' | 'TOTAL_STOCK' | 'LINE_INSPECTOR' | 'DISPATCH_CART' | 'INVOICES' | 'ANALYTICS'
   const [activeTab, setActiveTab] = useState<string>('INWARD');
 
   // Core Warehouse State with LocalStorage persistence
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
-    const saved = localStorage.getItem('tata_wms_packs_v3');
+    const saved = localStorage.getItem('tata_wms_packs_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -40,7 +50,7 @@ const MainAppContent: React.FC = () => {
   });
 
   const [dispatchLots, setDispatchLots] = useState<DispatchLot[]>(() => {
-    const saved = localStorage.getItem('tata_wms_lots_v3');
+    const saved = localStorage.getItem('tata_wms_lots_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -52,7 +62,7 @@ const MainAppContent: React.FC = () => {
   });
 
   const [inwardShipments, setInwardShipments] = useState<InwardShipmentRecord[]>(() => {
-    const saved = localStorage.getItem('tata_wms_inwards_v3');
+    const saved = localStorage.getItem('tata_wms_inwards_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -64,7 +74,7 @@ const MainAppContent: React.FC = () => {
   });
 
   const [savedInvoices, setSavedInvoices] = useState<Invoice[]>(() => {
-    const saved = localStorage.getItem('tata_wms_invoices_v3');
+    const saved = localStorage.getItem('tata_wms_invoices_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -80,24 +90,81 @@ const MainAppContent: React.FC = () => {
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState<boolean>(false);
+  const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
   const [activeLotForInvoice, setActiveLotForInvoice] = useState<DispatchLot | null>(null);
 
   // Sync to LocalStorage on state changes
   useEffect(() => {
-    localStorage.setItem('tata_wms_packs_v3', JSON.stringify(packs));
+    localStorage.setItem('tata_wms_packs_v4', JSON.stringify(packs));
   }, [packs]);
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_lots_v3', JSON.stringify(dispatchLots));
+    localStorage.setItem('tata_wms_lots_v4', JSON.stringify(dispatchLots));
   }, [dispatchLots]);
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_inwards_v3', JSON.stringify(inwardShipments));
+    localStorage.setItem('tata_wms_inwards_v4', JSON.stringify(inwardShipments));
   }, [inwardShipments]);
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_invoices_v3', JSON.stringify(savedInvoices));
+    localStorage.setItem('tata_wms_invoices_v4', JSON.stringify(savedInvoices));
   }, [savedInvoices]);
+
+  // SUPABASE REALTIME MULTI-USER CLOUD SYNC
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+
+    // 1. Fetch initial remote cloud state
+    fetchPacksFromCloud().then((remotePacks) => {
+      if (remotePacks && remotePacks.length > 0) {
+        setPacks(remotePacks);
+      }
+    });
+
+    // 2. Subscribe to Real-Time Postgres Changes (Instant WebSocket Broadcast across all devices)
+    const channel = sb
+      .channel('wms-live-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'battery_packs' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const updatedPack = mapRowToPack(payload.new);
+            setPacks((prev) => {
+              const existingIndex = prev.findIndex((p) => p.id === updatedPack.id);
+              if (existingIndex >= 0) {
+                const next = [...prev];
+                next[existingIndex] = updatedPack;
+                return next;
+              } else {
+                return [updatedPack, ...prev];
+              }
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setPacks((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_lots' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newLot = payload.new as DispatchLot;
+            setDispatchLots((prev) => {
+              if (prev.some((l) => l.id === newLot.id)) return prev;
+              return [newLot, ...prev];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, []);
 
   // If user is not authenticated, lock down portal and display full-screen Login Wall
   if (!currentUser) {
@@ -115,6 +182,17 @@ const MainAppContent: React.FC = () => {
   ) => {
     setPacks((prev) => [...newPacks, ...prev]);
     setInwardShipments((prev) => [shipmentRecord, ...prev]);
+
+    // Cloud Sync
+    syncPacksToCloud(newPacks);
+    syncInwardToCloud(shipmentRecord);
+  };
+
+  // Super Admin Historical Line Populator Save Action
+  const handleSaveAdminLinePacks = (newPacks: BatteryPack[]) => {
+    setPacks((prev) => [...newPacks, ...prev]);
+    syncPacksToCloud(newPacks);
+    setIsAdminPopulatorOpen(false);
   };
 
   // Supervisor Approval for Single Inward Pack
@@ -122,18 +200,20 @@ const MainAppContent: React.FC = () => {
     const approverName = currentUser?.name || currentUser?.username || 'Supervisor';
     const nowIso = new Date().toISOString();
 
-    setPacks((prev) =>
-      prev.map((p) =>
+    setPacks((prev) => {
+      const updated = prev.map((p) =>
         p.id === packId
           ? {
               ...p,
-              status: 'INWARD_AREA',
+              status: 'INWARD_AREA' as any,
               inwardApprovedBy: approverName,
               inwardApprovedAt: nowIso,
             }
           : p
-      )
-    );
+      );
+      syncPacksToCloud(updated.filter((p) => p.id === packId));
+      return updated;
+    });
   };
 
   // Supervisor Batch Approval for Multiple Inward Packs
@@ -142,18 +222,20 @@ const MainAppContent: React.FC = () => {
     const approverName = currentUser?.name || currentUser?.username || 'Supervisor';
     const nowIso = new Date().toISOString();
 
-    setPacks((prev) =>
-      prev.map((p) =>
+    setPacks((prev) => {
+      const updated = prev.map((p) =>
         idSet.has(p.id)
           ? {
               ...p,
-              status: 'INWARD_AREA',
+              status: 'INWARD_AREA' as any,
               inwardApprovedBy: approverName,
               inwardApprovedAt: nowIso,
             }
           : p
-      )
-    );
+      );
+      syncPacksToCloud(updated.filter((p) => idSet.has(p.id)));
+      return updated;
+    });
   };
 
   // Move Pack from Inward Area to Line & Rack
@@ -161,12 +243,12 @@ const MainAppContent: React.FC = () => {
     packId: string,
     location: { lineId: string; rackNumber: number; rackSlot: number }
   ) => {
-    const operatorName = currentUser?.name || currentUser?.username || 'Operator';
+    const operatorName = currentUser?.name || currentUser?.username || 'Staff Operator';
     const nowIso = new Date().toISOString();
     const locationStr = location.lineId + ', R-' + String(location.rackNumber).padStart(2, '0') + ', L-' + String(location.rackSlot).padStart(2, '0');
 
-    setPacks((prev) =>
-      prev.map((p) => {
+    setPacks((prev) => {
+      const updated = prev.map((p) => {
         if (p.id === packId) {
           const updatedHistory = [
             {
@@ -182,7 +264,7 @@ const MainAppContent: React.FC = () => {
 
           return {
             ...p,
-            status: 'IN_STORAGE',
+            status: 'IN_STORAGE' as any,
             locationArea: 'Warehouse Storage',
             currentLocation: locationStr,
             lineId: location.lineId,
@@ -192,8 +274,10 @@ const MainAppContent: React.FC = () => {
           };
         }
         return p;
-      })
-    );
+      });
+      syncPacksToCloud(updated.filter((p) => p.id === packId));
+      return updated;
+    });
   };
 
   const handleMoveMultiplePacksToLocation = (
@@ -201,12 +285,12 @@ const MainAppContent: React.FC = () => {
     location: { lineId: string; rackNumber: number; rackSlot: number }
   ) => {
     const idSet = new Set(packIds);
-    const operatorName = currentUser?.name || currentUser?.username || 'Operator';
+    const operatorName = currentUser?.name || currentUser?.username || 'Staff Operator';
     const nowIso = new Date().toISOString();
     const locationStr = location.lineId + ', R-' + String(location.rackNumber).padStart(2, '0') + ', L-' + String(location.rackSlot).padStart(2, '0');
 
-    setPacks((prev) =>
-      prev.map((p) => {
+    setPacks((prev) => {
+      const updated = prev.map((p) => {
         if (idSet.has(p.id)) {
           const updatedHistory = [
             {
@@ -222,7 +306,7 @@ const MainAppContent: React.FC = () => {
 
           return {
             ...p,
-            status: 'IN_STORAGE',
+            status: 'IN_STORAGE' as any,
             locationArea: 'Warehouse Storage',
             currentLocation: locationStr,
             lineId: location.lineId,
@@ -232,8 +316,10 @@ const MainAppContent: React.FC = () => {
           };
         }
         return p;
-      })
-    );
+      });
+      syncPacksToCloud(updated.filter((p) => idSet.has(p.id)));
+      return updated;
+    });
   };
 
   // Stage a pack into Dispatch Cart
@@ -281,17 +367,17 @@ const MainAppContent: React.FC = () => {
   const handleApproveDispatchLot = (newLot: DispatchLot, dispatchedPackIds: string[]) => {
     const idSet = new Set(dispatchedPackIds);
     setDispatchLots((prev) => [newLot, ...prev]);
+    syncLotToCloud(newLot);
 
     const operatorName = currentUser?.name || currentUser?.username || 'Dispatch Lead';
     const nowIso = new Date().toISOString();
 
-    // Mark packs as DISPATCHED in state
-    setPacks((prev) =>
-      prev.map((p) => {
+    setPacks((prev) => {
+      const updated = prev.map((p) => {
         if (idSet.has(p.id)) {
           return {
             ...p,
-            status: 'DISPATCHED',
+            status: 'DISPATCHED' as any,
             dispatchedBy: operatorName,
             dispatchedAt: nowIso,
             dispatchToAddress: newLot.consigneeAddress,
@@ -302,7 +388,7 @@ const MainAppContent: React.FC = () => {
                 id: 'mov-' + Date.now() + '-' + p.id,
                 timestamp: nowIso,
                 fromLocation: p.currentLocation || 'Inward Area',
-                toLocation: 'Consignee: ' + newLot.consigneeName + ' (Vehicle ' + newLot.vehicleNumber + ')',
+                toLocation: 'Consignee: ' + newLot.consigneeName + ' (' + newLot.vehicleNumber + ')',
                 movedBy: operatorName,
                 reason: 'Dispatched under Lot #' + newLot.lotNumber + ' (Doc #' + newLot.transportDocNo + ')',
               },
@@ -311,8 +397,10 @@ const MainAppContent: React.FC = () => {
           };
         }
         return p;
-      })
-    );
+      });
+      syncPacksToCloud(updated.filter((p) => idSet.has(p.id)));
+      return updated;
+    });
   };
 
   // Navigate directly from Lot to Invoice Generator
@@ -333,10 +421,10 @@ const MainAppContent: React.FC = () => {
       setDispatchLots([]);
       setInwardShipments([]);
       setSavedInvoices([]);
-      localStorage.setItem('tata_wms_packs_v3', JSON.stringify([]));
-      localStorage.setItem('tata_wms_lots_v3', JSON.stringify([]));
-      localStorage.setItem('tata_wms_inwards_v3', JSON.stringify([]));
-      localStorage.setItem('tata_wms_invoices_v3', JSON.stringify([]));
+      localStorage.setItem('tata_wms_packs_v4', JSON.stringify([]));
+      localStorage.setItem('tata_wms_lots_v4', JSON.stringify([]));
+      localStorage.setItem('tata_wms_inwards_v4', JSON.stringify([]));
+      localStorage.setItem('tata_wms_invoices_v4', JSON.stringify([]));
     }
   };
 
@@ -352,6 +440,7 @@ const MainAppContent: React.FC = () => {
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
+        onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
         onQuickSearch={(query) => {
           setActiveTab('TOTAL_STOCK');
         }}
@@ -386,6 +475,16 @@ const MainAppContent: React.FC = () => {
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onSendToDispatch={handleAddPackToDispatch}
           />
+        )}
+
+        {activeTab === 'LINE_INSPECTOR' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+            <LineInspectorView
+              packs={packs}
+              onOpenPackDetails={(pack) => setInspectingPack(pack)}
+              onSendToDispatch={handleAddPackToDispatch}
+            />
+          </div>
         )}
 
         {activeTab === 'DISPATCH_CART' && (
@@ -427,12 +526,12 @@ const MainAppContent: React.FC = () => {
             System: <strong className="text-slate-700">Tata AutoComp WMS PRO</strong>
           </span>
           <span className="text-slate-300">|</span>
-          <span className="text-emerald-700 font-bold">Plant: Varale / Chakan</span>
+          <span className="text-emerald-700 font-bold">Plant: Varale (B300 Plant)</span>
           <span className="text-slate-300 hidden sm:inline">|</span>
-          <span className="hidden sm:inline text-blue-700 font-bold">Gemini AI OCR: Active</span>
+          <span className="hidden sm:inline text-blue-700 font-bold">Supabase Realtime Cloud Sync: Active</span>
         </div>
         <div className="text-slate-400 normal-case sm:uppercase text-[10px]">
-          &copy; {new Date().getFullYear()} Tata AutoComp Systems Limited • Lithium Battery Warehouse Management
+          &copy; {new Date().getFullYear()} Tata AutoComp Systems Limited • Varale (B300 Plant) Management System
         </div>
       </footer>
 
@@ -442,7 +541,7 @@ const MainAppContent: React.FC = () => {
         onClose={() => setInspectingPack(null)}
         onSelectForMove={() => {}}
         onAddToDispatch={handleAddPackToDispatch}
-        onNavigateToLine={() => setActiveTab('TOTAL_STOCK')}
+        onNavigateToLine={() => setActiveTab('LINE_INSPECTOR')}
       />
 
       {/* Supabase Cloud Connection Modal */}
@@ -451,8 +550,24 @@ const MainAppContent: React.FC = () => {
         onClose={() => setIsSupabaseModalOpen(false)}
         totalPacksCount={packs.length}
         totalLotsCount={dispatchLots.length}
-        onTriggerSync={() => {}}
+        onTriggerSync={() => {
+          fetchPacksFromCloud().then((p) => {
+            if (p) setPacks(p);
+          });
+        }}
       />
+
+      {/* Super Admin Historical Line Populator Modal */}
+      {isAdminPopulatorOpen && isSuperAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+            <AdminLineDataPopulator
+              onSaveLinePacks={handleSaveAdminLinePacks}
+              onClose={() => setIsAdminPopulatorOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Login & User Switcher Modal */}
       <LoginModal

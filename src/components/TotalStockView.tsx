@@ -78,6 +78,38 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
     return counts;
   }, [packs]);
 
+  // Unified Kanger 1.0 Consolidated Total
+  const kanger1Unified = useMemo(() => {
+    const aio = modelCounts['Kanger1.0_AIO'] || { available: 0, dispatched: 0, total: 0 };
+    const gen3 = modelCounts['Kanger1.0_Gen3'] || { available: 0, dispatched: 0, total: 0 };
+    const ckd = modelCounts['Kanger1.0_CKD'] || { available: 0, dispatched: 0, total: 0 };
+    const fbu = modelCounts['Kanger1.0_FBU'] || { available: 0, dispatched: 0, total: 0 };
+
+    return {
+      available: aio.available + gen3.available + ckd.available + fbu.available,
+      dispatched: aio.dispatched + gen3.dispatched + ckd.dispatched + fbu.dispatched,
+      total: aio.total + gen3.total + ckd.total + fbu.total,
+      breakdown: {
+        AIO: aio.available,
+        Gen3: gen3.available,
+        CKD: ckd.available,
+        FBU: fbu.available,
+      },
+    };
+  }, [modelCounts]);
+
+  // Other distinct models (excluding the 4 Kanger 1.0 sub-variants)
+  const distinctOtherModels: BatteryPackType[] = [
+    'Kanger2.0',
+    'Kanger3.0',
+    'Tamor_ELR',
+    'Nova_LRP',
+    'Challenger_LR',
+    'Challenger_MR',
+    'Limber_Ais',
+    'Limber_Non_Ais',
+  ];
+
   // SEARCH 1: Exact Match by Pack Number (across ALL 12 products)
   const search1Results = useMemo(() => {
     if (!search1PackNumber.trim()) return [];
@@ -121,6 +153,9 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
     if (selectedCategoryFilter === 'ALL') {
       return packs;
     }
+    if (selectedCategoryFilter === 'KANGER_1_ALL') {
+      return packs.filter((p) => p.packType.startsWith('Kanger1.0'));
+    }
     return packs.filter((p) => p.packType === selectedCategoryFilter);
   }, [packs, selectedCategoryFilter]);
 
@@ -133,13 +168,13 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
             <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
               <Layers className="w-3.5 h-3.5 text-blue-600" /> Executive Stock View
             </span>
-            <span className="text-xs text-slate-500 font-mono-code font-medium">Tata AutoComp Systems Limited</span>
+            <span className="text-xs text-slate-500 font-mono-code font-medium">Varale (B300 Plant)</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight font-display">
             Total Stock Dashboard & Dual Exact Search
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Real-time counts for all 12 official battery models, current storage locations, and strict exact serial tracking.
+            Real-time counts for all official battery models, unified Kanger 1.0 series, and direct exact serial tracking.
           </p>
         </div>
 
@@ -151,8 +186,8 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         </div>
       </div>
 
-      {/* 12 Product Type Summary Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Product Summary Cards Grid (Unified Kanger 1.0 + Distinct Models) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Total Overview Card */}
         <div
           onClick={() => setSelectedCategoryFilter('ALL')}
@@ -175,8 +210,38 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
           </div>
         </div>
 
-        {/* 12 Official Tata Models Breakdown Cards */}
-        {ALL_PACK_TYPES.map((typeKey) => {
+        {/* Unified Kanger 1.0 Card (AIO, CKD, FBU, Gen3) */}
+        <div
+          onClick={() => setSelectedCategoryFilter(selectedCategoryFilter === 'KANGER_1_ALL' ? 'ALL' : 'KANGER_1_ALL')}
+          className={'p-3.5 rounded-xl border transition cursor-pointer shadow-2xs flex flex-col justify-between ' +
+            (selectedCategoryFilter === 'KANGER_1_ALL'
+              ? 'bg-slate-900 text-white border-slate-900 ring-2 ring-blue-500 shadow-md'
+              : 'bg-white border-slate-200 hover:border-blue-400')}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0" />
+              <span className={'text-xs font-bold truncate ' + (selectedCategoryFilter === 'KANGER_1_ALL' ? 'text-white' : 'text-slate-900')}>
+                Kanger 1.0 (All 4 Types)
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-2">
+            <div className="text-xl font-mono-code font-bold">
+              {kanger1Unified.available} <span className="text-xs font-normal text-slate-400">In Stock</span>
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono-code mt-1 flex flex-wrap gap-1">
+              <span>AIO:{kanger1Unified.breakdown.AIO}</span>
+              <span>Gen3:{kanger1Unified.breakdown.Gen3}</span>
+              <span>CKD:{kanger1Unified.breakdown.CKD}</span>
+              <span>FBU:{kanger1Unified.breakdown.FBU}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Distinct Models Cards */}
+        {distinctOtherModels.map((typeKey) => {
           const model = BATTERY_MODELS[typeKey];
           const isSelected = selectedCategoryFilter === typeKey;
           const stat = modelCounts[typeKey] || { available: 0, dispatched: 0, total: 0 };
@@ -221,7 +286,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 font-display">
               <Search className="w-5 h-5 text-orange-500" />
-              Direct Exact Search System (No Fuzzy/Similar Matching)
+              Direct Exact Search System (Strict Match Verification)
             </h3>
             <p className="text-xs text-slate-500">
               Find exact numeric pack number across all models or lookup a specific pack + model combination.
@@ -270,7 +335,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                     setSearch1PackNumber(e.target.value);
                     setHasExecutedSearch1(false);
                   }}
-                  placeholder="Enter exact numeric pack number (e.g. 1, 12, 5284, 894102)..."
+                  placeholder="Enter numeric pack number..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -351,7 +416,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Dealership / Source:</span>
-                                  <span className="font-semibold text-slate-900">{pack.dealershipName || 'Tata Hub'}</span>
+                                  <span className="font-semibold text-slate-900">{pack.dealershipName || 'Tata Plant'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Received State:</span>
@@ -375,7 +440,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Inwarded By:</span>
-                                  <span className="font-medium text-slate-800">{pack.inwardBy || 'Operator'}</span>
+                                  <span className="font-medium text-slate-800">{pack.inwardBy || 'Staff'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Current Storage Location:</span>
@@ -392,7 +457,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                                 <span>
                                   {isDispatched ? (
                                     <span className="text-rose-600 flex items-center gap-1 font-bold">
-                                      <Flag className="w-3.5 h-3.5 fill-rose-600" /> Dispatched to {pack.dispatchToAddress ? (pack.dispatchToAddress.slice(0, 30) + '...') : 'Customer'}
+                                      <Flag className="w-3.5 h-3.5 fill-rose-600" /> Dispatched
                                     </span>
                                   ) : (
                                     <span className="text-emerald-700 font-bold flex items-center gap-1">
@@ -446,7 +511,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                     setSearch2PackNumber(e.target.value);
                     setHasExecutedSearch2(false);
                   }}
-                  placeholder="Enter exact numeric pack number (e.g. 1, 12, 5284)..."
+                  placeholder="Enter numeric pack number..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -543,7 +608,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Dealership / Source:</span>
-                                  <span className="font-semibold text-slate-900">{pack.dealershipName || 'Tata Hub'}</span>
+                                  <span className="font-semibold text-slate-900">{pack.dealershipName || 'Tata Plant'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-slate-500">Received State:</span>
@@ -626,7 +691,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div>
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-              {selectedCategoryFilter === 'ALL' ? 'All Stock Inventory' : (selectedCategoryFilter + ' Stock List')} ({displayInventoryList.length} Packs)
+              {selectedCategoryFilter === 'ALL' ? 'All Stock Inventory' : selectedCategoryFilter === 'KANGER_1_ALL' ? 'Kanger 1.0 (All 4 Types) Stock List' : (selectedCategoryFilter + ' Stock List')} ({displayInventoryList.length} Packs)
             </h3>
           </div>
           {selectedCategoryFilter !== 'ALL' && (
@@ -706,7 +771,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                             <Flag className="w-3 h-3 text-rose-600 fill-rose-600" /> Dispatched
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
                             In Stock
                           </span>
                         )}

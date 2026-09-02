@@ -71,7 +71,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<UserAccount[]>(() => {
-    const saved = localStorage.getItem('tata_wms_users_v3');
+    const saved = localStorage.getItem('tata_wms_users_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -82,9 +82,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return DEFAULT_USERS;
   });
 
-  // Strict initial state: Starts as null (Requires Login Wall)
+  // MANDATORY LOGIN WALL: Always start as null so nobody can access without entering credentials!
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('tata_wms_curr_user_v3');
+    // Clear old legacy auto-login keys from browser
+    try {
+      localStorage.removeItem('tata_wms_curr_user_v3');
+      localStorage.removeItem('tata_wms_curr_user');
+      sessionStorage.removeItem('tata_wms_curr_user_v3');
+    } catch (e) {}
+
+    const saved = sessionStorage.getItem('tata_wms_session_user_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -96,14 +103,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_users_v3', JSON.stringify(users));
+    localStorage.setItem('tata_wms_users_v4', JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('tata_wms_curr_user_v3', JSON.stringify(currentUser));
+      sessionStorage.setItem('tata_wms_session_user_v4', JSON.stringify(currentUser));
     } else {
+      sessionStorage.removeItem('tata_wms_session_user_v4');
       localStorage.removeItem('tata_wms_curr_user_v3');
+      localStorage.removeItem('tata_wms_curr_user');
     }
   }, [currentUser]);
 
@@ -124,7 +133,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setCurrentUser(null);
+    sessionStorage.removeItem('tata_wms_session_user_v4');
     localStorage.removeItem('tata_wms_curr_user_v3');
+    localStorage.removeItem('tata_wms_curr_user');
   };
 
   const addUser = (newUser: UserAccount): boolean => {

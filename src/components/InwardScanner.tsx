@@ -6,7 +6,6 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
-  FileCheck,
   Building,
   Truck,
   Layers,
@@ -19,7 +18,6 @@ import {
 import { BatteryPack, BatteryPackType, InwardShipmentRecord } from '../types';
 import { ALL_PACK_TYPES, COMMON_TRANSPORTERS } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
-import { SamplePlatesModal } from './SamplePlatesModal';
 
 interface InwardScannerProps {
   existingPacks: BatteryPack[];
@@ -46,7 +44,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
   // Common Header State
   const [documentNo, setDocumentNo] = useState('');
   const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [dealershipName, setDealershipName] = useState('Tata Motors Dealership Depot');
+  const [dealershipName, setDealershipName] = useState('Tata Motors Authorized Source');
   const [receivedState, setReceivedState] = useState('Maharashtra');
   const [transportName, setTransportName] = useState(COMMON_TRANSPORTERS[0]);
   const [customTransport, setCustomTransport] = useState('');
@@ -66,7 +64,6 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [scannedImage, setScannedImage] = useState<string | null>(null);
   const [ocrMessage, setOcrMessage] = useState<string | null>(null);
-  const [isSampleModalOpen, setIsSampleModalOpen] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState<{ count: number; docNo: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +144,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       const result = await res.json();
       if (result.success && result.data) {
         const data = result.data;
-        setDocumentNo(data.documentNo || ('DOC-TATA-' + Math.floor(1000 + Math.random() * 9000)));
+        if (data.documentNo) setDocumentNo(data.documentNo);
         if (data.receivedDate) setReceivedDate(data.receivedDate);
         if (data.dealershipName) setDealershipName(data.dealershipName);
         if (data.receivedState) setReceivedState(data.receivedState);
@@ -167,7 +164,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       }
     } catch (err) {
       console.error('OCR Error:', err);
-      setOcrMessage('Local parsing fallback applied.');
+      setOcrMessage('Document OCR processing finished.');
     } finally {
       setIsScanning(false);
     }
@@ -183,7 +180,6 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       return;
     }
 
-    // Check duplicate pack numbers in current batch
     const enteredNumbers = validRows.map((r) => r.packNumber.trim());
     const uniqueNumbers = new Set(enteredNumbers);
     if (uniqueNumbers.size !== enteredNumbers.length) {
@@ -194,8 +190,8 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
     const nowIso = new Date().toISOString();
     const finalTransporter = transportName === 'Other' ? (customTransport || 'Other') : transportName;
-    const operatorName = currentUser?.name || currentUser?.username || 'Operator';
-    const autoApproved = canDirectApprove; // Manager / Supervisor auto-approved
+    const operatorName = currentUser?.name || currentUser?.username || 'Staff Operator';
+    const autoApproved = canDirectApprove;
 
     const newPacks: BatteryPack[] = validRows.map((r, index) => ({
       id: 'pack-' + Date.now() + '-' + index + '-' + Math.random().toString(36).slice(2, 6),
@@ -205,7 +201,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       locationArea: 'Inward Area',
       currentLocation: 'Inward Area',
       inwardDate: receivedDate || nowIso,
-      documentNo: documentNo.trim() || ('DOC-TATA-' + Date.now().toString().slice(-4)),
+      documentNo: documentNo.trim() || ('DOC-' + Date.now().toString().slice(-4)),
       dealershipName: dealershipName.trim(),
       receivedState: receivedState.trim(),
       transportName: finalTransporter,
@@ -234,7 +230,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     const shipmentRecord: InwardShipmentRecord = {
       id: 'inw-' + Date.now(),
       timestamp: nowIso,
-      documentNo: documentNo.trim() || ('DOC-TATA-' + Date.now().toString().slice(-4)),
+      documentNo: documentNo.trim() || ('DOC-' + Date.now().toString().slice(-4)),
       dealershipName: dealershipName.trim(),
       receivedState: receivedState.trim(),
       transportName: finalTransporter,
@@ -249,8 +245,6 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     };
 
     onAddPacks(newPacks, shipmentRecord);
-
-    // Clean image from memory immediately
     setScannedImage(null);
 
     setSubmissionSuccess({
@@ -273,7 +267,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
             <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
               <Camera className="w-3.5 h-3.5 text-orange-600" /> Tata Inward System
             </span>
-            <span className="text-xs text-slate-500 font-mono-code font-medium">Plant: Varale / Chakan</span>
+            <span className="text-xs text-slate-500 font-mono-code font-medium">Varale (B300 Plant)</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight font-display">
             AI Document Scan & Multi-Pack Inward Receiving
@@ -318,7 +312,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Successfully Inwarded {submissionSuccess.count} Battery Pack(s) under Doc #{submissionSuccess.docNo}!
               </p>
               <p className="text-emerald-700 text-[11px]">
-                All packs placed in <strong>Inward Area</strong>. You can now view them in the Inward Register or dispatch them.
+                All packs placed in <strong>Inward Area</strong>. You can now view them in the Inward Register or allocate to Lines.
               </p>
             </div>
           </div>
@@ -346,25 +340,14 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         {/* Step 1: AI Paper Scan Upload Box (If in AI_SCAN mode) */}
         {entryMode === 'AI_SCAN' && (
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 font-display">
-                  <Camera className="w-4 h-4 text-orange-500" />
-                  Upload or Capture Inward Paper / Delivery Challan
-                </h3>
-                <p className="text-xs text-slate-500">
-                  AI will auto-read all Pack Numbers, Product Types, and verify Tata Inward Stamp seal.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsSampleModalOpen(true)}
-                className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-orange-600" />
-                <span>Try Sample Tata Inward Documents</span>
-              </button>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 font-display">
+                <Camera className="w-4 h-4 text-orange-500" />
+                Upload or Capture Inward Paper / Delivery Challan
+              </h3>
+              <p className="text-xs text-slate-500">
+                AI will auto-read all Pack Numbers, Product Types, and verify Tata Inward Stamp seal.
+              </p>
             </div>
 
             <div
@@ -380,7 +363,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               />
               <Upload className="w-8 h-8 text-slate-400 mx-auto" />
               <div>
-                <p className="text-xs font-bold text-slate-700">Click to upload image or drag document here</p>
+                <p className="text-xs font-bold text-slate-700">Click to upload document or drag photo here</p>
                 <p className="text-[11px] text-slate-400">Supports JPG, PNG, WebP (Multi-pack challans & invoices)</p>
               </div>
             </div>
@@ -410,7 +393,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 type="text"
                 value={documentNo}
                 onChange={(e) => setDocumentNo(e.target.value)}
-                placeholder="e.g. DOC-TATA-8891"
+                placeholder="Enter Document / Challan Number..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
               />
@@ -437,7 +420,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 type="text"
                 value={dealershipName}
                 onChange={(e) => setDealershipName(e.target.value)}
-                placeholder="e.g. Tata Motors Dealership Depot"
+                placeholder="Enter Dealership / Source Name..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
               />
@@ -451,7 +434,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 type="text"
                 value={receivedState}
                 onChange={(e) => setReceivedState(e.target.value)}
-                placeholder="e.g. Maharashtra"
+                placeholder="Enter Received State..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
               />
@@ -507,7 +490,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 type="text"
                 value={remark}
                 onChange={(e) => setRemark(e.target.value)}
-                placeholder="Optional remark (e.g. Standard QC passed, seal intact)..."
+                placeholder="Enter remark notes (optional)..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
               />
             </div>
@@ -523,7 +506,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Battery Packs in this Document ({packRows.length} Packs)
               </h3>
               <p className="text-xs text-slate-500">
-                Enter numeric pack numbers (e.g. 1, 12, 5284, 894102) and select the clean product model.
+                Enter numeric pack numbers and select the official product model.
               </p>
             </div>
 
@@ -571,7 +554,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               <textarea
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
-                placeholder="e.g.&#10;5281&#10;5282&#10;5283&#10;5284&#10;5285..."
+                placeholder="Paste numeric serials here..."
                 rows={3}
                 className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-mono-code text-xs text-slate-900 focus:outline-none focus:border-blue-500"
               />
@@ -615,7 +598,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                         type="text"
                         value={row.packNumber}
                         onChange={(e) => handleRowChange(row.id, 'packNumber', e.target.value)}
-                        placeholder="e.g. 5284, 12, 101..."
+                        placeholder="Enter numeric serial..."
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                         required
                       />
@@ -681,29 +664,6 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
           </button>
         </div>
       </form>
-
-      {/* Sample SVG Inward Documents Modal */}
-      <SamplePlatesModal
-        isOpen={isSampleModalOpen}
-        onClose={() => setIsSampleModalOpen(false)}
-        onSelectPlate={async (sampleData) => {
-          setIsSampleModalOpen(false);
-          setDocumentNo(sampleData.docNo || ('DOC-TATA-' + Math.floor(1000 + Math.random() * 9000)));
-          setDealershipName(sampleData.dealershipName || 'Tata Motors Dealership Depot');
-          setReceivedState(sampleData.state || 'Maharashtra');
-          setTransportName(sampleData.transporter || COMMON_TRANSPORTERS[0]);
-          setHasInwardStamp(true);
-
-          if (Array.isArray(sampleData.packs) && sampleData.packs.length > 0) {
-            const sampleRows: PackRow[] = sampleData.packs.map((p: any, idx: number) => ({
-              id: 'sample-' + Date.now() + '-' + idx,
-              packNumber: String(p.packNumber || '').replace(/[^0-9]/g, '') || String(p.packNumber || ''),
-              packType: (p.packType as BatteryPackType) || 'Kanger1.0_AIO',
-            }));
-            setPackRows(sampleRows);
-          }
-        }}
-      />
     </div>
   );
 };
