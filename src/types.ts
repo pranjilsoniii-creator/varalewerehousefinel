@@ -43,6 +43,8 @@ export interface BatteryModelInfo {
   badgeBg: string;
   borderColor: string;
   description?: string;
+  energyKwh?: string;
+  hsnCode?: string;
 }
 
 export type PackStatus =

@@ -10,23 +10,22 @@ export function exportInventoryToExcel(packs: BatteryPack[], filename = 'Tata_Ba
       'Pack Number / Serial': p.packNumber,
       'Model / Pack Type': model?.name || p.packType,
       'Category': model?.category || 'Tata Lithium',
-      'Location Line': p.status === 'IN_STORAGE' ? p.lineId : (p.status === 'IN_DISPATCH_AREA' ? 'Dispatch Bay' : 'Dispatched'),
-      'Rack No': p.status === 'IN_STORAGE' ? `R-${p.rackNumber}` : '-',
-      'Slot (Level 1-4)': p.status === 'IN_STORAGE' ? `Level ${p.rackSlot}` : '-',
+      'Location Line': p.status === 'IN_STORAGE' ? p.lineId : (p.status === 'IN_DISPATCH_AREA' ? 'Dispatch Bay' : p.locationArea || 'Inward Area'),
+      'Rack No': p.status === 'IN_STORAGE' ? 'R-' + (p.rackNumber || 1) : '-',
+      'Slot (Level 1-4)': p.status === 'IN_STORAGE' ? 'Level ' + (p.rackSlot || 1) : '-',
       'Status': p.status,
-      'Nominal Voltage': p.voltage,
-      'Capacity (Ah)': p.capacityAh,
-      'Energy (kWh)': model?.energyKwh || '',
-      'HSN Code': model?.hsnCode || '85076000',
-      'Inward Date': new Date(p.inwardDate).toLocaleString('en-IN'),
-      'Transport Company': p.transportName,
-      'Transport Doc / Inv No': p.transportDocNo,
-      'LR Number': p.lrNumber,
-      'Vehicle Number': p.vehicleNumber,
-      'Batch Number': p.batchNumber || '',
+      'Inward Date': p.inwardDate ? new Date(p.inwardDate).toLocaleString('en-IN') : '-',
+      'Document / Challan No': p.documentNo || '-',
+      'Dealership / Source': p.dealershipName || '-',
+      'Transport Company': p.transportName || '-',
+      'Tata Stamp Verified': p.hasInwardStamp ? 'YES' : 'NO',
+      'Inwarded By': p.inwardBy || '-',
+      'Approved By': p.inwardApprovedBy || '-',
       'Dispatched Date': p.dispatchedAt ? new Date(p.dispatchedAt).toLocaleString('en-IN') : '-',
-      'Destination Consignee': p.destinationConsignee || '-',
-      'Invoice / Challan No': p.invoiceNumber || '-',
+      'Destination Consignee': p.dispatchToCustomer || p.dispatchToAddress || '-',
+      'Vehicle Number': p.dispatchVehicleNo || '-',
+      'LR Number': p.dispatchLrNo || '-',
+      'Gate Pass No': p.dispatchDocNo || '-',
     };
   });
 
@@ -40,16 +39,17 @@ export function exportInwardShipmentsToExcel(shipments: InwardShipmentRecord[], 
   const data = shipments.map((s, index) => ({
     'Sr No': index + 1,
     'Inward Date & Time': new Date(s.timestamp).toLocaleString('en-IN'),
+    'Document / Invoice No': s.documentNo,
+    'Dealership / Source': s.dealershipName,
+    'Received State': s.receivedState,
     'Transport Name': s.transportName,
-    'LR Number': s.lrNumber,
-    'Document / Invoice No': s.transportDocNo,
-    'Vehicle Number': s.vehicleNumber,
-    'Driver Name': s.driverName || '-',
-    'Driver Phone': s.driverPhone || '-',
     'Packs Received': s.packCount,
-    'Pack Serial Numbers': s.packNumbers.join(', '),
-    'Received By': s.receivedBy,
-    'Notes': s.notes || '',
+    'Pack Serial Numbers': Array.isArray(s.packNumbers) ? s.packNumbers.join(', ') : '',
+    'Received / Inwarded By': s.inwardBy,
+    'Approved By': s.approvedBy || '-',
+    'Tata Stamp Verified': s.hasInwardStamp ? 'YES' : 'NO',
+    'Status': s.status,
+    'Remark / Notes': s.remark || '',
   }));
 
   const ws = XLSX.utils.json_to_sheet(data);
@@ -62,23 +62,22 @@ export function exportDispatchLotsToExcel(lots: DispatchLot[], filename = 'Tata_
   const rows: any[] = [];
   
   lots.forEach((lot) => {
-    lot.packs.forEach((pack, pIdx) => {
+    (lot.packs || []).forEach((pack) => {
       const model = BATTERY_MODELS[pack.packType];
       rows.push({
         'Lot Number': lot.lotNumber,
         'Dispatch Date': new Date(lot.timestamp).toLocaleString('en-IN'),
         'Consignee Name': lot.consigneeName,
         'Destination Address': lot.consigneeAddress,
+        'Consignee GSTIN': lot.consigneeGstin || '-',
         'Vehicle Number': lot.vehicleNumber,
-        'Driver Name & Phone': `${lot.driverName} (${lot.driverMobile})`,
         'Transport Carrier': lot.transportName,
         'LR / Bilty No': lot.lrNumber,
         'Gate Pass No': lot.transportDocNo,
         'Pack Serial': pack.packNumber,
         'Model Type': model?.name || pack.packType,
-        'Voltage / Ah': `${pack.voltage} / ${pack.capacityAh}`,
-        'Invoice Number': lot.invoiceNumber || '-',
-        'Approved By': lot.approvedBy,
+        'Dispatched By': lot.dispatchedBy || '-',
+        'Approved By': lot.approvedBy || '-',
       });
     });
   });
@@ -90,7 +89,7 @@ export function exportDispatchLotsToExcel(lots: DispatchLot[], filename = 'Tata_
 }
 
 export function exportInvoiceToExcel(invoice: InvoiceData, filename?: string) {
-  const itemsData = invoice.items.map((it, idx) => ({
+  const itemsData = (invoice.items || []).map((it, idx) => ({
     'S.No': idx + 1,
     'Description of Goods': it.description,
     'HSN/SAC': it.hsnCode,
@@ -98,33 +97,11 @@ export function exportInvoiceToExcel(invoice: InvoiceData, filename?: string) {
     'Unit': 'NOS',
     'Rate (INR)': it.unitPrice || it.ratePerUnit || 0,
     'Taxable Amount (INR)': it.taxableAmount || it.amount || 0,
-    'Serial Numbers in Lot': (it.packNumbers || []).join(' | '),
+    'Total Amount': (it.quantity || 1) * (it.unitPrice || it.ratePerUnit || 0),
   }));
 
-  const summary = [
-    {},
-    { 'Description of Goods': 'Sub Total', 'Taxable Amount (INR)': invoice.totalTaxableAmount },
-    { 'Description of Goods': 'CGST', 'Taxable Amount (INR)': invoice.cgstAmount },
-    { 'Description of Goods': 'SGST', 'Taxable Amount (INR)': invoice.sgstAmount },
-    { 'Description of Goods': 'IGST', 'Taxable Amount (INR)': invoice.igstAmount },
-    { 'Description of Goods': 'Grand Total', 'Taxable Amount (INR)': invoice.grandTotal },
-  ];
-
-  const headerInfo = [
-    { 'S.No': 'TAX INVOICE / DELIVERY CHALLAN' },
-    { 'S.No': `Invoice No: ${invoice.invoiceNumber}`, 'Description of Goods': `Date: ${invoice.date}` },
-    { 'S.No': `E-Way Bill: ${invoice.eWayBillNo || '-'}`, 'Description of Goods': `LR No: ${invoice.lrNumber}` },
-    { 'S.No': `Transporter: ${invoice.transportName}`, 'Description of Goods': `Vehicle No: ${invoice.vehicleNumber}` },
-    { 'S.No': `SELLER: ${invoice.sellerName} | GSTIN: ${invoice.sellerGstin}` },
-    { 'S.No': `BUYER: ${invoice.buyerName} | GSTIN: ${invoice.buyerGstin}` },
-    { 'S.No': `Delivery Address: ${invoice.buyerAddress}` },
-    {},
-  ];
-
-  const ws = XLSX.utils.json_to_sheet([...headerInfo, ...itemsData, ...summary]);
+  const ws = XLSX.utils.json_to_sheet(itemsData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Tax Invoice');
-  
-  const finalName = filename || `Tax_Invoice_${invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
-  XLSX.writeFile(wb, finalName);
+  XLSX.writeFile(wb, filename || 'Tata_Invoice_' + invoice.invoiceNumber + '.xlsx');
 }

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
 import { BATTERY_MODELS } from '../data/batteryCatalog';
-import { WAREHOUSE_LINES } from '../data/seedWarehouse';
+import { getStoredWarehouseLines, MAX_PACKS_PER_RACK, RACKS_PER_LINE, SLOTS_PER_RACK } from '../data/seedWarehouse';
 import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
 

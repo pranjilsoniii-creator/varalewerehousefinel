@@ -42,13 +42,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       type: typeKey,
       count,
       color: model?.color || '#2563eb',
-      energyKwh: model?.energyKwh || '38.4',
+      energyKwh: (model as any)?.energyKwh || '38.4',
     };
   });
 
   const totalKwh = activeStoragePacks.reduce((sum, p) => {
     const model = BATTERY_MODELS[p.packType];
-    return sum + (model ? parseFloat(model.energyKwh) || 38.4 : 38.4);
+    return sum + (model ? parseFloat((model as any).energyKwh) || 38.4 : 38.4);
   }, 0);
 
   return (
