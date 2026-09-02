@@ -126,60 +126,78 @@ const MainAppContent: React.FC = () => {
     }
   };
 
-  // SUPABASE REALTIME MULTI-USER CLOUD SYNC
+  // SUPABASE REALTIME MULTI-USER CLOUD SYNC (Zero-Crash Safe Architecture)
   useEffect(() => {
-    const sb = getSupabase();
-    if (!sb) return;
+    try {
+      const sb = getSupabase();
+      if (!sb) return;
 
-    // 1. Fetch initial remote cloud state
-    fetchPacksFromCloud().then((remotePacks) => {
-      if (remotePacks && remotePacks.length > 0) {
-        setPacks(remotePacks);
-      }
-    });
+      // 1. Fetch initial remote cloud state safely
+      fetchPacksFromCloud()
+        .then((remotePacks) => {
+          if (remotePacks && remotePacks.length > 0) {
+            setPacks(remotePacks);
+          }
+        })
+        .catch((e) => {
+          console.warn('Initial cloud fetch notice (Local data active):', e);
+        });
 
-    // 2. Subscribe to Real-Time Postgres Changes (Instant WebSocket Broadcast across all devices)
-    const channel = sb
-      .channel('wms-live-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'battery_packs' },
-        (payload) => {
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const updatedPack = mapRowToPack(payload.new);
-            setPacks((prev) => {
-              const existingIndex = prev.findIndex((p) => p.id === updatedPack.id);
-              if (existingIndex >= 0) {
-                const next = [...prev];
-                next[existingIndex] = updatedPack;
-                return next;
-              } else {
-                return [updatedPack, ...prev];
+      // 2. Subscribe to Real-Time Postgres Changes
+      const channel = sb
+        .channel('wms-live-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'battery_packs' },
+          (payload) => {
+            try {
+              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                const updatedPack = mapRowToPack(payload.new);
+                setPacks((prev) => {
+                  const existingIndex = prev.findIndex((p) => p.id === updatedPack.id);
+                  if (existingIndex >= 0) {
+                    const next = [...prev];
+                    next[existingIndex] = updatedPack;
+                    return next;
+                  } else {
+                    return [updatedPack, ...prev];
+                  }
+                });
+              } else if (payload.eventType === 'DELETE') {
+                setPacks((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
               }
-            });
-          } else if (payload.eventType === 'DELETE') {
-            setPacks((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
+            } catch (err) {
+              console.warn('Realtime pack sync note:', err);
+            }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'dispatch_lots' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newLot = payload.new as DispatchLot;
-            setDispatchLots((prev) => {
-              if (prev.some((l) => l.id === newLot.id)) return prev;
-              return [newLot, ...prev];
-            });
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'dispatch_lots' },
+          (payload) => {
+            try {
+              if (payload.eventType === 'INSERT') {
+                const newLot = payload.new as DispatchLot;
+                setDispatchLots((prev) => {
+                  if (prev.some((l) => l.id === newLot.id)) return prev;
+                  return [newLot, ...prev];
+                });
+              }
+            } catch (err) {
+              console.warn('Realtime lot sync note:', err);
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
 
-    return () => {
-      sb.removeChannel(channel);
-    };
+      return () => {
+        try {
+          sb.removeChannel(channel);
+        } catch (e) {}
+      };
+    } catch (err) {
+      console.warn('Supabase Realtime startup note:', err);
+    }
   }, []);
 
   // If user is not authenticated, lock down portal and display full-screen Login Wall
