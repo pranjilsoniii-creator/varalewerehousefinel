@@ -82,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return DEFAULT_USERS;
   });
 
+  // Strict initial state: Starts as null (Requires Login Wall)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('tata_wms_curr_user_v3');
     if (saved) {
@@ -91,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Failed to parse current user', e);
       }
     }
-    return DEFAULT_USERS[0]; // Default to Superadmin Pranjil Soni
+    return null;
   });
 
   useEffect(() => {
@@ -122,8 +123,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    // Switch to employee or prompt login
     setCurrentUser(null);
+    localStorage.removeItem('tata_wms_curr_user_v3');
   };
 
   const addUser = (newUser: UserAccount): boolean => {

@@ -9,6 +9,7 @@ import { AnalyticsView } from './components/AnalyticsView';
 import { PackDetailsModal } from './components/PackDetailsModal';
 import { SupabaseSyncModal } from './components/SupabaseSyncModal';
 import { LoginModal } from './components/LoginModal';
+import { LoginScreen } from './components/LoginScreen';
 import { UserManagementModal } from './components/UserManagementModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BatteryPack, DispatchLot, InwardShipmentRecord, Invoice } from './types';
@@ -97,6 +98,11 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('tata_wms_invoices_v3', JSON.stringify(savedInvoices));
   }, [savedInvoices]);
+
+  // If user is not authenticated, lock down portal and display full-screen Login Wall
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
 
   // Derived filtered collections
   const activeStoragePacks = packs.filter((p) => p.status !== 'DISPATCHED' && p.status !== 'IN_DISPATCH_AREA');
