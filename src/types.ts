@@ -1,9 +1,14 @@
 export type BatteryPackType =
   | 'Kanger1.0_AIO'
+  | 'Kanger1.0_AIO_Ais'
   | 'Kanger1.0_Gen3'
+  | 'Kanger1.0_Gen3_Ais'
   | 'Kanger1.0_CKD'
+  | 'Kanger1.0_CKD_Ais'
   | 'Kanger1.0_FBU'
+  | 'Kanger1.0_FBU_Ais'
   | 'Kanger2.0'
+  | 'Kanger2.0_Ais'
   | 'Kanger3.0'
   | 'Tamor_ELR'
   | 'Nova_LRP'
@@ -14,6 +19,15 @@ export type BatteryPackType =
 
 export type UserRole = 'superadmin' | 'manager' | 'supervisor' | 'employee';
 
+export interface UserPermissions {
+  canInward: boolean;
+  canDispatch: boolean;
+  canLineManage: boolean;
+  canViewStock: boolean;
+  canInvoices: boolean;
+  canAnalytics: boolean;
+}
+
 export interface UserAccount {
   username: string;
   password?: string;
@@ -21,6 +35,7 @@ export interface UserAccount {
   role: UserRole;
   plant: string;
   active: boolean;
+  permissions?: UserPermissions;
 }
 
 export interface SavedAddress {
@@ -67,12 +82,14 @@ export interface MovementLog {
 
 export interface BatteryPack {
   id: string;
-  packNumber: string;                 // Strictly numeric e.g. "1", "12", "5284", "894102"
-  packType: BatteryPackType;          // Kanger1.0_AIO, Kanger1.0_Gen3, etc.
+  packNumber: string;                 // Strictly numeric e.g. "1", "12", "5284", "894102", or "NP-1001" for without plate
+  packType: BatteryPackType;          // Model type
   productName?: string;
   status: PackStatus;
   locationArea: string;               // Default: "Inward Area"
   currentLocation: string;            // e.g. "Inward Area" or "A-04, R-12, L-02"
+  isWithoutPlate?: boolean;           // True if pack arrived without serial plate/sticker
+  sourceType?: 'INWARD' | 'LINE_POPULATE'; // Source: Inward Dock vs Direct Line Matrix Populator
 
   // Inward Details
   inwardDate: string;                 // ISO date string
@@ -89,7 +106,7 @@ export interface BatteryPack {
   inwardApprovedBy?: string;          // Supervisor/Manager who approved
   inwardApprovedAt?: string;
 
-  // Storage Physical Coordinates (When allocated from Inward Area to Line)
+  // Storage Physical Coordinates (When allocated to Line & Rack)
   lineId?: string;                    // e.g. "A-01" to "A-25", "B-01" to "B-25"
   rackNumber?: number;                // 1 to 160
   rackSlot?: number;                  // 1 to 4 (Level L-01 to L-04)
@@ -100,17 +117,12 @@ export interface BatteryPack {
   // Dispatch Details
   dispatchedAt?: string;
   dispatchedBy?: string;
-  dispatchApprovedBy?: string;
   dispatchLotId?: string;
   dispatchDocNo?: string;
   dispatchLrNo?: string;
   dispatchVehicleNo?: string;
-  dispatchTransportName?: string;
-  dispatchFromPlant?: string;         // Default: "Tata AutoComp Systems Limited - Varale"
-  dispatchToAddress?: string;         // Full 100+ words address
+  dispatchToAddress?: string;
   dispatchToCustomer?: string;
-  dispatchRemarks?: string;
-  invoiceNumber?: string;
 }
 
 export interface InwardShipmentRecord {
@@ -120,27 +132,24 @@ export interface InwardShipmentRecord {
   dealershipName: string;
   receivedState: string;
   transportName: string;
-  lrNumber?: string;
-  vehicleNumber?: string;
   packCount: number;
   packNumbers: string[];
   packTypeSummary: Record<string, number>;
   inwardBy: string;
   approvedBy?: string;
   hasInwardStamp: boolean;
-  status: 'PENDING_APPROVAL' | 'APPROVED';
+  status: 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED';
   remark?: string;
-  notes?: string;
 }
 
 export interface DispatchLot {
   id: string;
-  lotNumber: string;                  // e.g. "LOT-2026-0901-01"
+  lotNumber: string;
   timestamp: string;
-  status: 'PENDING_SUPERVISOR_APPROVAL' | 'DISPATCHED';
-  fromPlant: string;                  // Tata AutoComp Systems Limited - Varale
+  status: 'PENDING_APPROVAL' | 'DISPATCHED' | 'CANCELLED';
+  fromPlant: string;
   consigneeName: string;
-  consigneeAddress: string;           // 100+ words full address
+  consigneeAddress: string;
   consigneeGstin?: string;
   vehicleNumber: string;
   driverName?: string;
@@ -148,80 +157,110 @@ export interface DispatchLot {
   transportName: string;
   lrNumber: string;
   transportDocNo: string;
-  packs: BatteryPack[];
   packCount: number;
-  invoiceNumber?: string;
+  packs: BatteryPack[];
   dispatchedBy: string;
-  approvedBy: string;
+  approvedBy?: string;
   approvedAt?: string;
   notes?: string;
 }
 
 export interface InvoiceItem {
   id: string;
-  description: string;
+  model?: BatteryPackType;
   packType?: string;
+  description: string;
   hsnCode: string;
   quantity: number;
   unitPrice: number;
   taxableAmount: number;
-  gstRate: number;
-  gstAmount: number;
-  totalAmount: number;
+  gstRate?: number;
+  gstAmount?: number;
+  totalAmount?: number;
+  packSerials?: string[];
   packNumbers?: string[];
-  ratePerUnit?: number;
-  amount?: number;
 }
 
 export interface Invoice {
   id: string;
   invoiceNumber: string;
   date: string;
+  lotId?: string;
+  lotNumber?: string;
   eWayBillNo?: string;
   poNumber?: string;
-  sellerName: string;
-  sellerAddress: string;
-  sellerGstin: string;
-  sellerState: string;
-  buyerName: string;
-  buyerAddress: string;
-  buyerGstin: string;
-  buyerState: string;
-  placeOfSupply: string;
-  transportName: string;
-  vehicleNumber: string;
-  lrNumber: string;
-  items: InvoiceItem[];
-  totalTaxableAmount: number;
-  cgstAmount: number;
-  sgstAmount: number;
-  igstAmount: number;
-  grandTotal: number;
-  termsAndConditions: string;
-  bankDetails: {
-    bankName: string;
-    accountNumber: string;
-    ifscCode: string;
-    branch: string;
+  sellerName?: string;
+  sellerAddress?: string;
+  sellerGstin?: string;
+  sellerState?: string;
+  sellerStateCode?: string;
+  buyerName?: string;
+  buyerAddress?: string;
+  buyerGstin?: string;
+  buyerState?: string;
+  buyerStateCode?: string;
+  vehicleNumber?: string;
+  transporterName?: string;
+  lrNumber?: string;
+  items?: InvoiceItem[];
+  subTotal?: number;
+  totalTaxable?: number;
+  cgstRate?: number;
+  cgstAmount?: number;
+  sgstRate?: number;
+  sgstAmount?: number;
+  igstRate?: number;
+  igstAmount?: number;
+  totalGst?: number;
+  totalGstAmount?: number;
+  grandTotal?: number;
+  grandTotalWords?: string;
+  isInterState?: boolean;
+  notes?: string;
+  generatedBy?: string;
+  fromPlant?: {
+    name: string;
+    address: string;
+    gstin: string;
+    state: string;
+    stateCode: string;
   };
+  consignee?: {
+    name: string;
+    address: string;
+    gstin?: string;
+    state?: string;
+    stateCode?: string;
+  };
+  transporter?: {
+    name: string;
+    vehicleNumber: string;
+    lrNumber: string;
+    gatePassNo: string;
+  };
+  [key: string]: any;
 }
 
-export type InvoiceData = Invoice;
-
-export interface OcrScanResult {
-  success: boolean;
-  hasInwardStamp: boolean;
-  documentNo?: string;
-  receivedDate?: string;
-  dealershipName?: string;
-  receivedState?: string;
-  transportName?: string;
-  remark?: string;
-  packs: Array<{
-    packNumber: string;
-    packType: BatteryPackType;
+export interface InvoiceData {
+  invoiceNumber: string;
+  date: string;
+  buyerName: string;
+  buyerAddress?: string;
+  buyerGstin?: string;
+  vehicleNumber?: string;
+  lrNumber?: string;
+  items: Array<{
+    description: string;
+    hsnCode: string;
+    quantity: number;
+    unitPrice?: number;
+    ratePerUnit?: number;
+    taxableAmount?: number;
+    amount?: number;
   }>;
-  rawText: string;
-  confidence: number;
-  error?: string;
+  subTotal: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  grandTotal: number;
 }

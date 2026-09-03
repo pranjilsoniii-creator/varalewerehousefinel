@@ -14,9 +14,11 @@ import {
   Sparkles,
   RefreshCw,
   Copy,
+  Tag,
+  HelpCircle,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, InwardShipmentRecord } from '../types';
-import { ALL_PACK_TYPES, COMMON_TRANSPORTERS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, COMMON_TRANSPORTERS, deriveModelFromShorthand } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 
 interface InwardScannerProps {
@@ -29,6 +31,7 @@ interface PackRow {
   id: string;
   packNumber: string;
   packType: BatteryPackType;
+  isWithoutPlate?: boolean;
 }
 
 export const InwardScanner: React.FC<InwardScannerProps> = ({
@@ -41,11 +44,11 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
   // Mode: 'AI_SCAN' vs 'MANUAL_TABLE'
   const [entryMode, setEntryMode] = useState<'AI_SCAN' | 'MANUAL_TABLE'>('AI_SCAN');
 
-  // Common Header State
+  // Common Header State - Completely Blank on Open, Only Today Date filled
   const [documentNo, setDocumentNo] = useState('');
   const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [dealershipName, setDealershipName] = useState('Tata Motors Authorized Source');
-  const [receivedState, setReceivedState] = useState('Maharashtra');
+  const [dealershipName, setDealershipName] = useState('');
+  const [receivedState, setReceivedState] = useState('');
   const [transportName, setTransportName] = useState(COMMON_TRANSPORTERS[0]);
   const [customTransport, setCustomTransport] = useState('');
   const [remark, setRemark] = useState('');
@@ -53,7 +56,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
   // Dynamic Pack Rows (1 to 35+ packs)
   const [packRows, setPackRows] = useState<PackRow[]>([
-    { id: 'row-1', packNumber: '', packType: 'Kanger1.0_AIO' },
+    { id: 'row-1', packNumber: '', packType: 'Kanger1.0_AIO', isWithoutPlate: false },
   ]);
 
   // Bulk Paste Text
@@ -68,6 +71,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Helper to generate Without-Plate tracked code
+  const generateNoPlateCode = () => {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    return 'NP-' + randomNum;
+  };
+
   // Add more rows
   const handleAddRow = (count: number = 1) => {
     const newRows: PackRow[] = [];
@@ -76,6 +85,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         id: 'row-' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6),
         packNumber: '',
         packType: packRows[packRows.length - 1]?.packType || 'Kanger1.0_AIO',
+        isWithoutPlate: false,
       });
     }
     setPackRows((prev) => [...prev, ...newRows]);
@@ -88,7 +98,33 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
   const handleRowChange = (id: string, field: 'packNumber' | 'packType', value: string) => {
     setPackRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
+      prev.map((r) => {
+        if (r.id === id) {
+          if (field === 'packNumber') {
+            const cleanNum = value.replace(/[^0-9]/g, '');
+            const autoType = deriveModelFromShorthand(cleanNum, r.packType);
+            return { ...r, packNumber: cleanNum, packType: autoType };
+          }
+          return { ...r, [field]: value };
+        }
+        return r;
+      })
+    );
+  };
+
+  const handleToggleWithoutPlate = (id: string) => {
+    setPackRows((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          const nextWithout = !r.isWithoutPlate;
+          return {
+            ...r,
+            isWithoutPlate: nextWithout,
+            packNumber: nextWithout ? generateNoPlateCode() : '',
+          };
+        }
+        return r;
+      })
     );
   };
 
@@ -102,11 +138,17 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
     if (tokens.length === 0) return;
 
-    const newRows: PackRow[] = tokens.map((token, index) => ({
-      id: 'bulk-' + Date.now() + '-' + index,
-      packNumber: token.replace(/[^0-9]/g, '') || token,
-      packType: packRows[0]?.packType || 'Kanger1.0_AIO',
-    }));
+    const newRows: PackRow[] = tokens.map((token, index) => {
+      const cleanNum = token.replace(/[^0-9]/g, '') || token;
+      const initialType = packRows[0]?.packType || 'Kanger1.0_AIO';
+      const derived = deriveModelFromShorthand(cleanNum, initialType);
+      return {
+        id: 'bulk-' + Date.now() + '-' + index,
+        packNumber: cleanNum,
+        packType: derived,
+        isWithoutPlate: token.toUpperCase().startsWith('NP-'),
+      };
+    });
 
     setPackRows(newRows);
     setBulkText('');
@@ -153,11 +195,18 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         setHasInwardStamp(Boolean(data.hasInwardStamp));
 
         if (Array.isArray(data.packs) && data.packs.length > 0) {
-          const extractedRows: PackRow[] = data.packs.map((p: any, idx: number) => ({
-            id: 'ocr-' + Date.now() + '-' + idx,
-            packNumber: String(p.packNumber || '').replace(/[^0-9]/g, '') || String(p.packNumber || ''),
-            packType: (p.packType as BatteryPackType) || 'Kanger1.0_AIO',
-          }));
+          const extractedRows: PackRow[] = data.packs.map((p: any, idx: number) => {
+            const rawSerial = String(p.packNumber || '').trim();
+            const cleanNum = rawSerial.replace(/[^0-9]/g, '') || rawSerial;
+            const modelKey = (p.packType as BatteryPackType) || 'Kanger1.0_AIO';
+            const autoType = deriveModelFromShorthand(cleanNum, modelKey);
+            return {
+              id: 'ocr-' + Date.now() + '-' + idx,
+              packNumber: cleanNum,
+              packType: autoType,
+              isWithoutPlate: rawSerial.toUpperCase().startsWith('NP-'),
+            };
+          });
           setPackRows(extractedRows);
           setOcrMessage('Found ' + extractedRows.length + ' pack(s) in document. Tata Stamp: ' + (data.hasInwardStamp ? 'VERIFIED' : 'NOT DETECTED'));
         }
@@ -176,7 +225,17 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
     const validRows = packRows.filter((r) => r.packNumber.trim().length > 0);
     if (validRows.length === 0) {
-      alert('Please enter at least 1 valid numeric Pack Number.');
+      alert('Please enter at least 1 valid Pack Number.');
+      return;
+    }
+
+    if (!documentNo.trim()) {
+      alert('Please enter Document / Challan Number.');
+      return;
+    }
+
+    if (!dealershipName.trim()) {
+      alert('Please enter Dealership / Source Supplier Name.');
       return;
     }
 
@@ -200,10 +259,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       status: autoApproved ? 'INWARD_AREA' : 'PENDING_APPROVAL',
       locationArea: 'Inward Area',
       currentLocation: 'Inward Area',
+      isWithoutPlate: r.isWithoutPlate,
+      sourceType: 'INWARD', // Explicitly marked as true Inward Dock entry
       inwardDate: receivedDate || nowIso,
-      documentNo: documentNo.trim() || ('DOC-' + Date.now().toString().slice(-4)),
+      documentNo: documentNo.trim(),
       dealershipName: dealershipName.trim(),
-      receivedState: receivedState.trim(),
+      receivedState: receivedState.trim() || 'Maharashtra',
       transportName: finalTransporter,
       remark: remark.trim(),
       hasInwardStamp: hasInwardStamp,
@@ -230,9 +291,9 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     const shipmentRecord: InwardShipmentRecord = {
       id: 'inw-' + Date.now(),
       timestamp: nowIso,
-      documentNo: documentNo.trim() || ('DOC-' + Date.now().toString().slice(-4)),
+      documentNo: documentNo.trim(),
       dealershipName: dealershipName.trim(),
-      receivedState: receivedState.trim(),
+      receivedState: receivedState.trim() || 'Maharashtra',
       transportName: finalTransporter,
       packCount: newPacks.length,
       packNumbers: enteredNumbers,
@@ -252,10 +313,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       docNo: shipmentRecord.documentNo,
     });
 
-    // Reset Form
+    // Reset Form completely
     setDocumentNo('');
+    setDealershipName('');
+    setReceivedState('');
     setRemark('');
-    setPackRows([{ id: 'row-' + Date.now(), packNumber: '', packType: 'Kanger1.0_AIO' }]);
+    setPackRows([{ id: 'row-' + Date.now(), packNumber: '', packType: 'Kanger1.0_AIO', isWithoutPlate: false }]);
   };
 
   return (
@@ -265,9 +328,9 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
-              <Camera className="w-3.5 h-3.5 text-orange-600" /> Tata Inward System
+              <Camera className="w-3.5 h-3.5 text-orange-600" /> Plant Inward Receiving
             </span>
-            <span className="text-xs text-slate-500 font-mono-code font-medium">Varale (B300 Plant)</span>
+            <span className="text-xs text-slate-500 font-mono-code font-medium">Tata AutoComp Systems (Varale B300 Plant)</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight font-display">
             AI Document Scan & Multi-Pack Inward Receiving
@@ -377,7 +440,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
           </div>
         )}
 
-        {/* Step 2: Document Header Information */}
+        {/* Step 2: Document Header Information - Completely Blank Initially */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2 font-display flex items-center gap-2">
             <Building className="w-4 h-4 text-blue-600" />
@@ -460,7 +523,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                   type="text"
                   value={customTransport}
                   onChange={(e) => setCustomTransport(e.target.value)}
-                  placeholder="Enter custom transporter name"
+                  placeholder="Enter custom transporter name..."
                   className="mt-2 w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                   required
                 />
@@ -497,7 +560,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
           </div>
         </div>
 
-        {/* Step 3: Multi-Pack Dynamic Table (1 to 35+ packs) */}
+        {/* Step 3: Multi-Pack Dynamic Table */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
@@ -506,7 +569,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Battery Packs in this Document ({packRows.length} Packs)
               </h3>
               <p className="text-xs text-slate-500">
-                Enter numeric pack numbers and select the official product model.
+                Enter numeric pack numbers (Auto-detects Ais models by digit length / $ge 30000$ threshold).
               </p>
             </div>
 
@@ -583,9 +646,10 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="p-3 w-12">#</th>
-                  <th className="p-3">Pack Number (Numeric)</th>
-                  <th className="p-3">Product Name (12 Official Models)</th>
-                  <th className="p-3">Destination Storage</th>
+                  <th className="p-3">Pack Number (Serial)</th>
+                  <th className="p-3">Product Name (Auto-Derived)</th>
+                  <th className="p-3">Missing Plate?</th>
+                  <th className="p-3">Destination</th>
                   <th className="p-3 text-right w-16">Action</th>
                 </tr>
               </thead>
@@ -597,9 +661,11 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                       <input
                         type="text"
                         value={row.packNumber}
+                        readOnly={row.isWithoutPlate}
                         onChange={(e) => handleRowChange(row.id, 'packNumber', e.target.value)}
                         placeholder="Enter numeric serial..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                        className={'w-full border rounded-lg px-3 py-2 text-xs font-mono-code font-bold focus:outline-none ' +
+                          (row.isWithoutPlate ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500')}
                         required
                       />
                     </td>
@@ -615,6 +681,20 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleWithoutPlate(row.id)}
+                        className={'px-2.5 py-1 rounded text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ' +
+                          (row.isWithoutPlate
+                            ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300')}
+                        title="Toggle if pack has no physical serial sticker/plate"
+                      >
+                        <Tag className="w-3 h-3" />
+                        <span>{row.isWithoutPlate ? 'NO-PLATE (Active)' : 'No Sticker?'}</span>
+                      </button>
                     </td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[11px]">
@@ -650,7 +730,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               </span>
             ) : (
               <span className="text-amber-700 font-medium">
-                Employee entry: Packs will be submitted for Supervisor / Manager approval.
+                Employee entry: Packs will be submitted for Supervisor / Manager approval (Editable while pending).
               </span>
             )}
           </div>

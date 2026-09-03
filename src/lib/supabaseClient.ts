@@ -259,3 +259,19 @@ export async function syncInwardToCloud(inward: InwardShipmentRecord): Promise<b
     return false;
   }
 }
+
+export async function deletePackFromCloud(packId: string): Promise<boolean> {
+  try {
+    const sb = getSupabase();
+    if (!sb || !packId) return false;
+    const { error } = await sb.from('battery_packs').delete().eq('id', packId);
+    if (error) {
+      console.warn('Supabase delete warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase delete exception:', e);
+    return false;
+  }
+}

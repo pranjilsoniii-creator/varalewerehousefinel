@@ -13,15 +13,18 @@ import { LoginModal } from './components/LoginModal';
 import { LoginScreen } from './components/LoginScreen';
 import { UserManagementModal } from './components/UserManagementModal';
 import { AdminLineDataPopulator } from './components/AdminLineDataPopulator';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { BatteryPack, DispatchLot, InwardShipmentRecord, Invoice } from './types';
+import {
+  BatteryPack,
+  DispatchLot,
+  InwardShipmentRecord,
+  Invoice,
+} from './types';
 import {
   createInitialWarehousePacks,
   createInitialDispatchLots,
   createInitialInwardShipments,
   getStoredWarehouseLines,
   saveStoredWarehouseLines,
-  DEFAULT_WAREHOUSE_LINES,
 } from './data/seedWarehouse';
 import {
   getSupabase,
@@ -29,21 +32,68 @@ import {
   syncPacksToCloud,
   syncLotToCloud,
   syncInwardToCloud,
+  deletePackFromCloud,
   mapRowToPack,
 } from './lib/supabaseClient';
+import { useAuth } from './context/AuthContext';
 
-const MainAppContent: React.FC = () => {
-  const { currentUser, isSuperAdmin } = useAuth();
+// Route Helper Mappings
+function getTabFromPath(path: string): string {
+  const p = path.toLowerCase().trim();
+  if (p === '/inward' || p === '/inward-scan') return 'INWARD';
+  if (p === '/inward-register' || p === '/inward-log' || p === '/inwards') return 'INWARD_LOG';
+  if (p === '/stock' || p === '/total-stock' || p === '/inventory') return 'TOTAL_STOCK';
+  if (p === '/lines' || p === '/line-inspector' || p === '/storage') return 'LINE_INSPECTOR';
+  if (p === '/dispatch' || p === '/dispatch-cart' || p === '/staging') return 'DISPATCH_CART';
+  if (p === '/invoices' || p === '/gatepass' || p === '/invoice') return 'INVOICES';
+  if (p === '/analytics' || p === '/reports' || p === '/dashboard') return 'ANALYTICS';
+  return 'INWARD';
+}
 
-  // Navigation active tab: 'INWARD' | 'INWARD_LOG' | 'TOTAL_STOCK' | 'LINE_INSPECTOR' | 'DISPATCH_CART' | 'INVOICES' | 'ANALYTICS'
-  const [activeTab, setActiveTab] = useState<string>('INWARD');
+function getPathFromTab(tab: string): string {
+  switch (tab) {
+    case 'INWARD': return '/inward';
+    case 'INWARD_LOG': return '/inward-register';
+    case 'TOTAL_STOCK': return '/stock';
+    case 'LINE_INSPECTOR': return '/lines';
+    case 'DISPATCH_CART': return '/dispatch';
+    case 'INVOICES': return '/invoices';
+    case 'ANALYTICS': return '/analytics';
+    default: return '/inward';
+  }
+}
 
-  // Dynamic Warehouse Lines State (Line A-01..A-25, B-01..B-25, and any custom lines)
+export function App() {
+  const { currentUser, isSuperAdmin, isManager, isSupervisor, hasPermission } = useAuth();
+
+  // Active Tab State with browser URL sync
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return getTabFromPath(window.location.pathname);
+  });
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(getTabFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const newPath = getPathFromTab(tab);
+    if (window.location.pathname !== newPath) {
+      window.history.pushState(null, '', newPath);
+    }
+  };
+
+  // Dynamic Warehouse Lines List
   const [warehouseLines, setWarehouseLines] = useState<string[]>(() => {
     return getStoredWarehouseLines();
   });
 
-  // Core Warehouse State with LocalStorage persistence
+  // Master State: Battery Packs
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
     const saved = localStorage.getItem('tata_wms_packs_v4');
     if (saved) {
@@ -222,383 +272,377 @@ const MainAppContent: React.FC = () => {
     syncInwardToCloud(shipmentRecord);
   };
 
-  // Super Admin Historical Line Populator Save Action
+  // Line Populator Save Action
   const handleSaveAdminLinePacks = (newPacks: BatteryPack[]) => {
     setPacks((prev) => [...newPacks, ...prev]);
     syncPacksToCloud(newPacks);
   };
 
-  // Supervisor Approval for Single Inward Pack
+  // Delete / Remove Pack Action (Super Admin & Manager)
+  const handleDeletePack = (packId: string) => {
+    setPacks((prev) => prev.filter((p) => p.id !== packId));
+    deletePackFromCloud(packId);
+  };
+
+  // Edit Pack Action
+  const handleEditPack = (updatedPack: BatteryPack) => {
+    setPacks((prev) =>
+      prev.map((p) => (p.id === updatedPack.id ? updatedPack : p))
+    );
+    syncPacksToCloud([updatedPack]);
+  };
+
+  // Inward Approval Handler (Supervisor/Manager)
   const handleApproveInwardPack = (packId: string) => {
+    const nowIso = new Date().toISOString();
     const approverName = currentUser?.name || currentUser?.username || 'Supervisor';
-    const nowIso = new Date().toISOString();
 
-    setPacks((prev) => {
-      const updated = prev.map((p) =>
-        p.id === packId
-          ? {
-              ...p,
-              status: 'INWARD_AREA' as any,
-              inwardApprovedBy: approverName,
-              inwardApprovedAt: nowIso,
-            }
-          : p
-      );
-      syncPacksToCloud(updated.filter((p) => p.id === packId));
-      return updated;
-    });
-  };
-
-  // Supervisor Batch Approval for Multiple Inward Packs
-  const handleApproveMultipleInwardPacks = (packIds: string[]) => {
-    const idSet = new Set(packIds);
-    const approverName = currentUser?.name || currentUser?.username || 'Supervisor';
-    const nowIso = new Date().toISOString();
-
-    setPacks((prev) => {
-      const updated = prev.map((p) =>
-        idSet.has(p.id)
-          ? {
-              ...p,
-              status: 'INWARD_AREA' as any,
-              inwardApprovedBy: approverName,
-              inwardApprovedAt: nowIso,
-            }
-          : p
-      );
-      syncPacksToCloud(updated.filter((p) => idSet.has(p.id)));
-      return updated;
-    });
-  };
-
-  // Move Pack from Inward Area to Line & Rack
-  const handleMovePackToLocation = (
-    packId: string,
-    location: { lineId: string; rackNumber: number; rackSlot: number }
-  ) => {
-    const operatorName = currentUser?.name || currentUser?.username || 'Staff Operator';
-    const nowIso = new Date().toISOString();
-    const locationStr = location.lineId + ', R-' + String(location.rackNumber).padStart(2, '0') + ', L-' + String(location.rackSlot).padStart(2, '0');
-
-    setPacks((prev) => {
-      const updated = prev.map((p) => {
-        if (p.id === packId) {
-          const updatedHistory = [
-            {
-              id: 'mov-' + Date.now(),
-              timestamp: nowIso,
-              fromLocation: p.currentLocation || p.locationArea || 'Inward Area',
-              toLocation: locationStr,
-              movedBy: operatorName,
-              reason: 'Rack Placement / Warehouse Allocation',
-            },
-            ...(p.movementHistory || []),
-          ];
-
-          return {
-            ...p,
-            status: 'IN_STORAGE' as any,
-            locationArea: 'Warehouse Storage',
-            currentLocation: locationStr,
-            lineId: location.lineId,
-            rackNumber: location.rackNumber,
-            rackSlot: location.rackSlot,
-            movementHistory: updatedHistory,
-          };
-        }
-        return p;
-      });
-      syncPacksToCloud(updated.filter((p) => p.id === packId));
-      return updated;
-    });
-  };
-
-  const handleMoveMultiplePacksToLocation = (
-    packIds: string[],
-    location: { lineId: string; rackNumber: number; rackSlot: number }
-  ) => {
-    const idSet = new Set(packIds);
-    const operatorName = currentUser?.name || currentUser?.username || 'Staff Operator';
-    const nowIso = new Date().toISOString();
-    const locationStr = location.lineId + ', R-' + String(location.rackNumber).padStart(2, '0') + ', L-' + String(location.rackSlot).padStart(2, '0');
-
-    setPacks((prev) => {
-      const updated = prev.map((p) => {
-        if (idSet.has(p.id)) {
-          const updatedHistory = [
-            {
-              id: 'mov-' + Date.now() + '-' + p.id,
-              timestamp: nowIso,
-              fromLocation: p.currentLocation || p.locationArea || 'Inward Area',
-              toLocation: locationStr,
-              movedBy: operatorName,
-              reason: 'Batch Line Allocation',
-            },
-            ...(p.movementHistory || []),
-          ];
-
-          return {
-            ...p,
-            status: 'IN_STORAGE' as any,
-            locationArea: 'Warehouse Storage',
-            currentLocation: locationStr,
-            lineId: location.lineId,
-            rackNumber: location.rackNumber,
-            rackSlot: location.rackSlot,
-            movementHistory: updatedHistory,
-          };
-        }
-        return p;
-      });
-      syncPacksToCloud(updated.filter((p) => idSet.has(p.id)));
-      return updated;
-    });
-  };
-
-  // Stage a pack into Dispatch Cart
-  const handleAddPackToDispatch = (pack: BatteryPack) => {
-    if (pack.status === 'DISPATCHED') {
-      alert('Pack #' + pack.packNumber + ' has already been dispatched.');
-      return;
-    }
-    if (pack.status === 'PENDING_APPROVAL') {
-      alert('Pack #' + pack.packNumber + ' is still pending inward approval.');
-      return;
-    }
-
-    setPacks((prev) =>
-      prev.map((p) => (p.id === pack.id ? { ...p, status: 'IN_DISPATCH_AREA' } : p))
-    );
-    setActiveTab('DISPATCH_CART');
-  };
-
-  // Stage multiple packs into Dispatch Cart
-  const handleAddMultipleToDispatch = (packIds: string[]) => {
-    const idSet = new Set(packIds);
-    setPacks((prev) =>
-      prev.map((p) => (idSet.has(p.id) ? { ...p, status: 'IN_DISPATCH_AREA' } : p))
-    );
-    setActiveTab('DISPATCH_CART');
-  };
-
-  // Remove pack from Dispatch Cart (returns to previous location or Inward Area)
-  const handleRemoveFromDispatchCart = (packId: string) => {
     setPacks((prev) =>
       prev.map((p) => {
         if (p.id === packId) {
-          return {
+          const updated: BatteryPack = {
             ...p,
-            status: p.lineId ? 'IN_STORAGE' : 'INWARD_AREA',
+            status: 'INWARD_AREA',
+            inwardApprovedBy: approverName,
+            inwardApprovedAt: nowIso,
+            movementHistory: [
+              ...(p.movementHistory || []),
+              {
+                id: 'mov-' + Date.now(),
+                timestamp: nowIso,
+                fromLocation: 'Receiving Dock',
+                toLocation: 'Inward Area',
+                movedBy: approverName,
+                reason: 'Inward Approved by ' + approverName,
+              },
+            ],
           };
+          syncPacksToCloud([updated]);
+          return updated;
         }
         return p;
       })
     );
   };
 
-  // Final Dispatch Approval: Updates pack status to DISPATCHED
-  const handleApproveDispatchLot = (newLot: DispatchLot, dispatchedPackIds: string[]) => {
-    const idSet = new Set(dispatchedPackIds);
-    setDispatchLots((prev) => [newLot, ...prev]);
-    syncLotToCloud(newLot);
+  const handleApproveMultipleInwardPacks = (packIds: string[]) => {
+    packIds.forEach((id) => handleApproveInwardPack(id));
+  };
 
-    const operatorName = currentUser?.name || currentUser?.username || 'Dispatch Lead';
+  // Relocate Pack to Line Rack Coordinates
+  const handleMovePackToLocation = (
+    packId: string,
+    location: { lineId: string; rackNumber: number; rackSlot: number }
+  ) => {
+    const locStr = location.lineId + ', R-' + String(location.rackNumber).padStart(2, '0') + ', L-0' + location.rackSlot;
     const nowIso = new Date().toISOString();
+    const moverName = currentUser?.name || currentUser?.username || 'Operator';
 
-    setPacks((prev) => {
-      const updated = prev.map((p) => {
-        if (idSet.has(p.id)) {
-          return {
+    setPacks((prev) =>
+      prev.map((p) => {
+        if (p.id === packId) {
+          const updated: BatteryPack = {
             ...p,
-            status: 'DISPATCHED' as any,
-            dispatchedBy: operatorName,
-            dispatchedAt: nowIso,
-            dispatchToAddress: newLot.consigneeAddress,
-            dispatchVehicleNo: newLot.vehicleNumber,
-            dispatchLrNo: newLot.lrNumber,
+            status: 'IN_STORAGE',
+            locationArea: 'Warehouse Storage',
+            currentLocation: locStr,
+            lineId: location.lineId,
+            rackNumber: location.rackNumber,
+            rackSlot: location.rackSlot,
             movementHistory: [
-              {
-                id: 'mov-' + Date.now() + '-' + p.id,
-                timestamp: nowIso,
-                fromLocation: p.currentLocation || 'Inward Area',
-                toLocation: 'Consignee: ' + newLot.consigneeName + ' (' + newLot.vehicleNumber + ')',
-                movedBy: operatorName,
-                reason: 'Dispatched under Lot #' + newLot.lotNumber + ' (Doc #' + newLot.transportDocNo + ')',
-              },
               ...(p.movementHistory || []),
+              {
+                id: 'mov-' + Date.now(),
+                timestamp: nowIso,
+                fromLocation: p.currentLocation || p.locationArea || 'Inward Area',
+                toLocation: locStr,
+                movedBy: moverName,
+                reason: 'Allocated to ' + locStr,
+              },
             ],
           };
+          syncPacksToCloud([updated]);
+          return updated;
         }
         return p;
+      })
+    );
+  };
+
+  const handleMoveMultiplePacksToLocation = (
+    packIds: string[],
+    location: { lineId: string; rackNumber: number; rackSlot: number }
+  ) => {
+    packIds.forEach((id, idx) => {
+      // Auto-increment rack/slot if moving multiple
+      const targetSlot = ((location.rackSlot - 1 + idx) % 4) + 1;
+      const targetRack = location.rackNumber + Math.floor((location.rackSlot - 1 + idx) / 4);
+      handleMovePackToLocation(id, {
+        lineId: location.lineId,
+        rackNumber: targetRack,
+        rackSlot: targetSlot,
       });
-      syncPacksToCloud(updated.filter((p) => idSet.has(p.id)));
-      return updated;
     });
   };
 
-  // Navigate directly from Lot to Invoice Generator
+  // Send Pack to Dispatch Cart
+  const handleSendToDispatch = (pack: BatteryPack) => {
+    const nowIso = new Date().toISOString();
+    const moverName = currentUser?.name || currentUser?.username || 'Staff';
+
+    setPacks((prev) =>
+      prev.map((p) => {
+        if (p.id === pack.id) {
+          const updated: BatteryPack = {
+            ...p,
+            status: 'IN_DISPATCH_AREA',
+            locationArea: 'Dispatch Staging Bay',
+            currentLocation: 'Dispatch Bay (Staged)',
+            movementHistory: [
+              ...(p.movementHistory || []),
+              {
+                id: 'mov-' + Date.now(),
+                timestamp: nowIso,
+                fromLocation: p.currentLocation || 'Inward Area',
+                toLocation: 'Dispatch Staging Bay',
+                movedBy: moverName,
+                reason: 'Staged for Outward Dispatch',
+              },
+            ],
+          };
+          syncPacksToCloud([updated]);
+          return updated;
+        }
+        return p;
+      })
+    );
+  };
+
+  const handleSendMultipleToDispatch = (packIds: string[]) => {
+    packIds.forEach((id) => {
+      const found = packs.find((p) => p.id === id);
+      if (found) handleSendToDispatch(found);
+    });
+  };
+
+  // Remove Pack from Dispatch Cart back to previous location
+  const handleRemoveFromCart = (packId: string) => {
+    const nowIso = new Date().toISOString();
+    const moverName = currentUser?.name || currentUser?.username || 'Staff';
+
+    setPacks((prev) =>
+      prev.map((p) => {
+        if (p.id === packId) {
+          const prevLocation = p.lineId ? p.lineId + ', R-' + p.rackNumber + ', L-0' + p.rackSlot : 'Inward Area';
+          const updated: BatteryPack = {
+            ...p,
+            status: p.lineId ? 'IN_STORAGE' : 'INWARD_AREA',
+            locationArea: p.lineId ? 'Warehouse Storage' : 'Inward Area',
+            currentLocation: prevLocation,
+            movementHistory: [
+              ...(p.movementHistory || []),
+              {
+                id: 'mov-' + Date.now(),
+                timestamp: nowIso,
+                fromLocation: 'Dispatch Staging Bay',
+                toLocation: prevLocation,
+                movedBy: moverName,
+                reason: 'Removed from Dispatch Staging Cart',
+              },
+            ],
+          };
+          syncPacksToCloud([updated]);
+          return updated;
+        }
+        return p;
+      })
+    );
+  };
+
+  const handleAddMultipleToCart = (packIds: string[]) => {
+    packIds.forEach((id) => {
+      const found = packs.find((p) => p.id === id);
+      if (found) handleSendToDispatch(found);
+    });
+  };
+
+  // Complete Outward Dispatch Lot Execution
+  const handleApproveDispatchLot = (lot: DispatchLot, dispatchedPackIds: string[]) => {
+    setDispatchLots((prev) => [lot, ...prev]);
+    syncLotToCloud(lot);
+
+    const nowIso = new Date().toISOString();
+    const operatorName = currentUser?.name || currentUser?.username || 'Dispatch Lead';
+
+    setPacks((prev) =>
+      prev.map((p) => {
+        if (dispatchedPackIds.includes(p.id)) {
+          const updated: BatteryPack = {
+            ...p,
+            status: 'DISPATCHED',
+            locationArea: 'Dispatched / In Transit',
+            currentLocation: 'Dispatched to ' + lot.consigneeName,
+            dispatchedAt: nowIso,
+            dispatchedBy: operatorName,
+            dispatchLotId: lot.id,
+            dispatchDocNo: lot.transportDocNo,
+            dispatchLrNo: lot.lrNumber,
+            dispatchVehicleNo: lot.vehicleNumber,
+            dispatchToAddress: lot.consigneeAddress,
+            dispatchToCustomer: lot.consigneeName,
+            movementHistory: [
+              ...(p.movementHistory || []),
+              {
+                id: 'mov-' + Date.now(),
+                timestamp: nowIso,
+                fromLocation: 'Dispatch Staging Bay',
+                toLocation: 'Dispatched (Vehicle ' + lot.vehicleNumber + ')',
+                movedBy: operatorName,
+                reason: 'Dispatched under Lot #' + lot.lotNumber + ' (LR: ' + lot.lrNumber + ')',
+              },
+            ],
+          };
+          syncPacksToCloud([updated]);
+          return updated;
+        }
+        return p;
+      })
+    );
+  };
+
+  // Open Invoice Generation for a Dispatch Lot
   const handleGenerateInvoiceForLot = (lot: DispatchLot) => {
     setActiveLotForInvoice(lot);
-    setActiveTab('INVOICES');
-  };
-
-  // Save Generated Invoice
-  const handleSaveInvoice = (invoice: Invoice) => {
-    setSavedInvoices((prev) => [invoice, ...prev]);
-  };
-
-  // Clean Slate reset helper
-  const handleResetToCleanSlate = () => {
-    if (confirm('Reset warehouse back to clean slate (0 packs) for clean presentation?')) {
-      setPacks([]);
-      setDispatchLots([]);
-      setInwardShipments([]);
-      setSavedInvoices([]);
-      localStorage.setItem('tata_wms_packs_v4', JSON.stringify([]));
-      localStorage.setItem('tata_wms_lots_v4', JSON.stringify([]));
-      localStorage.setItem('tata_wms_inwards_v4', JSON.stringify([]));
-      localStorage.setItem('tata_wms_invoices_v4', JSON.stringify([]));
-    }
+    handleTabChange('INVOICES');
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
-      {/* Top Main Navigation Header */}
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-orange-500 selection:text-white">
+      {/* Top Professional Navigation Header */}
       <Navbar
         activeTab={activeTab}
-        onTabChange={setActiveTab}
-        totalActivePacks={packs.length}
+        onTabChange={handleTabChange}
+        totalActivePacks={packs.filter((p) => p.sourceType !== 'LINE_POPULATE').length}
         cartPacksCount={stagedCartPacks.length}
         dispatchedLotsCount={dispatchLots.length}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
         onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
-        onQuickSearch={(query) => {
-          setActiveTab('TOTAL_STOCK');
-        }}
       />
 
-      {/* Main Content View Switcher */}
-      <main className="flex-1 pb-12">
-        {activeTab === 'INWARD' && (
+      {/* Main Content Workspace */}
+      <main className="flex-1 pb-16">
+        {activeTab === 'INWARD' && hasPermission('canInward') && (
           <InwardScanner
             existingPacks={packs}
             onAddPacks={handleAddInwardPacks}
-            onNavigateToInwardLog={() => setActiveTab('INWARD_LOG')}
+            onNavigateToInwardLog={() => handleTabChange('INWARD_LOG')}
           />
         )}
 
-        {activeTab === 'INWARD_LOG' && (
+        {activeTab === 'INWARD_LOG' && hasPermission('canInward') && (
           <InwardRegisterView
             packs={packs}
             onApproveInwardPack={handleApproveInwardPack}
             onApproveMultipleInwardPacks={handleApproveMultipleInwardPacks}
-            onSendToDispatch={handleAddPackToDispatch}
-            onSendMultipleToDispatch={handleAddMultipleToDispatch}
+            onSendToDispatch={handleSendToDispatch}
+            onSendMultipleToDispatch={handleSendMultipleToDispatch}
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onMovePackToLocation={handleMovePackToLocation}
             onMoveMultiplePacksToLocation={handleMoveMultiplePacksToLocation}
+            onEditPack={handleEditPack}
+            onDeletePack={handleDeletePack}
           />
         )}
 
-        {activeTab === 'TOTAL_STOCK' && (
+        {activeTab === 'TOTAL_STOCK' && hasPermission('canViewStock') && (
           <TotalStockView
             packs={packs}
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
-            onSendToDispatch={handleAddPackToDispatch}
+            onSendToDispatch={handleSendToDispatch}
+            onDeletePack={handleDeletePack}
           />
         )}
 
-        {activeTab === 'LINE_INSPECTOR' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-            <LineInspectorView
-              packs={packs}
-              warehouseLines={warehouseLines}
-              onAddNewLine={handleAddNewWarehouseLine}
-              onOpenPackDetails={(pack) => setInspectingPack(pack)}
-              onSendToDispatch={handleAddPackToDispatch}
-              onOpenRackLoader={(line, rack) => {
-                setIsAdminPopulatorOpen(true);
-              }}
-            />
-          </div>
+        {activeTab === 'LINE_INSPECTOR' && hasPermission('canLineManage') && (
+          <LineInspectorView
+            packs={packs}
+            warehouseLines={warehouseLines}
+            onAddNewLine={handleAddNewWarehouseLine}
+            onOpenPackDetails={(pack) => setInspectingPack(pack)}
+            onSendToDispatch={handleSendToDispatch}
+            onOpenRackLoader={(line, rack) => {
+              setIsAdminPopulatorOpen(true);
+            }}
+            onDeletePack={handleDeletePack}
+          />
         )}
 
-        {activeTab === 'DISPATCH_CART' && (
+        {activeTab === 'DISPATCH_CART' && hasPermission('canDispatch') && (
           <DispatchCart
             stagedPacks={stagedCartPacks}
             availableStoragePacks={activeStoragePacks}
-            onRemoveFromCart={handleRemoveFromDispatchCart}
-            onAddMultipleToCart={handleAddMultipleToDispatch}
+            onRemoveFromCart={handleRemoveFromCart}
+            onAddMultipleToCart={handleAddMultipleToCart}
             onApproveDispatchLot={handleApproveDispatchLot}
             onGenerateInvoiceForLot={handleGenerateInvoiceForLot}
           />
         )}
 
-        {activeTab === 'INVOICES' && (
+        {activeTab === 'INVOICES' && hasPermission('canInvoices') && (
           <InvoiceGenerator
             initialLot={activeLotForInvoice}
             savedInvoices={savedInvoices}
-            onSaveInvoice={handleSaveInvoice}
-            onBackToDispatch={() => setActiveTab('DISPATCH_CART')}
+            onSaveInvoice={(newInvoice) => {
+              setSavedInvoices((prev) => [newInvoice, ...prev]);
+            }}
           />
         )}
 
-        {activeTab === 'ANALYTICS' && (
+        {activeTab === 'ANALYTICS' && hasPermission('canAnalytics') && (
           <AnalyticsView
             packs={packs}
             dispatchLots={dispatchLots}
             inwardShipments={inwardShipments}
-            warehouseLines={warehouseLines}
-            onResetToDemoData={handleResetToCleanSlate}
           />
         )}
       </main>
 
-      {/* Professional System Footer */}
-      <footer className="h-10 bg-white border-t border-slate-200 px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 font-medium uppercase tracking-wider gap-2 py-2 sm:py-0">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            System: <strong className="text-slate-700">Tata AutoComp WMS PRO</strong>
-          </span>
-          <span className="text-slate-300">|</span>
-          <span className="text-emerald-700 font-bold">Plant: Varale (B300 Plant)</span>
-          <span className="text-slate-300 hidden sm:inline">|</span>
-          <span className="hidden sm:inline text-blue-700 font-bold">Supabase Realtime Cloud Sync: Active</span>
-        </div>
-        <div className="text-slate-400 normal-case sm:uppercase text-[10px]">
-          &copy; {new Date().getFullYear()} Tata AutoComp Systems Limited • Varale (B300 Plant) Management System
-        </div>
-      </footer>
+      {/* MODAL 1: Individual Pack Pedigree & History */}
+      {inspectingPack && (
+        <PackDetailsModal
+          pack={inspectingPack}
+          onClose={() => setInspectingPack(null)}
+          onSendToDispatch={(p) => {
+            handleSendToDispatch(p);
+            setInspectingPack(null);
+          }}
+        />
+      )}
 
-      {/* Pack Details Modal */}
-      <PackDetailsModal
-        pack={inspectingPack}
-        onClose={() => setInspectingPack(null)}
-        onSelectForMove={() => {}}
-        onAddToDispatch={handleAddPackToDispatch}
-        onNavigateToLine={() => setActiveTab('LINE_INSPECTOR')}
-      />
-
-      {/* Supabase Cloud Connection Modal */}
+      {/* MODAL 2: Supabase Cloud Database Config */}
       <SupabaseSyncModal
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
-        totalPacksCount={packs.length}
-        totalLotsCount={dispatchLots.length}
-        onTriggerSync={() => {
-          fetchPacksFromCloud().then((p) => {
-            if (p) setPacks(p);
-          });
-        }}
       />
 
-      {/* Super Admin Historical Line Populator Modal */}
-      {isAdminPopulatorOpen && isSuperAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+      {/* MODAL 3: Switch User Login Dialog */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+      />
+
+      {/* MODAL 4: User & Staff Management Modal (Super Admin & Manager) */}
+      <UserManagementModal
+        isOpen={isUserManagementModalOpen}
+        onClose={() => setIsUserManagementModalOpen(false)}
+      />
+
+      {/* MODAL 5: Historical Line & Rack Data Populator Modal */}
+      {isAdminPopulatorOpen && (isSuperAdmin || isManager) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fadeIn">
+          <div className="w-full max-w-5xl my-8">
             <AdminLineDataPopulator
               existingPacks={packs}
               warehouseLines={warehouseLines}
@@ -609,28 +653,8 @@ const MainAppContent: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Login & User Switcher Modal */}
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-      />
-
-      {/* Super Admin User Management Modal */}
-      <UserManagementModal
-        isOpen={isUserManagementModalOpen}
-        onClose={() => setIsUserManagementModalOpen(false)}
-      />
     </div>
   );
-};
-
-export const App: React.FC = () => {
-  return (
-    <AuthProvider>
-      <MainAppContent />
-    </AuthProvider>
-  );
-};
+}
 
 export default App;

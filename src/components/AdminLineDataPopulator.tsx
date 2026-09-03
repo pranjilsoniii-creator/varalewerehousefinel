@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Layers,
   Plus,
@@ -18,9 +18,10 @@ import {
   Lock,
   ChevronRight,
   FolderPlus,
+  Tag,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, deriveModelFromShorthand } from '../data/batteryCatalog';
 import {
   getStoredWarehouseLines,
   saveStoredWarehouseLines,
@@ -42,24 +43,7 @@ interface RackSlotInput {
   packNumber: string;
   modelInput: string;
   normalizedModel: BatteryPackType;
-}
-
-// Shorthand normalization dictionary
-function normalizeShorthand(input: string): BatteryPackType {
-  const clean = input.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (clean.includes('gen3') || clean === 'g3' || clean === 'k1gen3') return 'Kanger1.0_Gen3';
-  if (clean.includes('ckd') || clean === 'k1ckd') return 'Kanger1.0_CKD';
-  if (clean.includes('fbu') || clean === 'k1fbu') return 'Kanger1.0_FBU';
-  if (clean.includes('aio') || clean === 'allinone' || clean === 'k1aio' || clean === 'k1') return 'Kanger1.0_AIO';
-  if (clean.includes('k2') || clean.includes('kanger2')) return 'Kanger2.0';
-  if (clean.includes('k3') || clean.includes('kanger3')) return 'Kanger3.0';
-  if (clean.includes('tamor') || clean.includes('elr')) return 'Tamor_ELR';
-  if (clean.includes('nova') || clean.includes('lrp')) return 'Nova_LRP';
-  if (clean.includes('challengermr') || clean === 'mr') return 'Challenger_MR';
-  if (clean.includes('challenger') || clean.includes('lr')) return 'Challenger_LR';
-  if (clean.includes('nonais') || clean.includes('limbernon')) return 'Limber_Non_Ais';
-  if (clean.includes('limber') || clean.includes('ais')) return 'Limber_Ais';
-  return 'Kanger1.0_AIO';
+  isWithoutPlate?: boolean;
 }
 
 export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
@@ -71,7 +55,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
 }) => {
   const { currentUser } = useAuth();
 
-  // Mode Tab: 'STEPPER' (Rack-by-Rack Save & Next) vs 'EXCEL_SHEET' (Full Matrix Matching User Photo)
+  // Mode Tab: 'STEPPER' (Rack-by-Rack Save & Next) vs 'EXCEL_SHEET' (Full Sheet Matrix)
   const [activeEntryMode, setActiveEntryMode] = useState<'STEPPER' | 'EXCEL_SHEET'>('STEPPER');
 
   // Selected Line
@@ -86,16 +70,19 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
 
   // 4 Slots for currently active rack (Level 1, 2, 3, 4)
   const [rackSlots, setRackSlots] = useState<RackSlotInput[]>([
-    { slot: 1, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
-    { slot: 2, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
-    { slot: 3, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
-    { slot: 4, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO' },
+    { slot: 1, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO', isWithoutPlate: false },
+    { slot: 2, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO', isWithoutPlate: false },
+    { slot: 3, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO', isWithoutPlate: false },
+    { slot: 4, packNumber: '', modelInput: 'AIO', normalizedModel: 'Kanger1.0_AIO', isWithoutPlate: false },
   ]);
 
   // Bulk Paste Text for Excel Sheet Matrix Mode
   const [matrixText, setMatrixText] = useState('');
   const [showMatrixPaste, setShowMatrixPaste] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'warning' } | null>(null);
+
+  // Input refs for keyboard navigation
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Check how many packs are already stored in each rack for the selected line
   const existingRackCounts = useMemo(() => {
@@ -115,7 +102,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
     return counts;
   }, [existingPacks, selectedLine]);
 
-  // Load any existing packs for active rack into slot inputs
+  // Load existing packs for active rack into slot inputs
   useEffect(() => {
     const existing = existingRackCounts[activeRackNumber]?.packs || [];
     const newSlots: RackSlotInput[] = [1, 2, 3, 4].map((slotNum) => {
@@ -126,6 +113,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
           packNumber: foundPack.packNumber,
           modelInput: foundPack.packType,
           normalizedModel: foundPack.packType,
+          isWithoutPlate: foundPack.isWithoutPlate,
         };
       }
       return {
@@ -133,23 +121,47 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         packNumber: '',
         modelInput: 'AIO',
         normalizedModel: 'Kanger1.0_AIO',
+        isWithoutPlate: false,
       };
     });
     setRackSlots(newSlots);
   }, [activeRackNumber, selectedLine, existingRackCounts]);
 
-  // Handle slot change
+  // Handle slot change with auto-derivation
   const handleSlotChange = (slotIndex: number, field: 'packNumber' | 'modelInput', value: string) => {
     setRackSlots((prev) => {
       const next = [...prev];
       if (field === 'packNumber') {
-        next[slotIndex].packNumber = value.replace(/[^0-9]/g, '');
+        const cleanVal = value.trim();
+        next[slotIndex].packNumber = cleanVal;
+        if (cleanVal && cleanVal !== '0') {
+          next[slotIndex].normalizedModel = deriveModelFromShorthand(cleanVal, next[slotIndex].modelInput);
+        }
       } else if (field === 'modelInput') {
         next[slotIndex].modelInput = value;
-        next[slotIndex].normalizedModel = normalizeShorthand(value);
+        next[slotIndex].normalizedModel = deriveModelFromShorthand(next[slotIndex].packNumber, value);
       }
       return next;
     });
+  };
+
+  // Keyboard navigation handler for inputs
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, currentIndex: number) => {
+    if (e.key === 'ArrowDown' || e.key === 'Enter') {
+      e.preventDefault();
+      const nextIdx = currentIndex + 1;
+      if (nextIdx < inputRefs.current.length && inputRefs.current[nextIdx]) {
+        inputRefs.current[nextIdx]?.focus();
+      } else if (e.key === 'Enter') {
+        handleSaveAndNextRack();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIdx = currentIndex - 1;
+      if (prevIdx >= 0 && inputRefs.current[prevIdx]) {
+        inputRefs.current[prevIdx]?.focus();
+      }
+    }
   };
 
   // Add a new custom warehouse line
@@ -176,17 +188,18 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
 
   // SAVE & NEXT RACK ACTION (Core Sequential Flow)
   const handleSaveAndNextRack = () => {
-    const validSlotEntries = rackSlots.filter((s) => s.packNumber.trim().length > 0);
-    const existingCountInThisRack = existingRackCounts[activeRackNumber]?.count || 0;
+    // Exclude '0' and empty string (0 represents empty rack)
+    const validSlotEntries = rackSlots.filter(
+      (s) => s.packNumber.trim().length > 0 && s.packNumber.trim() !== '0'
+    );
 
-    // Check strict max 4 constraint
     if (validSlotEntries.length > MAX_PACKS_PER_RACK) {
       alert('Capacity Error: A rack can hold a maximum of 4 packs (Slots 1 to 4).');
       return;
     }
 
     if (validSlotEntries.length === 0) {
-      // Advance to next rack without saving if empty
+      // Advance to next rack without saving if all slots are 0 or blank
       if (activeRackNumber < RACKS_PER_LINE) {
         setActiveRackNumber((prev) => prev + 1);
       }
@@ -194,7 +207,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
     }
 
     const nowIso = new Date().toISOString();
-    const adminName = currentUser?.name || currentUser?.username || 'Super Admin';
+    const operatorName = currentUser?.name || currentUser?.username || 'Line Manager';
 
     // Create BatteryPack items
     const newPacks: BatteryPack[] = validSlotEntries.map((slotItem, idx) => {
@@ -209,22 +222,24 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         lineId: selectedLine,
         rackNumber: activeRackNumber,
         rackSlot: slotItem.slot,
+        sourceType: 'LINE_POPULATE', // Direct Line Stock (Excluded from Inward Register, included in Total Stock)
+        isWithoutPlate: slotItem.packNumber.toUpperCase().startsWith('NP-'),
         inwardDate: nowIso,
         documentNo: 'LINE-LOAD-' + selectedLine,
         dealershipName: 'Varale B300 Line Stock',
         receivedState: 'Maharashtra',
         transportName: 'Direct Line Allocation',
         hasInwardStamp: true,
-        inwardBy: adminName,
-        inwardApprovedBy: adminName,
+        inwardBy: operatorName,
+        inwardApprovedBy: operatorName,
         inwardApprovedAt: nowIso,
         movementHistory: [
           {
             id: 'mov-' + Date.now() + '-' + idx,
             timestamp: nowIso,
-            fromLocation: 'Initial Stocking',
+            fromLocation: 'Initial Line Stocking',
             toLocation: locStr,
-            movedBy: adminName,
+            movedBy: operatorName,
             reason: 'Sequential Rack Allocation (Line ' + selectedLine + ', Rack ' + activeRackNumber + ')',
           },
         ],
@@ -243,14 +258,14 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
     }
   };
 
-  // MULTI-PASTE MATRIX PARSER (Matching the uploaded photo chunking by 4)
+  // MULTI-PASTE MATRIX PARSER (Matching user sheet chunking by 4 with 0 empty rack support)
   const handleApplyMatrixPaste = () => {
     if (!matrixText.trim()) return;
     const lines = matrixText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
     if (lines.length === 0) return;
 
     const nowIso = new Date().toISOString();
-    const adminName = currentUser?.name || currentUser?.username || 'Super Admin';
+    const operatorName = currentUser?.name || currentUser?.username || 'Line Manager';
     const newPacks: BatteryPack[] = [];
 
     let currentRackIndex = activeRackNumber;
@@ -258,15 +273,18 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
 
     lines.forEach((lineText, idx) => {
       const parts = lineText.split(/[\t,;]+/).map((s) => s.trim());
-      const boxCode = parts[0]?.replace(/[^0-9]/g, '') || parts[0] || '';
+      const rawCode = parts[0] || '';
       const modelStr = parts[1] || 'AIO';
-      const normModel = normalizeShorthand(modelStr);
 
-      if (boxCode) {
+      // If code is '0' or empty -> keep slot empty without creating pack
+      if (rawCode && rawCode !== '0') {
+        const cleanNum = rawCode.replace(/[^0-9A-Za-z_-]/g, '');
+        const normModel = deriveModelFromShorthand(cleanNum, modelStr);
         const locStr = selectedLine + ', R-' + String(currentRackIndex).padStart(2, '0') + ', L-0' + slotInRack;
+
         newPacks.push({
           id: 'pack-matrix-' + Date.now() + '-' + currentRackIndex + '-' + slotInRack + '-' + idx,
-          packNumber: boxCode,
+          packNumber: cleanNum,
           packType: normModel,
           status: 'IN_STORAGE',
           locationArea: 'Warehouse Storage',
@@ -274,33 +292,35 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
           lineId: selectedLine,
           rackNumber: currentRackIndex,
           rackSlot: slotInRack,
+          sourceType: 'LINE_POPULATE',
+          isWithoutPlate: cleanNum.toUpperCase().startsWith('NP-'),
           inwardDate: nowIso,
           documentNo: 'MATRIX-LOAD-' + selectedLine,
           dealershipName: 'Varale B300 Line Stock',
           receivedState: 'Maharashtra',
           transportName: 'Direct Line Matrix Allocation',
           hasInwardStamp: true,
-          inwardBy: adminName,
-          inwardApprovedBy: adminName,
+          inwardBy: operatorName,
+          inwardApprovedBy: operatorName,
           inwardApprovedAt: nowIso,
           movementHistory: [
             {
               id: 'mov-mat-' + Date.now() + '-' + idx,
               timestamp: nowIso,
-              fromLocation: 'Matrix Batch Inward',
+              fromLocation: 'Matrix Batch Stock',
               toLocation: locStr,
-              movedBy: adminName,
+              movedBy: operatorName,
               reason: 'Excel Batch Line Stock (Line ' + selectedLine + ', Rack ' + currentRackIndex + ', Slot ' + slotInRack + ')',
             },
           ],
         });
+      }
 
-        // 4 packs per rack increment
-        slotInRack += 1;
-        if (slotInRack > MAX_PACKS_PER_RACK) {
-          slotInRack = 1;
-          currentRackIndex += 1;
-        }
+      // Increment slot (4 slots per rack)
+      slotInRack += 1;
+      if (slotInRack > MAX_PACKS_PER_RACK) {
+        slotInRack = 1;
+        currentRackIndex += 1;
       }
     });
 
@@ -326,13 +346,13 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
               <Table className="w-3.5 h-3.5 text-purple-700" /> Line & Rack Data Management
             </span>
-            <span className="text-slate-500 font-mono-code font-medium">Max 4 Packs / Rack (Capacity Enforced)</span>
+            <span className="text-slate-500 font-mono-code font-medium">Auto-Ais Compliant • Max 4 Packs / Rack</span>
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight font-display">
             Sequential Rack Loader & Line Stock Matrix
           </h2>
           <p className="text-slate-500 text-xs">
-            Enter box codes per rack (4 slots max), click "Save & Next Rack", or jump to any specific rack/line directly.
+            Enter box codes per rack (4 slots max), use '0' for empty rack slots, or paste full Excel matrix.
           </p>
         </div>
 
@@ -458,7 +478,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         )}
       </div>
 
-      {/* MODE 1: SEQUENTIAL RACK-BY-RACK STEPPER ("Save & Next Rack") */}
+      {/* MODE 1: SEQUENTIAL RACK-BY-RACK STEPPER */}
       {activeEntryMode === 'STEPPER' && (
         <div className="space-y-5">
           {/* Direct Rack Jump Navigation Bar */}
@@ -558,26 +578,30 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
                     <div className="space-y-2">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-600 mb-0.5">
-                          Box Code / Numeric Pack Serial
+                          Box Code / Serial (Enter '0' for Empty Slot)
                         </label>
                         <input
+                          ref={(el) => (inputRefs.current[idx * 2] = el)}
                           type="text"
                           value={slotItem.packNumber}
+                          onKeyDown={(e) => handleKeyDown(e, idx * 2)}
                           onChange={(e) => handleSlotChange(idx, 'packNumber', e.target.value)}
-                          placeholder="e.g. 7428, 2741, 16640..."
+                          placeholder="e.g. 7428, 2741, 16640, or '0' for empty..."
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
                         />
                       </div>
 
                       <div>
                         <label className="block text-[11px] font-bold text-slate-600 mb-0.5">
-                          Item Name / Shorthand (AIO, CKD, Gen3, FBU, K2, K3, Tamor...)
+                          Item Shorthand (AIO, CKD, Gen3, FBU, K2, K3, Tamor, Limber...)
                         </label>
                         <input
+                          ref={(el) => (inputRefs.current[idx * 2 + 1] = el)}
                           type="text"
                           value={slotItem.modelInput}
+                          onKeyDown={(e) => handleKeyDown(e, idx * 2 + 1)}
                           onChange={(e) => handleSlotChange(idx, 'modelInput', e.target.value)}
-                          placeholder="AIO, CKD, Gen3, FBU..."
+                          placeholder="AIO, CKD, Gen3, FBU, K2, Limber..."
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
                         />
                       </div>
@@ -614,7 +638,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         </div>
       )}
 
-      {/* MODE 2: FULL-LINE EXCEL SHEET MATRIX (Matching Uploaded Image Chunking by 4) */}
+      {/* MODE 2: FULL-LINE EXCEL SHEET MATRIX */}
       {activeEntryMode === 'EXCEL_SHEET' && (
         <div className="space-y-4">
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
@@ -624,7 +648,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
                   Batch Excel Matrix Populator (Line {selectedLine})
                 </h3>
                 <p className="text-slate-500 text-xs">
-                  Paste entire columns from your Excel table (Box Code [TAB] Item Name). The system will automatically chunk 4 packs per rack sequentially (Rack 1 to 4 packs, Rack 2 to 4 packs, Rack 3 to 4 packs...).
+                  Paste entire columns from your Excel table (Box Code [TAB] Item Name). Enter '0' for empty slots. The system will automatically chunk 4 packs per rack sequentially into Line {selectedLine}.
                 </p>
               </div>
 
@@ -646,7 +670,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
                 <textarea
                   value={matrixText}
                   onChange={(e) => setMatrixText(e.target.value)}
-                  placeholder="7428	AIO&#10;2741	AIO&#10;16640	Gen3&#10;1491	CKD&#10;16220	FBU&#10;1737	AIO&#10;5562	K2..."
+                  placeholder="7428	AIO&#10;2741	AIO&#10;16640	Gen3&#10;1491	CKD&#10;0	(empty)&#10;1737	AIO&#10;5562	K2..."
                   rows={6}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 font-mono-code text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />

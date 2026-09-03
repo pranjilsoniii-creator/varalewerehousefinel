@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserAccount, UserRole } from '../types';
+import { UserAccount, UserPermissions, UserRole } from '../types';
 
 interface AuthContextType {
   currentUser: UserAccount | null;
@@ -14,6 +14,7 @@ interface AuthContextType {
   isEmployee: boolean;
   canDirectApprove: boolean;
   canApproveRequests: boolean;
+  hasPermission: (permission: keyof UserPermissions) => boolean;
 }
 
 const DEFAULT_USERS: UserAccount[] = [
@@ -24,6 +25,14 @@ const DEFAULT_USERS: UserAccount[] = [
     role: 'superadmin',
     plant: 'Tata AutoComp Systems Limited - Varale / Chakan',
     active: true,
+    permissions: {
+      canInward: true,
+      canDispatch: true,
+      canLineManage: true,
+      canViewStock: true,
+      canInvoices: true,
+      canAnalytics: true,
+    },
   },
   {
     username: 'Sureshchavan',
@@ -32,6 +41,14 @@ const DEFAULT_USERS: UserAccount[] = [
     role: 'manager',
     plant: 'Tata AutoComp Systems Limited - Varale / Chakan',
     active: true,
+    permissions: {
+      canInward: true,
+      canDispatch: true,
+      canLineManage: true,
+      canViewStock: true,
+      canInvoices: true,
+      canAnalytics: true,
+    },
   },
   {
     username: 'Nitin',
@@ -40,6 +57,14 @@ const DEFAULT_USERS: UserAccount[] = [
     role: 'supervisor',
     plant: 'Tata AutoComp Systems Limited - Varale / Chakan',
     active: true,
+    permissions: {
+      canInward: true,
+      canDispatch: true,
+      canLineManage: true,
+      canViewStock: true,
+      canInvoices: true,
+      canAnalytics: true,
+    },
   },
   {
     username: 'Vikash',
@@ -48,6 +73,14 @@ const DEFAULT_USERS: UserAccount[] = [
     role: 'supervisor',
     plant: 'Tata AutoComp Systems Limited - Varale / Chakan',
     active: true,
+    permissions: {
+      canInward: true,
+      canDispatch: true,
+      canLineManage: true,
+      canViewStock: true,
+      canInvoices: true,
+      canAnalytics: true,
+    },
   },
   {
     username: 'Deepak',
@@ -56,6 +89,14 @@ const DEFAULT_USERS: UserAccount[] = [
     role: 'employee',
     plant: 'Tata AutoComp Systems Limited - Varale / Chakan',
     active: true,
+    permissions: {
+      canInward: true,
+      canDispatch: true,
+      canLineManage: false,
+      canViewStock: true,
+      canInvoices: false,
+      canAnalytics: false,
+    },
   },
   {
     username: 'Jitendra',
@@ -64,6 +105,14 @@ const DEFAULT_USERS: UserAccount[] = [
     role: 'employee',
     plant: 'Tata AutoComp Systems Limited - Varale / Chakan',
     active: true,
+    permissions: {
+      canInward: true,
+      canDispatch: true,
+      canLineManage: false,
+      canViewStock: true,
+      canInvoices: false,
+      canAnalytics: false,
+    },
   },
 ];
 
@@ -71,27 +120,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<UserAccount[]>(() => {
-    const saved = localStorage.getItem('tata_wms_users_v4');
+    const saved = localStorage.getItem('tata_wms_users_v3');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {
-        console.error('Failed to parse saved users', e);
+        console.error('Failed to parse users', e);
       }
     }
     return DEFAULT_USERS;
   });
 
-  // MANDATORY LOGIN WALL: Always start as null so nobody can access without entering credentials!
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    // Clear old legacy auto-login keys from browser
-    try {
-      localStorage.removeItem('tata_wms_curr_user_v3');
-      localStorage.removeItem('tata_wms_curr_user');
-      sessionStorage.removeItem('tata_wms_curr_user_v3');
-    } catch (e) {}
-
-    const saved = sessionStorage.getItem('tata_wms_session_user_v4');
+    const saved = localStorage.getItem('tata_wms_current_user_v3');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -99,47 +140,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Failed to parse current user', e);
       }
     }
-    return null;
+    return DEFAULT_USERS[0]; // Default Super Admin
   });
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_users_v4', JSON.stringify(users));
+    localStorage.setItem('tata_wms_users_v3', JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
     if (currentUser) {
-      sessionStorage.setItem('tata_wms_session_user_v4', JSON.stringify(currentUser));
+      localStorage.setItem('tata_wms_current_user_v3', JSON.stringify(currentUser));
     } else {
-      sessionStorage.removeItem('tata_wms_session_user_v4');
-      localStorage.removeItem('tata_wms_curr_user_v3');
-      localStorage.removeItem('tata_wms_curr_user');
+      localStorage.removeItem('tata_wms_current_user_v3');
     }
   }, [currentUser]);
 
   const login = (username: string, password?: string): boolean => {
     const user = users.find(
-      (u) =>
-        u.username.toLowerCase() === username.trim().toLowerCase() &&
-        u.active &&
-        (!password || !u.password || u.password === password.trim())
+      (u) => u.username.toLowerCase() === username.toLowerCase().trim() && u.active
     );
+    if (!user) return false;
 
-    if (user) {
-      setCurrentUser(user);
-      return true;
+    if (password && user.password && user.password !== password.trim()) {
+      return false;
     }
-    return false;
+
+    setCurrentUser(user);
+    return true;
   };
 
   const logout = () => {
     setCurrentUser(null);
-    sessionStorage.removeItem('tata_wms_session_user_v4');
-    localStorage.removeItem('tata_wms_curr_user_v3');
-    localStorage.removeItem('tata_wms_curr_user');
   };
 
   const addUser = (newUser: UserAccount): boolean => {
-    if (users.some((u) => u.username.toLowerCase() === newUser.username.trim().toLowerCase())) {
+    if (users.some((u) => u.username.toLowerCase() === newUser.username.toLowerCase())) {
       return false;
     }
     setUsers((prev) => [...prev, newUser]);
@@ -152,14 +187,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  const role = currentUser?.role;
-  const isSuperAdmin = role === 'superadmin';
-  const isManager = role === 'manager' || isSuperAdmin;
-  const isSupervisor = role === 'supervisor' || isManager || isSuperAdmin;
-  const isEmployee = role === 'employee';
+  const isSuperAdmin = currentUser?.role === 'superadmin';
+  const isManager = currentUser?.role === 'manager';
+  const isSupervisor = currentUser?.role === 'supervisor';
+  const isEmployee = currentUser?.role === 'employee';
 
-  const canDirectApprove = isManager || isSuperAdmin;
-  const canApproveRequests = isSupervisor || isManager || isSuperAdmin;
+  const canDirectApprove = isSuperAdmin || isManager || isSupervisor;
+  const canApproveRequests = isSuperAdmin || isManager || isSupervisor;
+
+  const hasPermission = (perm: keyof UserPermissions): boolean => {
+    if (isSuperAdmin || isManager) return true;
+    if (!currentUser) return false;
+    if (currentUser.permissions && typeof currentUser.permissions[perm] === 'boolean') {
+      return currentUser.permissions[perm];
+    }
+    if (isSupervisor) return true;
+    if (perm === 'canInward' || perm === 'canDispatch' || perm === 'canViewStock') return true;
+    return false;
+  };
 
   return (
     <AuthContext.Provider
@@ -176,6 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isEmployee,
         canDirectApprove,
         canApproveRequests,
+        hasPermission,
       }}
     >
       {children}
@@ -185,8 +231,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

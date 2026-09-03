@@ -209,7 +209,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
       id: 'lot-' + Date.now(),
       lotNumber: lotNo,
       timestamp: nowIso,
-      status: autoApproved ? 'DISPATCHED' : 'PENDING_SUPERVISOR_APPROVAL',
+      status: autoApproved ? 'DISPATCHED' : 'PENDING_APPROVAL',
       fromPlant: DEFAULT_PLANT_LOCATION.name + ', ' + DEFAULT_PLANT_LOCATION.address,
       consigneeName: consigneeName.trim(),
       consigneeAddress: consigneeAddress.trim(),
