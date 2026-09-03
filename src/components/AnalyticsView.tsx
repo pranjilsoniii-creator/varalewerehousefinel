@@ -19,15 +19,15 @@ interface AnalyticsViewProps {
   packs: BatteryPack[];
   dispatchLots: DispatchLot[];
   inwardShipments: InwardShipmentRecord[];
-  warehouseLines: string[];
-  onResetToDemoData: () => void;
+  warehouseLines?: string[];
+  onResetToDemoData?: () => void;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
-  packs,
-  dispatchLots,
-  inwardShipments,
-  warehouseLines,
+  packs = [],
+  dispatchLots = [],
+  inwardShipments = [],
+  warehouseLines = [],
   onResetToDemoData,
 }) => {
   const activeStoragePacks = packs.filter((p) => p.status === 'IN_STORAGE');
@@ -230,13 +230,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         <span className="text-slate-600">
           Need to test with fresh data? Reset all lines and lots to default Tata warehouse state.
         </span>
-        <button
-          onClick={onResetToDemoData}
-          className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 border border-slate-200 shadow-2xs"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Reset Demo Warehouse State</span>
-        </button>
+        {onResetToDemoData && (
+          <button
+            onClick={onResetToDemoData}
+            className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5 border border-slate-200 shadow-2xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reset Demo Warehouse State</span>
+          </button>
+        )}
       </div>
     </div>
   );

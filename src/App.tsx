@@ -605,6 +605,15 @@ export function App() {
             packs={packs}
             dispatchLots={dispatchLots}
             inwardShipments={inwardShipments}
+            warehouseLines={warehouseLines}
+            onResetToDemoData={() => {
+              if (confirm('Reset warehouse inventory and lots to fresh demo state?')) {
+                localStorage.removeItem('tata_wms_packs_v4');
+                localStorage.removeItem('tata_wms_lots_v4');
+                localStorage.removeItem('tata_wms_inwards_v4');
+                window.location.reload();
+              }
+            }}
           />
         )}
       </main>
