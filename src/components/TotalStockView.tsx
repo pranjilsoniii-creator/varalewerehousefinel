@@ -305,6 +305,31 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         </div>
       </div>
 
+      {/* Complete Plant Location Distribution Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-4 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-800 font-display">Plant Inventory Distribution:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 font-mono-code font-bold">
+          <div className="px-3 py-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+            <span>In Storage Lines: {packs.filter((p) => p.status === 'IN_STORAGE').length}</span>
+          </div>
+          <div className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span>In Inward Dock: {packs.filter((p) => p.status === 'INWARD_AREA').length}</span>
+          </div>
+          <div className="px-3 py-1 bg-purple-50 text-purple-800 border border-purple-200 rounded-lg flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-purple-600"></span>
+            <span>Staged in Dispatch: {packs.filter((p) => p.status === 'IN_DISPATCH_AREA').length}</span>
+          </div>
+          <div className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+            <span>Dispatched: {packs.filter((p) => p.status === 'DISPATCHED').length}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Unified Executive Series Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Kanger 1.0 Unified Card (AIO, Gen3, CKD, FBU + AIS Counted Together) */}
