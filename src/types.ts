@@ -121,6 +121,7 @@ export interface BatteryPack {
   dispatchDocNo?: string;
   dispatchLrNo?: string;
   dispatchVehicleNo?: string;
+  dispatchTransporter?: string;
   dispatchToAddress?: string;
   dispatchToCustomer?: string;
 }

@@ -15,13 +15,16 @@ import {
   Send,
   ArrowDownLeft,
   ArrowUpRight,
+  Table,
 } from 'lucide-react';
-import { BatteryPack, BatteryPackType } from '../types';
+import { BatteryPack, BatteryPackType, DispatchLot } from '../types';
 import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
+import { OutwardDispatchRegister } from './OutwardDispatchRegister';
 
 interface TotalStockViewProps {
   packs: BatteryPack[];
+  dispatchLots?: DispatchLot[];
   onOpenPackDetails: (pack: BatteryPack) => void;
   onSendToDispatch: (pack: BatteryPack) => void;
   onDeletePack?: (packId: string) => void;
@@ -29,14 +32,15 @@ interface TotalStockViewProps {
 
 export const TotalStockView: React.FC<TotalStockViewProps> = ({
   packs,
+  dispatchLots = [],
   onOpenPackDetails,
   onSendToDispatch,
   onDeletePack,
 }) => {
   const { isSuperAdmin, isManager } = useAuth();
 
-  // Search Mode Tab: 'MODE_1' (All Products / Threshold) vs 'MODE_2' (Specific Product)
-  const [activeSearchTab, setActiveSearchTab] = useState<'MODE_1' | 'MODE_2'>('MODE_1');
+  // Search Mode Tab: 'MODE_1' | 'MODE_2' | 'DISPATCH_SHEET'
+  const [activeSearchTab, setActiveSearchTab] = useState<'MODE_1' | 'MODE_2' | 'DISPATCH_SHEET'>('MODE_1');
 
   // Search Mode 1: Search by Pack Number / Threshold across all product models
   const [search1PackNumber, setSearch1PackNumber] = useState('');
@@ -246,7 +250,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         </div>
       </div>
 
-      {/* EXACT 4 KPI METRIC CARDS REQUESTED */}
+      {/* EXACT 4 KPI METRIC CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Battery */}
         <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-2xs space-y-2 hover:border-blue-300 transition">
@@ -409,7 +413,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         </div>
       </div>
 
-      {/* Dual Search Tabs */}
+      {/* Dual Search & Outward Sheet Tab Controls */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
@@ -427,7 +431,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Search Mode 1 (Serial / Threshold)
+              Mode 1 (Serial / Threshold)
             </button>
             <button
               type="button"
@@ -438,7 +442,19 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Search Mode 2 (Serial + Product Name)
+              Mode 2 (Serial + Product)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSearchTab('DISPATCH_SHEET')}
+              className={`px-3 py-1.5 rounded-md font-bold transition cursor-pointer flex items-center gap-1 ${
+                activeSearchTab === 'DISPATCH_SHEET'
+                  ? 'bg-white text-blue-700 shadow-2xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Table className="w-3.5 h-3.5" />
+              <span>Outward Dispatch Sheet ({packs.filter((p) => p.status === 'DISPATCHED').length})</span>
             </button>
           </div>
         </div>
@@ -543,110 +559,114 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         )}
       </div>
 
-      {/* Results Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
-            {hasExecutedSearch1
-              ? `Search 1 Results (${search1Results.length} Packs)`
-              : hasExecutedSearch2
-              ? `Search 2 Results (${search2Results.length} Packs)`
-              : `Warehouse Master Inventory (${availableStockPacks.length} Available Packs)`}
-          </h3>
-        </div>
+      {/* DISPATCH SHEET VIEW OR MASTER INVENTORY TABLE */}
+      {activeSearchTab === 'DISPATCH_SHEET' ? (
+        <OutwardDispatchRegister packs={packs} dispatchLots={dispatchLots} />
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+              {hasExecutedSearch1
+                ? `Search 1 Results (${search1Results.length} Packs)`
+                : hasExecutedSearch2
+                ? `Search 2 Results (${search2Results.length} Packs)`
+                : `Warehouse Master Inventory (${availableStockPacks.length} Available Packs)`}
+            </h3>
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                <th className="p-3">#</th>
-                <th className="p-3">Pack Number</th>
-                <th className="p-3">Product Model</th>
-                <th className="p-3">Current Location</th>
-                <th className="p-3">Document No</th>
-                <th className="p-3">Inward Date</th>
-                <th className="p-3">Status</th>
-                <th className="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {((hasExecutedSearch1 ? search1Results : hasExecutedSearch2 ? search2Results : availableStockPacks).slice(0, 100)).map((pack, index) => {
-                const model = BATTERY_MODELS[pack.packType];
-                const isDispatched = pack.status === 'DISPATCHED';
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                  <th className="p-3">#</th>
+                  <th className="p-3">Pack Number</th>
+                  <th className="p-3">Product Model</th>
+                  <th className="p-3">Current Location</th>
+                  <th className="p-3">Document No</th>
+                  <th className="p-3">Inward Date</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {((hasExecutedSearch1 ? search1Results : hasExecutedSearch2 ? search2Results : availableStockPacks).slice(0, 100)).map((pack, index) => {
+                  const model = BATTERY_MODELS[pack.packType];
+                  const isDispatched = pack.status === 'DISPATCHED';
 
-                return (
-                  <tr key={pack.id} className="hover:bg-slate-50/80 transition">
-                    <td className="p-3 font-mono-code text-slate-400">{index + 1}</td>
-                    <td className="p-3 font-mono-code font-extrabold text-slate-900 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <span>#{pack.packNumber}</span>
-                        {pack.isWithoutPlate && (
-                          <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
-                            NO-PLATE
+                  return (
+                    <tr key={pack.id} className="hover:bg-slate-50/80 transition">
+                      <td className="p-3 font-mono-code text-slate-400">{index + 1}</td>
+                      <td className="p-3 font-mono-code font-extrabold text-slate-900 text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <span>#{pack.packNumber}</span>
+                          {pack.isWithoutPlate && (
+                            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
+                              NO-PLATE
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded font-bold text-[11px] border ${model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                          {pack.packType}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono-code font-bold text-blue-700">
+                        {pack.currentLocation || pack.locationArea || 'Inward Area'}
+                      </td>
+                      <td className="p-3 font-mono-code text-slate-700 font-bold">{pack.documentNo || '—'}</td>
+                      <td className="p-3 font-mono-code text-slate-600">
+                        {pack.inwardDate ? new Date(pack.inwardDate).toLocaleDateString('en-IN') : '—'}
+                      </td>
+                      <td className="p-3">
+                        {isDispatched ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                            Dispatched
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            In Stock
                           </span>
                         )}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[11px] border ${model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                        {pack.packType}
-                      </span>
-                    </td>
-                    <td className="p-3 font-mono-code font-bold text-blue-700">
-                      {pack.currentLocation || pack.locationArea || 'Inward Area'}
-                    </td>
-                    <td className="p-3 font-mono-code text-slate-700 font-bold">{pack.documentNo || '—'}</td>
-                    <td className="p-3 font-mono-code text-slate-600">
-                      {pack.inwardDate ? new Date(pack.inwardDate).toLocaleDateString('en-IN') : '—'}
-                    </td>
-                    <td className="p-3">
-                      {isDispatched ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
-                          Dispatched
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          In Stock
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {!isDispatched && (
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {!isDispatched && (
+                            <button
+                              type="button"
+                              onClick={() => onSendToDispatch(pack)}
+                              className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[11px] font-bold cursor-pointer"
+                            >
+                              Dispatch
+                            </button>
+                          )}
+                          {(isSuperAdmin || isManager) && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePackPrompt(pack)}
+                              className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
+                              title="Delete pack"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => onSendToDispatch(pack)}
-                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[11px] font-bold cursor-pointer"
+                            onClick={() => onOpenPackDetails(pack)}
+                            className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 transition cursor-pointer"
                           >
-                            Dispatch
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        {(isSuperAdmin || isManager) && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePackPrompt(pack)}
-                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
-                            title="Delete pack"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => onOpenPackDetails(pack)}
-                          className="p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 transition cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

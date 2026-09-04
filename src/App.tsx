@@ -544,6 +544,7 @@ export function App() {
         {activeTab === 'TOTAL_STOCK' && hasPermission('canViewStock') && (
           <TotalStockView
             packs={packs}
+            dispatchLots={dispatchLots}
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onSendToDispatch={handleSendToDispatch}
             onDeletePack={handleDeletePack}
