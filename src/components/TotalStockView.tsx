@@ -8,18 +8,13 @@ import {
   Clock,
   Truck,
   ArrowRight,
-  Sparkles,
-  Building,
-  Flag,
-  FileCheck,
-  ShieldCheck,
   Eye,
-  RefreshCw,
-  Hash,
-  MapPin,
   Trash2,
   Tag,
-  Filter,
+  Calendar,
+  Send,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
 import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
@@ -40,7 +35,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
 }) => {
   const { isSuperAdmin, isManager } = useAuth();
 
-  // Search Mode Tab: 'MODE_1' (All Products) vs 'MODE_2' (Specific Product)
+  // Search Mode Tab: 'MODE_1' (All Products / Threshold) vs 'MODE_2' (Specific Product)
   const [activeSearchTab, setActiveSearchTab] = useState<'MODE_1' | 'MODE_2'>('MODE_1');
 
   // Search Mode 1: Search by Pack Number / Threshold across all product models
@@ -52,16 +47,36 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
   const [search2ProductName, setSearch2ProductName] = useState<BatteryPackType>('Kanger1.0_AIO');
   const [hasExecutedSearch2, setHasExecutedSearch2] = useState(false);
 
-  // Category filter
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
+  // Today Date String
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  // Total Available Stock (Excluding Dispatched)
-  const availableStockPacks = useMemo(() => {
-    return packs.filter((p) => p.status !== 'DISPATCHED');
+  // 1. Total Battery (Total active battery packs in plant)
+  const totalBatteryCount = useMemo(() => {
+    return packs.filter((p) => p.status !== 'DISPATCHED').length;
   }, [packs]);
 
-  const dispatchedPacksCount = useMemo(() => {
-    return packs.filter((p) => p.status === 'DISPATCHED').length;
+  // 2. Today's Inward (Batteries inwarded today)
+  const todayInwardCount = useMemo(() => {
+    return packs.filter(
+      (p) => p.inwardDate && p.inwardDate.slice(0, 10) === todayStr
+    ).length;
+  }, [packs, todayStr]);
+
+  // 3. Today's Outward (Batteries dispatched today)
+  const todayOutwardCount = useMemo(() => {
+    return packs.filter(
+      (p) => p.status === 'DISPATCHED' && p.dispatchedAt && p.dispatchedAt.slice(0, 10) === todayStr
+    ).length;
+  }, [packs, todayStr]);
+
+  // 4. Ready for Dispatch (Batteries staged in dispatch area)
+  const readyForDispatchCount = useMemo(() => {
+    return packs.filter((p) => p.status === 'IN_DISPATCH_AREA').length;
+  }, [packs]);
+
+  // Available in storage (excluding dispatched)
+  const availableStockPacks = useMemo(() => {
+    return packs.filter((p) => p.status !== 'DISPATCHED');
   }, [packs]);
 
   // Model-wise count breakdown
@@ -86,7 +101,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
     return counts;
   }, [packs]);
 
-  // Grouped Series Summary
+  // Unified Kanger 1.0 Series
   const kanger1Unified = useMemo(() => {
     const k1Keys: BatteryPackType[] = [
       'Kanger1.0_AIO',
@@ -110,6 +125,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
     return { available, dispatched, total };
   }, [modelCounts]);
 
+  // Unified Kanger 2.0 Series
   const kanger2Unified = useMemo(() => {
     const k2Keys: BatteryPackType[] = ['Kanger2.0', 'Kanger2.0_Ais'];
     let available = 0;
@@ -124,12 +140,26 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
     return { available, dispatched, total };
   }, [modelCounts]);
 
-  // Search 1 Results (With Threshold Support e.g. ">= 30000", "30000+", or numeric match)
+  // Unified Limber Series (Ais + Non-Ais Counted as 1)
+  const limberUnified = useMemo(() => {
+    const limberKeys: BatteryPackType[] = ['Limber_Ais', 'Limber_Non_Ais'];
+    let available = 0;
+    let dispatched = 0;
+    let total = 0;
+    limberKeys.forEach((k) => {
+      const c = modelCounts[k] || { available: 0, dispatched: 0, total: 0 };
+      available += c.available;
+      dispatched += c.dispatched;
+      total += c.total;
+    });
+    return { available, dispatched, total };
+  }, [modelCounts]);
+
+  // Search 1 Results (With Threshold Support)
   const search1Results = useMemo(() => {
     if (!hasExecutedSearch1 || !search1PackNumber.trim()) return [];
     const query = search1PackNumber.trim().toLowerCase();
 
-    // Check if query is a threshold operator like ">= 30000" or "30000+"
     let minThreshold: number | null = null;
     let maxThreshold: number | null = null;
 
@@ -163,7 +193,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
     });
   }, [packs, hasExecutedSearch1, search1PackNumber]);
 
-  // Search 2 Results (Pack Number + Specific Product Name)
+  // Search 2 Results
   const search2Results = useMemo(() => {
     if (!hasExecutedSearch2) return [];
     return packs.filter((p) => {
@@ -191,7 +221,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
       alert('Permission Denied: Only Super Admin and Manager can delete packs.');
       return;
     }
-    if (confirm('Permanently delete Pack #' + pack.packNumber + ' from the warehouse inventory and database?')) {
+    if (confirm(`Permanently delete Pack #${pack.packNumber} from warehouse inventory and database?`)) {
       if (onDeletePack) onDeletePack(pack.id);
     }
   };
@@ -199,11 +229,11 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 animate-fadeIn">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
-              <Box className="w-3.5 h-3.5 text-emerald-700" /> Plant Total Stock
+            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold uppercase tracking-wider">
+              Total Stock
             </span>
             <span className="text-xs text-slate-500 font-mono-code font-medium">Tata AutoComp Systems (Varale B300 Plant)</span>
           </div>
@@ -211,43 +241,85 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
             Master Battery Inventory & Stock Locator
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Complete plant visibility across Inward Dock, Storage Lines (A-01 to B-25), and Outward Dispatches.
+            Complete plant visibility across Inward Dock, Storage Lines, and Dispatch Area.
+          </p>
+        </div>
+      </div>
+
+      {/* EXACT 4 KPI METRIC CARDS REQUESTED */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Total Battery */}
+        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-2xs space-y-2 hover:border-blue-300 transition">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+            <span>Total Battery</span>
+            <Box className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="text-3xl font-extrabold font-mono-code text-slate-900">
+            {totalBatteryCount}
+          </div>
+          <p className="text-xs text-slate-500">
+            Total active packs stored in warehouse
           </p>
         </div>
 
-        {/* Global Summary Stats */}
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center min-w-28">
-            <p className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Available Stock</p>
-            <p className="text-2xl font-extrabold text-emerald-950 font-mono-code mt-0.5">
-              {availableStockPacks.length}
-            </p>
+        {/* Card 2: Today's Inward */}
+        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-2xs space-y-2 hover:border-emerald-300 transition">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+            <span>Today's Inward</span>
+            <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
           </div>
+          <div className="text-3xl font-extrabold font-mono-code text-emerald-700">
+            {todayInwardCount}
+          </div>
+          <p className="text-xs text-slate-500">
+            Packs received into dock today
+          </p>
+        </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center min-w-28">
-            <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dispatched</p>
-            <p className="text-2xl font-extrabold text-slate-800 font-mono-code mt-0.5">
-              {dispatchedPacksCount}
-            </p>
+        {/* Card 3: Today's Outward */}
+        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-2xs space-y-2 hover:border-orange-300 transition">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+            <span>Today's Outward</span>
+            <ArrowUpRight className="w-4 h-4 text-orange-600" />
           </div>
+          <div className="text-3xl font-extrabold font-mono-code text-orange-700">
+            {todayOutwardCount}
+          </div>
+          <p className="text-xs text-slate-500">
+            Packs dispatched to EV plants today
+          </p>
+        </div>
+
+        {/* Card 4: Ready for Dispatch */}
+        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-2xs space-y-2 hover:border-purple-300 transition">
+          <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+            <span>Ready for Dispatch</span>
+            <Truck className="w-4 h-4 text-purple-600" />
+          </div>
+          <div className="text-3xl font-extrabold font-mono-code text-purple-700">
+            {readyForDispatchCount}
+          </div>
+          <p className="text-xs text-slate-500">
+            Packs staged in dispatch staging cart
+          </p>
         </div>
       </div>
 
       {/* Unified Executive Series Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Kanger 1.0 Unified Card */}
-        <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-950 text-white rounded-2xl p-5 shadow-lg relative overflow-hidden space-y-3">
+        {/* Kanger 1.0 Unified Card (AIO, Gen3, CKD, FBU + AIS Counted Together) */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3 hover:border-blue-300 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider bg-white/10 px-2.5 py-0.5 rounded-full">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
               Kanger 1.0 Series
             </span>
-            <span className="text-xs font-mono-code text-blue-200 font-bold">4 Models + AIS (&gt;=30000)</span>
+            <span className="text-[11px] font-mono-code text-slate-500">AIO / Gen3 / CKD / FBU</span>
           </div>
           <div>
-            <p className="text-3xl font-extrabold font-mono-code tracking-tight">{kanger1Unified.available}</p>
-            <p className="text-xs text-blue-200 mt-0.5">Packs Available in Warehouse</p>
+            <p className="text-3xl font-extrabold font-mono-code text-slate-900">{kanger1Unified.available}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Available in Plant</p>
           </div>
-          <div className="pt-2 border-t border-white/10 grid grid-cols-4 gap-1 text-[10px] text-blue-100 font-mono-code">
+          <div className="pt-2 border-t border-slate-100 grid grid-cols-4 gap-1 text-[10px] text-slate-600 font-mono-code">
             <div>AIO: {modelCounts['Kanger1.0_AIO']?.available || 0}</div>
             <div>Gen3: {modelCounts['Kanger1.0_Gen3']?.available || 0}</div>
             <div>CKD: {modelCounts['Kanger1.0_CKD']?.available || 0}</div>
@@ -256,91 +328,90 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         </div>
 
         {/* Kanger 2.0 Unified Card */}
-        <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-violet-950 text-white rounded-2xl p-5 shadow-lg relative overflow-hidden space-y-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3 hover:border-purple-300 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider bg-white/10 px-2.5 py-0.5 rounded-full">
+            <span className="text-xs font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
               Kanger 2.0 Series
             </span>
-            <span className="text-xs font-mono-code text-purple-200 font-bold">4-Digit & 5-Digit AIS</span>
+            <span className="text-[11px] font-mono-code text-slate-500">Standard & AIS</span>
           </div>
           <div>
-            <p className="text-3xl font-extrabold font-mono-code tracking-tight">{kanger2Unified.available}</p>
-            <p className="text-xs text-purple-200 mt-0.5">Packs Available in Warehouse</p>
+            <p className="text-3xl font-extrabold font-mono-code text-slate-900">{kanger2Unified.available}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Available in Plant</p>
           </div>
-          <div className="pt-2 border-t border-white/10 flex justify-between text-[11px] text-purple-200 font-mono-code">
-            <span>Standard (4 Digits): {modelCounts['Kanger2.0']?.available || 0}</span>
-            <span>AIS (5 Digits): {modelCounts['Kanger2.0_Ais']?.available || 0}</span>
+          <div className="pt-2 border-t border-slate-100 flex justify-between text-[11px] text-slate-600 font-mono-code">
+            <span>Standard: {modelCounts['Kanger2.0']?.available || 0}</span>
+            <span>AIS (5D): {modelCounts['Kanger2.0_Ais']?.available || 0}</span>
           </div>
         </div>
 
-        {/* Limber Unified Card */}
-        <div className="bg-gradient-to-br from-emerald-900 via-teal-800 to-emerald-950 text-white rounded-2xl p-5 shadow-lg relative overflow-hidden space-y-3">
+        {/* Limber Unified Card (Ais + Non-Ais Counted as 1 Model) */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3 hover:border-emerald-300 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider bg-white/10 px-2.5 py-0.5 rounded-full">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
               Limber Series
             </span>
-            <span className="text-xs font-mono-code text-emerald-200 font-bold">AIS & Non-AIS</span>
+            <span className="text-[11px] font-mono-code text-slate-500">Combined Model</span>
           </div>
           <div>
-            <p className="text-3xl font-extrabold font-mono-code tracking-tight">
-              {(modelCounts['Limber_Ais']?.available || 0) + (modelCounts['Limber_Non_Ais']?.available || 0)}
-            </p>
-            <p className="text-xs text-emerald-200 mt-0.5">Packs Available in Warehouse</p>
+            <p className="text-3xl font-extrabold font-mono-code text-slate-900">{limberUnified.available}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Available in Plant</p>
           </div>
-          <div className="pt-2 border-t border-white/10 flex justify-between text-[11px] text-emerald-200 font-mono-code">
-            <span>Non-AIS (4 Digits): {modelCounts['Limber_Non_Ais']?.available || 0}</span>
-            <span>AIS (5 Digits): {modelCounts['Limber_Ais']?.available || 0}</span>
+          <div className="pt-2 border-t border-slate-100 flex justify-between text-[11px] text-slate-600 font-mono-code">
+            <span>Non-AIS: {modelCounts['Limber_Non_Ais']?.available || 0}</span>
+            <span>AIS: {modelCounts['Limber_Ais']?.available || 0}</span>
           </div>
         </div>
 
         {/* Tamor & Other Models Card */}
-        <div className="bg-gradient-to-br from-amber-900 via-orange-800 to-amber-950 text-white rounded-2xl p-5 shadow-lg relative overflow-hidden space-y-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3 hover:border-amber-300 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider bg-white/10 px-2.5 py-0.5 rounded-full">
-              Tamor / Nova / Other
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+              Other Series
             </span>
-            <span className="text-xs font-mono-code text-amber-200 font-bold">Special Models</span>
+            <span className="text-[11px] font-mono-code text-slate-500">Tamor & Nova</span>
           </div>
           <div>
-            <p className="text-3xl font-extrabold font-mono-code tracking-tight">
+            <p className="text-3xl font-extrabold font-mono-code text-slate-900">
               {(modelCounts['Tamor_ELR']?.available || 0) + (modelCounts['Nova_LRP']?.available || 0) + (modelCounts['Challenger_LR']?.available || 0)}
             </p>
-            <p className="text-xs text-amber-200 mt-0.5">Packs Available in Warehouse</p>
+            <p className="text-xs text-slate-500 mt-0.5">Available in Plant</p>
           </div>
-          <div className="pt-2 border-t border-white/10 flex justify-between text-[11px] text-amber-200 font-mono-code">
+          <div className="pt-2 border-t border-slate-100 flex justify-between text-[11px] text-slate-600 font-mono-code">
             <span>Tamor: {modelCounts['Tamor_ELR']?.available || 0}</span>
             <span>Nova: {modelCounts['Nova_LRP']?.available || 0}</span>
-            <span>Chal: {modelCounts['Challenger_LR']?.available || 0}</span>
           </div>
         </div>
       </div>
 
-      {/* Dual Search System Tabs */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+      {/* Dual Search Tabs */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
-            <Search className="w-4 h-4 text-emerald-600" />
+            <Search className="w-4 h-4 text-blue-600" />
             <h3 className="font-bold text-slate-900 text-sm font-display">Targeted Battery Search & Stock Locator</h3>
           </div>
 
-          <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex items-center gap-1 text-xs">
+          <div className="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center gap-1 text-xs">
             <button
               type="button"
               onClick={() => setActiveSearchTab('MODE_1')}
-              className={'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ' +
-                (activeSearchTab === 'MODE_1'
-                  ? 'bg-white text-emerald-800 shadow-2xs border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900')}
+              className={`px-3 py-1.5 rounded-md font-bold transition cursor-pointer ${
+                activeSearchTab === 'MODE_1'
+                  ? 'bg-white text-blue-700 shadow-2xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
               Search Mode 1 (Serial / Threshold)
             </button>
             <button
               type="button"
               onClick={() => setActiveSearchTab('MODE_2')}
-              className={'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ' +
-                (activeSearchTab === 'MODE_2'
-                  ? 'bg-white text-emerald-800 shadow-2xs border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900')}
+              className={`px-3 py-1.5 rounded-md font-bold transition cursor-pointer ${
+                activeSearchTab === 'MODE_2'
+                  ? 'bg-white text-blue-700 shadow-2xs border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
             >
               Search Mode 2 (Serial + Product Name)
             </button>
@@ -358,13 +429,13 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   value={search1PackNumber}
                   onChange={(e) => setSearch1PackNumber(e.target.value)}
                   placeholder="Enter pack serial (e.g. 7428) or threshold query (e.g. '>= 30000', '30000+')..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-10 pr-4 py-2.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer flex items-center justify-center gap-2"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-2xs transition cursor-pointer flex items-center justify-center gap-2"
               >
                 <Search className="w-4 h-4" />
                 <span>Search Inventory</span>
@@ -377,7 +448,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                     setSearch1PackNumber('');
                     setHasExecutedSearch1(false);
                   }}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-xs cursor-pointer"
                 >
                   Clear
                 </button>
@@ -385,7 +456,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
             </div>
 
             {hasExecutedSearch1 && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-bold flex items-center justify-between">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 font-bold flex items-center justify-between">
                 <span>Found {search1Results.length} matching pack(s) in warehouse.</span>
               </div>
             )}
@@ -403,7 +474,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   value={search2PackNumber}
                   onChange={(e) => setSearch2PackNumber(e.target.value)}
                   placeholder="Enter pack serial (optional)..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -411,7 +482,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                 <select
                   value={search2ProductName}
                   onChange={(e) => setSearch2ProductName(e.target.value as BatteryPackType)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-emerald-500 focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 >
                   {ALL_PACK_TYPES.map((t) => (
                     <option key={t} value={t}>
@@ -424,7 +495,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
               <div className="sm:col-span-3 flex gap-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Search className="w-3.5 h-3.5" />
                   <span>Filter</span>
@@ -447,15 +518,15 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
         )}
       </div>
 
-      {/* Results Table (When search is active) or Full Inventory Master View */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+      {/* Results Table */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
             {hasExecutedSearch1
-              ? 'Search 1 Results (' + search1Results.length + ' Packs)'
+              ? `Search 1 Results (${search1Results.length} Packs)`
               : hasExecutedSearch2
-              ? 'Search 2 Results (' + search2Results.length + ' Packs)'
-              : 'Warehouse Master Inventory (' + availableStockPacks.length + ' Available Packs)'}
+              ? `Search 2 Results (${search2Results.length} Packs)`
+              : `Warehouse Master Inventory (${availableStockPacks.length} Available Packs)`}
           </h3>
         </div>
 
@@ -492,14 +563,14 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                       </div>
                     </td>
                     <td className="p-3">
-                      <span className={'px-2 py-0.5 rounded font-bold text-[11px] border ' + (model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200')}>
+                      <span className={`px-2 py-0.5 rounded font-bold text-[11px] border ${model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
                         {pack.packType}
                       </span>
                     </td>
-                    <td className="p-3 font-mono-code font-bold text-indigo-700">
+                    <td className="p-3 font-mono-code font-bold text-blue-700">
                       {pack.currentLocation || pack.locationArea || 'Inward Area'}
                     </td>
-                    <td className="p-3 font-mono-code text-blue-700 font-bold">{pack.documentNo || '—'}</td>
+                    <td className="p-3 font-mono-code text-slate-700 font-bold">{pack.documentNo || '—'}</td>
                     <td className="p-3 font-mono-code text-slate-600">
                       {pack.inwardDate ? new Date(pack.inwardDate).toLocaleDateString('en-IN') : '—'}
                     </td>
@@ -520,7 +591,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                           <button
                             type="button"
                             onClick={() => onSendToDispatch(pack)}
-                            className="px-2 py-1 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded text-[11px] font-bold cursor-pointer"
+                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[11px] font-bold cursor-pointer"
                           >
                             Dispatch
                           </button>

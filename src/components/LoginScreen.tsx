@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, User, Key, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, Key, ShieldCheck, AlertCircle, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginScreen: React.FC = () => {
@@ -29,24 +29,28 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 flex flex-col justify-between p-4 sm:p-6 text-slate-100 font-sans selection:bg-orange-500 selection:text-white">
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-between p-4 sm:p-6 text-slate-100 font-sans selection:bg-blue-600 selection:text-white">
       {/* Top Header */}
       <div className="max-w-6xl mx-auto w-full flex items-center justify-between py-2">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center font-black italic text-xl shadow-lg shadow-blue-700/40">
-            T
+          <div className="h-10 w-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-md">
+            <img
+              src="/tata-logo.png"
+              alt="TATA Logo"
+              className="h-8 w-8 object-contain"
+            />
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight text-white font-display">
+            <h1 className="text-base font-extrabold tracking-tight text-white font-display">
               TATA AUTOCOMP SYSTEMS LIMITED
             </h1>
-            <p className="text-[11px] text-blue-300 font-medium">
-              Varale (B300 Plant) Management System
+            <p className="text-[11px] text-slate-400 font-mono-code">
+              Varale (B300 Plant) Warehouse Management System
             </p>
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300">
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] text-slate-300">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
           <span>Restricted Authorized Staff Portal</span>
         </div>
@@ -54,15 +58,21 @@ export const LoginScreen: React.FC = () => {
 
       {/* Center Login Box */}
       <div className="max-w-md mx-auto w-full py-8">
-        <div className="bg-white text-slate-900 rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-6">
-          <div className="text-center space-y-2 border-b border-slate-100 pb-5">
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center mx-auto shadow-xs">
-              <Lock className="w-6 h-6" />
+        <div className="bg-white text-slate-900 rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-6">
+          <div className="text-center space-y-3 border-b border-slate-100 pb-5">
+            <div className="h-16 w-16 mx-auto bg-slate-50 p-2 rounded-2xl border border-slate-200 flex items-center justify-center shadow-2xs">
+              <img
+                src="/tata-logo.png"
+                alt="TATA Logo"
+                className="h-12 w-12 object-contain"
+              />
             </div>
-            <h2 className="text-xl font-bold text-slate-900 font-display">Staff Authentication Gateway</h2>
-            <p className="text-xs text-slate-500">
-              Varale B300 Plant • Lithium Battery Warehouse System
-            </p>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 font-display">Staff Authentication Gateway</h2>
+              <p className="text-xs text-slate-500 font-mono-code">
+                Varale B300 Plant • Lithium Battery System
+              </p>
+            </div>
           </div>
 
           {error && (
@@ -102,14 +112,14 @@ export const LoginScreen: React.FC = () => {
                     setPassword(e.target.value);
                     setError(null);
                   }}
-                  placeholder="Enter account password..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-medium text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                  placeholder="Enter your password..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -118,22 +128,22 @@ export const LoginScreen: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-2 mt-2"
             >
-              <Lock className="w-4 h-4" />
-              <span>Sign In to Warehouse Portal</span>
+              <span>Authenticate & Enter Portal</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          <div className="pt-2 text-center text-[11px] text-slate-400 border-t border-slate-100">
-            For password reset or new staff account access, contact Super Admin.
+          <div className="pt-2 text-center text-[11px] text-slate-400 border-t border-slate-100 font-mono-code">
+            Secure Warehouse Access • Plant B300
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="max-w-6xl mx-auto w-full text-center py-2 text-[11px] text-slate-500">
-        &copy; {new Date().getFullYear()} Tata AutoComp Systems Limited • Varale (B300 Plant)
+      <div className="max-w-6xl mx-auto w-full text-center text-slate-500 text-xs py-2">
+        <p>© 2026 Tata AutoComp Systems Limited. All rights reserved. Varale Plant (B300).</p>
       </div>
     </div>
   );

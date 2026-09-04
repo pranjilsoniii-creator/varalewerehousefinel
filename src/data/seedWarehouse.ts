@@ -28,7 +28,7 @@ export function saveStoredWarehouseLines(lines: string[]) {
 
 export const WAREHOUSE_LINES = DEFAULT_WAREHOUSE_LINES;
 
-export const RACKS_PER_LINE = 160; // R-01 to R-160
+export const RACKS_PER_LINE = 40; // Exactly 40 Racks per line (R-01 to R-40)
 export const MAX_PACKS_PER_RACK = 4; // Exactly 4 packs maximum per rack (Level 1, 2, 3, 4)
 export const SLOTS_PER_RACK = 4;   // L-01 to L-04
 

@@ -15,6 +15,8 @@ interface AuthContextType {
   canDirectApprove: boolean;
   canApproveRequests: boolean;
   hasPermission: (permission: keyof UserPermissions) => boolean;
+  isMaintenanceMode: boolean;
+  setMaintenanceMode: (active: boolean) => void;
 }
 
 const DEFAULT_USERS: UserAccount[] = [
@@ -131,17 +133,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return DEFAULT_USERS;
   });
 
+  // Strict Login Wall: Default to null if no valid saved session
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('tata_wms_current_user_v3');
     if (saved) {
       try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse current user', e);
-      }
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.username) {
+          return parsed;
+        }
+      } catch (e) {}
     }
-    return DEFAULT_USERS[0]; // Default Super Admin
+    return null; // Strict Login Screen
   });
+
+  // Super Admin Maintenance Mode State
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(() => {
+    return localStorage.getItem('tata_wms_maintenance_mode') === 'true';
+  });
+
+  const setMaintenanceMode = (active: boolean) => {
+    setIsMaintenanceMode(active);
+    localStorage.setItem('tata_wms_maintenance_mode', active ? 'true' : 'false');
+  };
 
   useEffect(() => {
     localStorage.setItem('tata_wms_users_v3', JSON.stringify(users));
@@ -171,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('tata_wms_current_user_v3');
   };
 
   const addUser = (newUser: UserAccount): boolean => {
@@ -222,6 +237,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         canDirectApprove,
         canApproveRequests,
         hasPermission,
+        isMaintenanceMode,
+        setMaintenanceMode,
       }}
     >
       {children}

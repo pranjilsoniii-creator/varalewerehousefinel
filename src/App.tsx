@@ -5,7 +5,6 @@ import { InwardRegisterView } from './components/InwardRegisterView';
 import { TotalStockView } from './components/TotalStockView';
 import { LineInspectorView } from './components/LineInspectorView';
 import { DispatchCart } from './components/DispatchCart';
-import { InvoiceGenerator } from './components/InvoiceGenerator';
 import { AnalyticsView } from './components/AnalyticsView';
 import { PackDetailsModal } from './components/PackDetailsModal';
 import { SupabaseSyncModal } from './components/SupabaseSyncModal';
@@ -17,7 +16,6 @@ import {
   BatteryPack,
   DispatchLot,
   InwardShipmentRecord,
-  Invoice,
 } from './types';
 import {
   createInitialWarehousePacks,
@@ -36,64 +34,55 @@ import {
   mapRowToPack,
 } from './lib/supabaseClient';
 import { useAuth } from './context/AuthContext';
+import { Wrench, ShieldAlert } from 'lucide-react';
 
-// Route Helper Mappings
+// Route Helper Mappings (Without Invoices)
 function getTabFromPath(path: string): string {
-  const p = path.toLowerCase().trim();
-  if (p === '/inward' || p === '/inward-scan') return 'INWARD';
-  if (p === '/inward-register' || p === '/inward-log' || p === '/inwards') return 'INWARD_LOG';
-  if (p === '/stock' || p === '/total-stock' || p === '/inventory') return 'TOTAL_STOCK';
-  if (p === '/lines' || p === '/line-inspector' || p === '/storage') return 'LINE_INSPECTOR';
-  if (p === '/dispatch' || p === '/dispatch-cart' || p === '/staging') return 'DISPATCH_CART';
-  if (p === '/invoices' || p === '/gatepass' || p === '/invoice') return 'INVOICES';
-  if (p === '/analytics' || p === '/reports' || p === '/dashboard') return 'ANALYTICS';
-  return 'INWARD';
+  const cleanPath = path.toLowerCase().replace(/^\/|\/$/g, '');
+  if (cleanPath === 'inward') return 'INWARD';
+  if (cleanPath === 'inward-register' || cleanPath === 'inward-log') return 'INWARD_LOG';
+  if (cleanPath === 'stock' || cleanPath === 'total-stock') return 'TOTAL_STOCK';
+  if (cleanPath === 'lines' || cleanPath === 'warehouse-lines') return 'LINE_INSPECTOR';
+  if (cleanPath === 'dispatch' || cleanPath === 'dispatch-staging') return 'DISPATCH_CART';
+  if (cleanPath === 'analytics' || cleanPath === 'reports') return 'ANALYTICS';
+  return 'TOTAL_STOCK';
 }
 
 function getPathFromTab(tab: string): string {
   switch (tab) {
-    case 'INWARD': return '/inward';
-    case 'INWARD_LOG': return '/inward-register';
-    case 'TOTAL_STOCK': return '/stock';
-    case 'LINE_INSPECTOR': return '/lines';
-    case 'DISPATCH_CART': return '/dispatch';
-    case 'INVOICES': return '/invoices';
-    case 'ANALYTICS': return '/analytics';
-    default: return '/inward';
+    case 'INWARD':
+      return '/inward';
+    case 'INWARD_LOG':
+      return '/inward-register';
+    case 'TOTAL_STOCK':
+      return '/stock';
+    case 'LINE_INSPECTOR':
+      return '/lines';
+    case 'DISPATCH_CART':
+      return '/dispatch';
+    case 'ANALYTICS':
+      return '/analytics';
+    default:
+      return '/stock';
   }
 }
 
 export function App() {
-  const { currentUser, isSuperAdmin, isManager, isSupervisor, hasPermission } = useAuth();
+  const { currentUser, isSuperAdmin, isManager, isSupervisor, hasPermission, isMaintenanceMode, setMaintenanceMode } = useAuth();
 
-  // Active Tab State with browser URL sync
+  // Navigation Tab State initialized from URL
   const [activeTab, setActiveTab] = useState<string>(() => {
     return getTabFromPath(window.location.pathname);
   });
 
-  // Handle browser back/forward buttons
-  useEffect(() => {
-    const handlePopState = () => {
-      setActiveTab(getTabFromPath(window.location.pathname));
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  // Modal States
+  const [inspectingPack, setInspectingPack] = useState<BatteryPack | null>(null);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState<boolean>(false);
+  const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    const newPath = getPathFromTab(tab);
-    if (window.location.pathname !== newPath) {
-      window.history.pushState(null, '', newPath);
-    }
-  };
-
-  // Dynamic Warehouse Lines List
-  const [warehouseLines, setWarehouseLines] = useState<string[]>(() => {
-    return getStoredWarehouseLines();
-  });
-
-  // Master State: Battery Packs
+  // Core Warehouse State
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
     const saved = localStorage.getItem('tata_wms_packs_v4');
     if (saved) {
@@ -106,419 +95,419 @@ export function App() {
     return createInitialWarehousePacks();
   });
 
-  const [dispatchLots, setDispatchLots] = useState<DispatchLot[]>(() => {
-    const saved = localStorage.getItem('tata_wms_lots_v4');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse saved lots', e);
-      }
-    }
-    return createInitialDispatchLots();
-  });
-
   const [inwardShipments, setInwardShipments] = useState<InwardShipmentRecord[]>(() => {
     const saved = localStorage.getItem('tata_wms_inwards_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {
-        console.error('Failed to parse saved inwards', e);
+        console.error('Failed to parse saved inward shipments', e);
       }
     }
     return createInitialInwardShipments();
   });
 
-  const [savedInvoices, setSavedInvoices] = useState<Invoice[]>(() => {
-    const saved = localStorage.getItem('tata_wms_invoices_v4');
+  const [dispatchLots, setDispatchLots] = useState<DispatchLot[]>(() => {
+    const saved = localStorage.getItem('tata_wms_lots_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {
-        console.error('Failed to parse saved invoices', e);
+        console.error('Failed to parse saved dispatch lots', e);
       }
     }
-    return [];
+    return createInitialDispatchLots();
   });
 
-  // Modal States
-  const [inspectingPack, setInspectingPack] = useState<BatteryPack | null>(null);
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
-  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState<boolean>(false);
-  const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
-  const [activeLotForInvoice, setActiveLotForInvoice] = useState<DispatchLot | null>(null);
+  const [warehouseLines, setWarehouseLines] = useState<string[]>(() => {
+    return getStoredWarehouseLines();
+  });
 
-  // Sync to LocalStorage on state changes
+  // Handle URL changes & browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(getTabFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    const targetPath = getPathFromTab(newTab);
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+  };
+
+  // Synchronize LocalStorage
   useEffect(() => {
     localStorage.setItem('tata_wms_packs_v4', JSON.stringify(packs));
   }, [packs]);
-
-  useEffect(() => {
-    localStorage.setItem('tata_wms_lots_v4', JSON.stringify(dispatchLots));
-  }, [dispatchLots]);
 
   useEffect(() => {
     localStorage.setItem('tata_wms_inwards_v4', JSON.stringify(inwardShipments));
   }, [inwardShipments]);
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_invoices_v4', JSON.stringify(savedInvoices));
-  }, [savedInvoices]);
+    localStorage.setItem('tata_wms_lots_v4', JSON.stringify(dispatchLots));
+  }, [dispatchLots]);
 
-  // Add new dynamic warehouse line
-  const handleAddNewWarehouseLine = (newLine: string) => {
-    if (!warehouseLines.includes(newLine)) {
-      const nextLines = [...warehouseLines, newLine];
-      setWarehouseLines(nextLines);
-      saveStoredWarehouseLines(nextLines);
-    }
-  };
-
-  // SUPABASE REALTIME MULTI-USER CLOUD SYNC (Zero-Crash Safe Architecture)
   useEffect(() => {
-    try {
-      const sb = getSupabase();
-      if (!sb) return;
+    saveStoredWarehouseLines(warehouseLines);
+  }, [warehouseLines]);
 
-      // 1. Fetch initial remote cloud state safely
-      fetchPacksFromCloud()
-        .then((remotePacks) => {
-          if (remotePacks && remotePacks.length > 0) {
-            setPacks(remotePacks);
-          }
-        })
-        .catch((e) => {
-          console.warn('Initial cloud fetch notice (Local data active):', e);
-        });
-
-      // 2. Subscribe to Real-Time Postgres Changes
-      const channel = sb
-        .channel('wms-live-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'battery_packs' },
-          (payload) => {
-            try {
-              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                const updatedPack = mapRowToPack(payload.new);
-                setPacks((prev) => {
-                  const existingIndex = prev.findIndex((p) => p.id === updatedPack.id);
-                  if (existingIndex >= 0) {
-                    const next = [...prev];
-                    next[existingIndex] = updatedPack;
-                    return next;
-                  } else {
-                    return [updatedPack, ...prev];
-                  }
-                });
-              } else if (payload.eventType === 'DELETE') {
-                setPacks((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
-              }
-            } catch (err) {
-              console.warn('Realtime pack sync note:', err);
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'dispatch_lots' },
-          (payload) => {
-            try {
-              if (payload.eventType === 'INSERT') {
-                const newLot = payload.new as DispatchLot;
-                setDispatchLots((prev) => {
-                  if (prev.some((l) => l.id === newLot.id)) return prev;
-                  return [newLot, ...prev];
-                });
-              }
-            } catch (err) {
-              console.warn('Realtime lot sync note:', err);
-            }
-          }
-        )
-        .subscribe();
-
-      return () => {
-        try {
-          sb.removeChannel(channel);
-        } catch (e) {}
-      };
-    } catch (err) {
-      console.warn('Supabase Realtime startup note:', err);
-    }
+  // Initial Supabase Cloud Sync
+  useEffect(() => {
+    const loadFromCloud = async () => {
+      try {
+        const cloudPacks = await fetchPacksFromCloud();
+        if (cloudPacks && cloudPacks.length > 0) {
+          setPacks((prev) => {
+            const map = new Map<string, BatteryPack>();
+            prev.forEach((p) => map.set(p.id, p));
+            cloudPacks.forEach((cp) => map.set(cp.id, cp));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn('Initial cloud sync notice:', err);
+      }
+    };
+    loadFromCloud();
   }, []);
 
-  // If user is not authenticated, lock down portal and display full-screen Login Wall
-  if (!currentUser) {
-    return <LoginScreen />;
-  }
+  // Supabase Real-time Cloud Subscriptions
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
 
-  // Derived filtered collections
-  const activeStoragePacks = packs.filter((p) => p.status !== 'DISPATCHED' && p.status !== 'IN_DISPATCH_AREA');
-  const stagedCartPacks = packs.filter((p) => p.status === 'IN_DISPATCH_AREA');
+    const channel = sb
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'battery_packs' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newPack = mapRowToPack(payload.new);
+            setPacks((prev) => {
+              if (prev.some((p) => p.id === newPack.id)) return prev;
+              return [newPack, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedPack = mapRowToPack(payload.new);
+            setPacks((prev) =>
+              prev.map((p) => (p.id === updatedPack.id ? updatedPack : p))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old.id;
+            setPacks((prev) => prev.filter((p) => p.id !== deletedId));
+          }
+        }
+      )
+      .subscribe();
 
-  // Inward Action: Add new packs to system
-  const handleAddInwardPacks = (
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, []);
+
+  // Handler: Add Inward Packs
+  const handleAddInwardPacks = async (
     newPacks: BatteryPack[],
     shipmentRecord: InwardShipmentRecord
   ) => {
     setPacks((prev) => [...newPacks, ...prev]);
     setInwardShipments((prev) => [shipmentRecord, ...prev]);
 
-    // Cloud Sync
-    syncPacksToCloud(newPacks);
-    syncInwardToCloud(shipmentRecord);
+    try {
+      await syncPacksToCloud(newPacks);
+      await syncInwardToCloud(shipmentRecord);
+    } catch (err) {
+      console.warn('Cloud sync on inward:', err);
+    }
   };
 
-  // Line Populator Save Action
-  const handleSaveAdminLinePacks = (newPacks: BatteryPack[]) => {
-    setPacks((prev) => [...newPacks, ...prev]);
-    syncPacksToCloud(newPacks);
+  // Handler: Approve Inward Pack
+  const handleApproveInwardPack = async (packId: string) => {
+    const operatorName = currentUser?.name || currentUser?.username || 'Supervisor';
+    const nowIso = new Date().toISOString();
+
+    const updatedPacks = packs.map((p) => {
+      if (p.id === packId) {
+        return {
+          ...p,
+          status: 'INWARD_AREA' as const,
+          inwardApprovedBy: operatorName,
+          inwardApprovedAt: nowIso,
+          movementHistory: [
+            ...p.movementHistory,
+            {
+              id: `mov-${Date.now()}`,
+              timestamp: nowIso,
+              fromLocation: 'Inward Dock',
+              toLocation: 'Inward Area (Approved)',
+              movedBy: operatorName,
+              reason: 'Supervisor Approval',
+            },
+          ],
+        };
+      }
+      return p;
+    });
+
+    setPacks(updatedPacks);
+    const approvedPack = updatedPacks.find((p) => p.id === packId);
+    if (approvedPack) {
+      try {
+        await syncPacksToCloud([approvedPack]);
+      } catch (err) {
+        console.warn('Cloud sync on approve:', err);
+      }
+    }
   };
 
-  // Delete / Remove Pack Action (Super Admin & Manager)
-  const handleDeletePack = (packId: string) => {
+  // Handler: Save Historical Line Matrix Packs
+  const handleSaveAdminLinePacks = async (newPacks: BatteryPack[]) => {
+    setPacks((prev) => {
+      const lineMap = new Map<string, BatteryPack>();
+      prev.forEach((p) => lineMap.set(p.id, p));
+      newPacks.forEach((np) => lineMap.set(np.id, np));
+      return Array.from(lineMap.values());
+    });
+
+    try {
+      await syncPacksToCloud(newPacks);
+    } catch (err) {
+      console.warn('Cloud sync on line populator:', err);
+    }
+  };
+
+  // Handler: Permanent Delete Pack
+  const handleDeletePack = async (packId: string) => {
     setPacks((prev) => prev.filter((p) => p.id !== packId));
-    deletePackFromCloud(packId);
+    try {
+      await deletePackFromCloud(packId);
+    } catch (err) {
+      console.warn('Cloud sync on delete pack:', err);
+    }
   };
 
-  // Edit Pack Action
-  const handleEditPack = (updatedPack: BatteryPack) => {
+  // Handler: Edit Pack
+  const handleEditPack = async (updatedPack: BatteryPack) => {
     setPacks((prev) =>
       prev.map((p) => (p.id === updatedPack.id ? updatedPack : p))
     );
-    syncPacksToCloud([updatedPack]);
+    try {
+      await syncPacksToCloud([updatedPack]);
+    } catch (err) {
+      console.warn('Cloud sync on edit pack:', err);
+    }
   };
 
-  // Inward Approval Handler (Supervisor/Manager)
-  const handleApproveInwardPack = (packId: string) => {
+  // Handler: Add New Warehouse Line
+  const handleAddNewWarehouseLine = (newLine: string) => {
+    if (!warehouseLines.includes(newLine)) {
+      setWarehouseLines((prev) => [...prev, newLine]);
+    }
+  };
+
+  // Handler: Move Pack to Dispatch Staging
+  const handleSendToDispatch = async (pack: BatteryPack) => {
+    const operatorName = currentUser?.name || currentUser?.username || 'Operator';
     const nowIso = new Date().toISOString();
-    const approverName = currentUser?.name || currentUser?.username || 'Supervisor';
 
-    setPacks((prev) =>
-      prev.map((p) => {
-        if (p.id === packId) {
-          const updated: BatteryPack = {
-            ...p,
-            status: 'INWARD_AREA',
-            inwardApprovedBy: approverName,
-            inwardApprovedAt: nowIso,
-            movementHistory: [
-              ...(p.movementHistory || []),
-              {
-                id: 'mov-' + Date.now(),
-                timestamp: nowIso,
-                fromLocation: 'Receiving Dock',
-                toLocation: 'Inward Area',
-                movedBy: approverName,
-                reason: 'Inward Approved by ' + approverName,
-              },
-            ],
-          };
-          syncPacksToCloud([updated]);
-          return updated;
-        }
-        return p;
-      })
-    );
-  };
-
-  const handleApproveMultipleInwardPacks = (packIds: string[]) => {
-    packIds.forEach((id) => handleApproveInwardPack(id));
-  };
-
-  // Relocate Pack to Line Rack Coordinates
-  const handleMovePackToLocation = (
-    packId: string,
-    location: { lineId: string; rackNumber: number; rackSlot: number }
-  ) => {
-    const locStr = location.lineId + ', R-' + String(location.rackNumber).padStart(2, '0') + ', L-0' + location.rackSlot;
-    const nowIso = new Date().toISOString();
-    const moverName = currentUser?.name || currentUser?.username || 'Operator';
-
-    setPacks((prev) =>
-      prev.map((p) => {
-        if (p.id === packId) {
-          const updated: BatteryPack = {
-            ...p,
-            status: 'IN_STORAGE',
-            locationArea: 'Warehouse Storage',
-            currentLocation: locStr,
-            lineId: location.lineId,
-            rackNumber: location.rackNumber,
-            rackSlot: location.rackSlot,
-            movementHistory: [
-              ...(p.movementHistory || []),
-              {
-                id: 'mov-' + Date.now(),
-                timestamp: nowIso,
-                fromLocation: p.currentLocation || p.locationArea || 'Inward Area',
-                toLocation: locStr,
-                movedBy: moverName,
-                reason: 'Allocated to ' + locStr,
-              },
-            ],
-          };
-          syncPacksToCloud([updated]);
-          return updated;
-        }
-        return p;
-      })
-    );
-  };
-
-  const handleMoveMultiplePacksToLocation = (
-    packIds: string[],
-    location: { lineId: string; rackNumber: number; rackSlot: number }
-  ) => {
-    packIds.forEach((id, idx) => {
-      // Auto-increment rack/slot if moving multiple
-      const targetSlot = ((location.rackSlot - 1 + idx) % 4) + 1;
-      const targetRack = location.rackNumber + Math.floor((location.rackSlot - 1 + idx) / 4);
-      handleMovePackToLocation(id, {
-        lineId: location.lineId,
-        rackNumber: targetRack,
-        rackSlot: targetSlot,
-      });
+    const updatedPacks = packs.map((p) => {
+      if (p.id === pack.id) {
+        return {
+          ...p,
+          status: 'IN_DISPATCH_AREA' as const,
+          locationArea: 'Dispatch Staging Bay',
+          currentLocation: 'Dispatch Bay',
+          movementHistory: [
+            ...p.movementHistory,
+            {
+              id: `mov-${Date.now()}`,
+              timestamp: nowIso,
+              fromLocation: p.currentLocation || 'Warehouse Storage',
+              toLocation: 'Dispatch Staging Bay',
+              movedBy: operatorName,
+              reason: 'Staged for Outward Dispatch',
+            },
+          ],
+        };
+      }
+      return p;
     });
+
+    setPacks(updatedPacks);
+    const updated = updatedPacks.find((p) => p.id === pack.id);
+    if (updated) {
+      try {
+        await syncPacksToCloud([updated]);
+      } catch (err) {
+        console.warn('Cloud sync on dispatch staging:', err);
+      }
+    }
   };
 
-  // Send Pack to Dispatch Cart
-  const handleSendToDispatch = (pack: BatteryPack) => {
+  // Handler: Remove from Dispatch Cart
+  const handleRemoveFromCart = async (packId: string) => {
+    const operatorName = currentUser?.name || currentUser?.username || 'Operator';
     const nowIso = new Date().toISOString();
-    const moverName = currentUser?.name || currentUser?.username || 'Staff';
 
-    setPacks((prev) =>
-      prev.map((p) => {
-        if (p.id === pack.id) {
-          const updated: BatteryPack = {
-            ...p,
-            status: 'IN_DISPATCH_AREA',
-            locationArea: 'Dispatch Staging Bay',
-            currentLocation: 'Dispatch Bay (Staged)',
-            movementHistory: [
-              ...(p.movementHistory || []),
-              {
-                id: 'mov-' + Date.now(),
-                timestamp: nowIso,
-                fromLocation: p.currentLocation || 'Inward Area',
-                toLocation: 'Dispatch Staging Bay',
-                movedBy: moverName,
-                reason: 'Staged for Outward Dispatch',
-              },
-            ],
-          };
-          syncPacksToCloud([updated]);
-          return updated;
-        }
-        return p;
-      })
-    );
-  };
-
-  const handleSendMultipleToDispatch = (packIds: string[]) => {
-    packIds.forEach((id) => {
-      const found = packs.find((p) => p.id === id);
-      if (found) handleSendToDispatch(found);
+    const updatedPacks = packs.map((p) => {
+      if (p.id === packId) {
+        return {
+          ...p,
+          status: 'IN_STORAGE' as const,
+          locationArea: p.lineId ? `Line ${p.lineId}` : 'Storage Rack',
+          currentLocation: p.lineId && p.rackNumber ? `${p.lineId}-R${p.rackNumber}` : 'Warehouse Storage',
+          movementHistory: [
+            ...p.movementHistory,
+            {
+              id: `mov-${Date.now()}`,
+              timestamp: nowIso,
+              fromLocation: 'Dispatch Bay',
+              toLocation: p.lineId ? `Line ${p.lineId}` : 'Warehouse Storage',
+              movedBy: operatorName,
+              reason: 'Returned to storage rack from dispatch cart',
+            },
+          ],
+        };
+      }
+      return p;
     });
+
+    setPacks(updatedPacks);
+    const updated = updatedPacks.find((p) => p.id === packId);
+    if (updated) {
+      try {
+        await syncPacksToCloud([updated]);
+      } catch (err) {
+        console.warn('Cloud sync on return to storage:', err);
+      }
+    }
   };
 
-  // Remove Pack from Dispatch Cart back to previous location
-  const handleRemoveFromCart = (packId: string) => {
+  // Handler: Add Multiple Packs to Dispatch Cart
+  const handleAddMultipleToCart = async (packsToAdd: BatteryPack[]) => {
+    const operatorName = currentUser?.name || currentUser?.username || 'Operator';
     const nowIso = new Date().toISOString();
-    const moverName = currentUser?.name || currentUser?.username || 'Staff';
+    const idsToAdd = new Set(packsToAdd.map((p) => p.id));
 
-    setPacks((prev) =>
-      prev.map((p) => {
-        if (p.id === packId) {
-          const prevLocation = p.lineId ? p.lineId + ', R-' + p.rackNumber + ', L-0' + p.rackSlot : 'Inward Area';
-          const updated: BatteryPack = {
-            ...p,
-            status: p.lineId ? 'IN_STORAGE' : 'INWARD_AREA',
-            locationArea: p.lineId ? 'Warehouse Storage' : 'Inward Area',
-            currentLocation: prevLocation,
-            movementHistory: [
-              ...(p.movementHistory || []),
-              {
-                id: 'mov-' + Date.now(),
-                timestamp: nowIso,
-                fromLocation: 'Dispatch Staging Bay',
-                toLocation: prevLocation,
-                movedBy: moverName,
-                reason: 'Removed from Dispatch Staging Cart',
-              },
-            ],
-          };
-          syncPacksToCloud([updated]);
-          return updated;
-        }
-        return p;
-      })
-    );
-  };
-
-  const handleAddMultipleToCart = (packIds: string[]) => {
-    packIds.forEach((id) => {
-      const found = packs.find((p) => p.id === id);
-      if (found) handleSendToDispatch(found);
+    const updatedPacks = packs.map((p) => {
+      if (idsToAdd.has(p.id)) {
+        return {
+          ...p,
+          status: 'IN_DISPATCH_AREA' as const,
+          locationArea: 'Dispatch Staging Bay',
+          currentLocation: 'Dispatch Bay',
+          movementHistory: [
+            ...p.movementHistory,
+            {
+              id: `mov-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              timestamp: nowIso,
+              fromLocation: p.currentLocation || 'Warehouse Storage',
+              toLocation: 'Dispatch Staging Bay',
+              movedBy: operatorName,
+              reason: 'Bulk staged for Outward Dispatch',
+            },
+          ],
+        };
+      }
+      return p;
     });
+
+    setPacks(updatedPacks);
+    const updatedList = updatedPacks.filter((p) => idsToAdd.has(p.id));
+    try {
+      await syncPacksToCloud(updatedList);
+    } catch (err) {
+      console.warn('Cloud sync on bulk dispatch staging:', err);
+    }
   };
 
-  // Complete Outward Dispatch Lot Execution
-  const handleApproveDispatchLot = (lot: DispatchLot, dispatchedPackIds: string[]) => {
+  // Handler: Approve Outward Dispatch Lot
+  const handleApproveDispatchLot = async (lot: DispatchLot) => {
     setDispatchLots((prev) => [lot, ...prev]);
-    syncLotToCloud(lot);
 
-    const nowIso = new Date().toISOString();
-    const operatorName = currentUser?.name || currentUser?.username || 'Dispatch Lead';
+    const lotPackIds = new Set(lot.packs.map((p) => p.id));
+    const updatedPacks = packs.map((p) => {
+      if (lotPackIds.has(p.id)) {
+        return {
+          ...p,
+          status: 'DISPATCHED' as const,
+          currentLocation: `Dispatched to ${lot.consigneeName}`,
+          locationArea: 'Dispatched to EV Plant',
+          dispatchLotId: lot.id,
+          dispatchedAt: lot.timestamp,
+        };
+      }
+      return p;
+    });
 
-    setPacks((prev) =>
-      prev.map((p) => {
-        if (dispatchedPackIds.includes(p.id)) {
-          const updated: BatteryPack = {
-            ...p,
-            status: 'DISPATCHED',
-            locationArea: 'Dispatched / In Transit',
-            currentLocation: 'Dispatched to ' + lot.consigneeName,
-            dispatchedAt: nowIso,
-            dispatchedBy: operatorName,
-            dispatchLotId: lot.id,
-            dispatchDocNo: lot.transportDocNo,
-            dispatchLrNo: lot.lrNumber,
-            dispatchVehicleNo: lot.vehicleNumber,
-            dispatchToAddress: lot.consigneeAddress,
-            dispatchToCustomer: lot.consigneeName,
-            movementHistory: [
-              ...(p.movementHistory || []),
-              {
-                id: 'mov-' + Date.now(),
-                timestamp: nowIso,
-                fromLocation: 'Dispatch Staging Bay',
-                toLocation: 'Dispatched (Vehicle ' + lot.vehicleNumber + ')',
-                movedBy: operatorName,
-                reason: 'Dispatched under Lot #' + lot.lotNumber + ' (LR: ' + lot.lrNumber + ')',
-              },
-            ],
-          };
-          syncPacksToCloud([updated]);
-          return updated;
-        }
-        return p;
-      })
+    setPacks(updatedPacks);
+    try {
+      await syncLotToCloud(lot);
+      const dispatchedList = updatedPacks.filter((p) => lotPackIds.has(p.id));
+      await syncPacksToCloud(dispatchedList);
+    } catch (err) {
+      console.warn('Cloud sync on lot dispatch:', err);
+    }
+  };
+
+  // Derived state subsets
+  const totalActiveStorage = packs.filter((p) => p.status === 'IN_STORAGE').length;
+  const stagedCartPacks = packs.filter((p) => p.status === 'IN_DISPATCH_AREA');
+  const activeStoragePacks = packs.filter((p) => p.status === 'IN_STORAGE' || p.status === 'INWARD_AREA');
+
+  // STRICT LOGIN WALL: If not logged in, show Login Screen
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
+
+  // SUPER ADMIN MAINTENANCE LOCKDOWN SCREEN FOR NON-ADMIN STAFF
+  if (isMaintenanceMode && !isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white text-xs font-sans">
+        <div className="bg-slate-800 border border-slate-700 p-8 rounded-3xl max-w-lg w-full space-y-6 shadow-2xl text-center">
+          <div className="h-16 w-16 mx-auto bg-white p-2 rounded-2xl flex items-center justify-center shadow-lg">
+            <img src="/tata-logo.png" alt="TATA Logo" className="h-12 w-12 object-contain" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold uppercase tracking-wider text-[11px]">
+              <Wrench className="w-3.5 h-3.5" /> Maintenance Mode Active
+            </div>
+            <h2 className="text-xl font-bold text-white font-display">System Maintenance In Progress</h2>
+            <p className="text-slate-300 text-xs">
+              Tata AutoComp Systems Limited (Varale B300 Plant)
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-900/60 border border-slate-700 rounded-2xl text-left space-y-2 text-slate-400 font-mono-code text-[11px]">
+            <p className="text-amber-300 font-bold">Portal Temporarily Locked for Upgrades</p>
+            <p>
+              Database optimization and new feature enhancements are currently being applied by Super Admin.
+              Normal warehouse operations will resume shortly.
+            </p>
+          </div>
+
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition cursor-pointer"
+          >
+            Check Status & Refresh
+          </button>
+        </div>
+      </div>
     );
-  };
-
-  // Open Invoice Generation for a Dispatch Lot
-  const handleGenerateInvoiceForLot = (lot: DispatchLot) => {
-    setActiveLotForInvoice(lot);
-    handleTabChange('INVOICES');
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900 selection:bg-orange-500 selection:text-white">
-      {/* Top Professional Navigation Header */}
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      {/* Executive White Header Navbar */}
       <Navbar
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -531,7 +520,7 @@ export function App() {
         onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
       />
 
-      {/* Main Content Workspace */}
+      {/* Main Body View Rendering */}
       <main className="flex-1 pb-16">
         {activeTab === 'INWARD' && hasPermission('canInward') && (
           <InwardScanner
@@ -545,14 +534,10 @@ export function App() {
           <InwardRegisterView
             packs={packs}
             onApproveInwardPack={handleApproveInwardPack}
-            onApproveMultipleInwardPacks={handleApproveMultipleInwardPacks}
-            onSendToDispatch={handleSendToDispatch}
-            onSendMultipleToDispatch={handleSendMultipleToDispatch}
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
-            onMovePackToLocation={handleMovePackToLocation}
-            onMoveMultiplePacksToLocation={handleMoveMultiplePacksToLocation}
-            onEditPack={handleEditPack}
+            onAllocatePackToRack={(pack) => handleTabChange('LINE_INSPECTOR')}
             onDeletePack={handleDeletePack}
+            onEditPack={handleEditPack}
           />
         )}
 
@@ -572,10 +557,39 @@ export function App() {
             onAddNewLine={handleAddNewWarehouseLine}
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onSendToDispatch={handleSendToDispatch}
-            onOpenRackLoader={(line, rack) => {
-              setIsAdminPopulatorOpen(true);
+            onAllocatePackSlot={async (updatedPack) => {
+              setPacks((prev) =>
+                prev.map((p) => (p.id === updatedPack.id ? updatedPack : p))
+              );
+              try {
+                await syncPacksToCloud([updatedPack]);
+              } catch (err) {
+                console.warn('Cloud sync on rack slot allocation:', err);
+              }
             }}
-            onDeletePack={handleDeletePack}
+            onClearSlot={async (packId) => {
+              const packToClear = packs.find((p) => p.id === packId);
+              if (!packToClear) return;
+              const clearedPack: BatteryPack = {
+                ...packToClear,
+                status: 'INWARD_AREA',
+                locationArea: 'Inward Area',
+                currentLocation: 'Inward Area',
+                lineId: undefined,
+                rackNumber: undefined,
+                level: undefined,
+                slotPosition: undefined,
+              };
+              setPacks((prev) =>
+                prev.map((p) => (p.id === packId ? clearedPack : p))
+              );
+              try {
+                await syncPacksToCloud([clearedPack]);
+              } catch (err) {
+                console.warn('Cloud sync on clear slot:', err);
+              }
+            }}
+            onOpenPopulatorModal={() => setIsAdminPopulatorOpen(true)}
           />
         )}
 
@@ -586,17 +600,6 @@ export function App() {
             onRemoveFromCart={handleRemoveFromCart}
             onAddMultipleToCart={handleAddMultipleToCart}
             onApproveDispatchLot={handleApproveDispatchLot}
-            onGenerateInvoiceForLot={handleGenerateInvoiceForLot}
-          />
-        )}
-
-        {activeTab === 'INVOICES' && hasPermission('canInvoices') && (
-          <InvoiceGenerator
-            initialLot={activeLotForInvoice}
-            savedInvoices={savedInvoices}
-            onSaveInvoice={(newInvoice) => {
-              setSavedInvoices((prev) => [newInvoice, ...prev]);
-            }}
           />
         )}
 
