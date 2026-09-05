@@ -193,69 +193,133 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
   },
 };
 
+export const MODEL_KEYWORDS = [
+  'K1-AIO-AIS', 'K1-GEN3-AIS', 'K1-CKD-AIS', 'K1-FBU-AIS', 'K2-AIS', 'LIM-AIS', 'LIM-NON',
+  'K1-AIO', 'K1-GEN3', 'K1-CKD', 'K1-FBU', 'K2AIS', 'K1AIS', 'GEN3-AIS', 'CKD-AIS', 'FBU-AIS',
+  'NONAIS', 'NON-AIS', 'LIMBER', 'GEN3', 'TAMOR', 'NOVA', 'CHALLENGER',
+  'FBU', 'CKD', 'AIO', 'G3', 'K2', 'K3', 'K1', 'AIS'
+];
+
 /**
  * Intelligent Shorthand & Digit-Threshold Model Auto-Derivation Helper
  * Rules:
+ * - FBU / CKD / GEN3 / AIO keywords anywhere in string are auto-detected.
  * - Limber: 4 digits -> Limber_Non_Ais, 5 digits -> Limber_Ais
  * - Kanger 2.0: 4 digits -> Kanger2.0, 5 digits -> Kanger2.0_Ais
  * - Kanger 1.0 (AIO / Gen3 / CKD / FBU): serial >= 30000 -> _Ais variant
  */
 export function deriveModelFromShorthand(serial: string, shorthand: string = 'AIO'): BatteryPackType {
-  const cleanSerial = serial.replace(/[^0-9]/g, '');
+  const rawCombined = `${serial || ''} ${shorthand || ''}`.toUpperCase();
+  const cleanSerial = (serial || '').replace(/[^0-9]/g, '');
   const serialNum = parseInt(cleanSerial, 10) || 0;
   const digitCount = cleanSerial.length;
-  const cleanShort = (shorthand || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  // 1. Limber Series Rules
-  if (cleanShort.includes('limber') || cleanShort.includes('ais') || cleanShort.includes('nonais')) {
-    if (cleanShort.includes('non') || cleanShort === 'limbernon' || cleanShort === 'nonais') {
-      return 'Limber_Non_Ais';
-    }
-    if (cleanShort.includes('ais') && !cleanShort.includes('non')) {
-      return 'Limber_Ais';
-    }
-    // Auto-detect by digit length: 5 digits -> Ais, 4 digits -> Non_Ais
-    if (digitCount >= 5) return 'Limber_Ais';
-    return 'Limber_Non_Ais';
+  // 1. Check for FBU
+  if (rawCombined.includes('FBU')) {
+    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_FBU_Ais' : 'Kanger1.0_FBU';
   }
 
-  // 2. Kanger 2.0 Series Rules
-  if (cleanShort === 'k2' || cleanShort.includes('kanger2') || cleanShort === 'k2ais') {
-    if (cleanShort.includes('ais') || digitCount >= 5) {
+  // 2. Check for CKD
+  if (rawCombined.includes('CKD')) {
+    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_CKD_Ais' : 'Kanger1.0_CKD';
+  }
+
+  // 3. Check for GEN3
+  if (rawCombined.includes('GEN3') || rawCombined.includes('GEN 3') || rawCombined.includes('G3')) {
+    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_Gen3_Ais' : 'Kanger1.0_Gen3';
+  }
+
+  // 4. Check for Kanger 2.0 / K2
+  if (rawCombined.includes('KANGER2') || rawCombined.includes('K2') || rawCombined.includes('KANGER 2')) {
+    if (rawCombined.includes('AIS') || digitCount >= 5) {
       return 'Kanger2.0_Ais';
     }
     return 'Kanger2.0';
   }
 
-  // 3. Kanger 3.0 Series Rules
-  if (cleanShort === 'k3' || cleanShort.includes('kanger3')) {
+  // 5. Check for Limber
+  if (rawCombined.includes('LIMBER') || rawCombined.includes('LIM')) {
+    if (rawCombined.includes('NON') || rawCombined.includes('NONAIS') || rawCombined.includes('NON-AIS')) {
+      return 'Limber_Non_Ais';
+    }
+    if (rawCombined.includes('AIS')) {
+      return 'Limber_Ais';
+    }
+    return digitCount >= 5 ? 'Limber_Ais' : 'Limber_Non_Ais';
+  }
+
+  // 6. Check for Kanger 3.0 / K3
+  if (rawCombined.includes('KANGER3') || rawCombined.includes('K3')) {
     return 'Kanger3.0';
   }
 
-  // 4. Tamor, Nova, Challenger
-  if (cleanShort.includes('tamor') || cleanShort.includes('elr')) return 'Tamor_ELR';
-  if (cleanShort.includes('nova') || cleanShort.includes('lrp')) return 'Nova_LRP';
-  if (cleanShort.includes('challengermr') || cleanShort === 'mr') return 'Challenger_MR';
-  if (cleanShort.includes('challenger') || cleanShort === 'lr' || cleanShort === 'chal') return 'Challenger_LR';
+  // 7. Check for Tamor, Nova, Challenger
+  if (rawCombined.includes('TAMOR') || rawCombined.includes('ELR')) return 'Tamor_ELR';
+  if (rawCombined.includes('NOVA') || rawCombined.includes('LRP')) return 'Nova_LRP';
+  if (rawCombined.includes('CHALLENGER MR') || rawCombined.includes('CHALLENGER_MR')) return 'Challenger_MR';
+  if (rawCombined.includes('CHALLENGER')) return 'Challenger_LR';
 
-  // 5. Kanger 1.0 Variants (Gen3, CKD, FBU, AIO)
-  const isAisThreshold = serialNum >= 30000;
-
-  if (cleanShort.includes('gen3') || cleanShort === 'g3' || cleanShort === 'k1gen3') {
-    return isAisThreshold ? 'Kanger1.0_Gen3_Ais' : 'Kanger1.0_Gen3';
-  }
-  if (cleanShort.includes('ckd') || cleanShort === 'k1ckd') {
-    return isAisThreshold ? 'Kanger1.0_CKD_Ais' : 'Kanger1.0_CKD';
-  }
-  if (cleanShort.includes('fbu') || cleanShort === 'k1fbu') {
-    return isAisThreshold ? 'Kanger1.0_FBU_Ais' : 'Kanger1.0_FBU';
-  }
-  if (cleanShort.includes('aio') || cleanShort === 'allinone' || cleanShort === 'k1aio' || cleanShort === 'k1') {
-    return isAisThreshold ? 'Kanger1.0_AIO_Ais' : 'Kanger1.0_AIO';
+  // 8. Check for AIO
+  if (rawCombined.includes('AIO') || rawCombined.includes('ALL IN ONE')) {
+    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_AIO_Ais' : 'Kanger1.0_AIO';
   }
 
-  // Default fallback for Kanger 1.0 AIO
-  return isAisThreshold ? 'Kanger1.0_AIO_Ais' : 'Kanger1.0_AIO';
+  // 9. Numeric threshold fallback if no explicit letters:
+  if (serialNum >= 30000) {
+    return 'Kanger1.0_AIO_Ais';
+  }
+  if (digitCount === 5) {
+    return 'Kanger2.0_Ais';
+  }
+
+  return 'Kanger1.0_AIO';
+}
+
+/**
+ * Robust Parser: Extracts clean numeric pack number and derives correct model enum
+ */
+export function parseBoxCodeAndModel(rawInput: string, fallbackModel: string = 'AIO'): {
+  cleanPackNumber: string;
+  derivedModel: BatteryPackType;
+  isWithoutPlate: boolean;
+} {
+  const raw = (rawInput || '').trim();
+  if (!raw || raw === '0') {
+    return {
+      cleanPackNumber: '',
+      derivedModel: 'Kanger1.0_AIO',
+      isWithoutPlate: false,
+    };
+  }
+
+  // Check if plate-less
+  if (raw.toUpperCase().startsWith('NP-') || raw.toUpperCase().startsWith('NP')) {
+    const cleanNoPlate = raw.toUpperCase().startsWith('NP-') ? raw.toUpperCase() : `NP-${raw.slice(2)}`;
+    return {
+      cleanPackNumber: cleanNoPlate,
+      derivedModel: deriveModelFromShorthand(raw, fallbackModel),
+      isWithoutPlate: true,
+    };
+  }
+
+  // Determine model first from full raw string
+  const derivedModel = deriveModelFromShorthand(raw, fallbackModel);
+
+  // Strip known model keywords to get pure serial number
+  let stripped = raw.toUpperCase();
+  for (const kw of MODEL_KEYWORDS) {
+    const regex = new RegExp(kw, 'gi');
+    stripped = stripped.replace(regex, '');
+  }
+
+  const cleanDigits = stripped.replace(/[^0-9]/g, '').trim();
+  const cleanPackNumber = cleanDigits.length > 0 ? cleanDigits : raw.replace(/[^0-9A-Za-z_-]/g, '');
+
+  return {
+    cleanPackNumber,
+    derivedModel,
+    isWithoutPlate: false,
+  };
 }
 
 export const COMMON_TRANSPORTERS = [

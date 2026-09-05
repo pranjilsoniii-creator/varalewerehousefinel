@@ -596,7 +596,8 @@ export function App() {
       <Navbar
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        totalActivePacks={packs.filter((p) => p.sourceType !== 'LINE_POPULATE').length}
+        inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.status !== 'DISPATCHED').length}
+        totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
         cartPacksCount={stagedCartPacks.length}
         dispatchedLotsCount={dispatchLots.length}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}

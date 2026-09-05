@@ -21,7 +21,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, deriveModelFromShorthand } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, deriveModelFromShorthand, parseBoxCodeAndModel } from '../data/batteryCatalog';
 import {
   getStoredWarehouseLines,
   saveStoredWarehouseLines,
@@ -132,14 +132,17 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
     setRackSlots((prev) => {
       const next = [...prev];
       if (field === 'packNumber') {
-        const cleanVal = value.trim();
-        next[slotIndex].packNumber = cleanVal;
-        if (cleanVal && cleanVal !== '0') {
-          next[slotIndex].normalizedModel = deriveModelFromShorthand(cleanVal, next[slotIndex].modelInput);
+        const rawVal = value;
+        next[slotIndex].packNumber = rawVal;
+        if (rawVal.trim() && rawVal.trim() !== '0') {
+          const parsed = parseBoxCodeAndModel(rawVal, next[slotIndex].modelInput);
+          next[slotIndex].normalizedModel = parsed.derivedModel;
+          next[slotIndex].isWithoutPlate = parsed.isWithoutPlate;
         }
       } else if (field === 'modelInput') {
         next[slotIndex].modelInput = value;
-        next[slotIndex].normalizedModel = deriveModelFromShorthand(next[slotIndex].packNumber, value);
+        const parsed = parseBoxCodeAndModel(next[slotIndex].packNumber, value);
+        next[slotIndex].normalizedModel = parsed.derivedModel;
       }
       return next;
     });
@@ -209,13 +212,14 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
     const nowIso = new Date().toISOString();
     const operatorName = currentUser?.name || currentUser?.username || 'Line Manager';
 
-    // Create BatteryPack items
+    // Create BatteryPack items using parseBoxCodeAndModel
     const newPacks: BatteryPack[] = validSlotEntries.map((slotItem, idx) => {
+      const parsed = parseBoxCodeAndModel(slotItem.packNumber, slotItem.modelInput);
       const locStr = selectedLine + ', R-' + String(activeRackNumber).padStart(2, '0') + ', L-0' + slotItem.slot;
       return {
         id: 'pack-line-' + Date.now() + '-' + activeRackNumber + '-' + slotItem.slot + '-' + idx,
-        packNumber: slotItem.packNumber.trim(),
-        packType: slotItem.normalizedModel,
+        packNumber: parsed.cleanPackNumber,
+        packType: parsed.derivedModel,
         status: 'IN_STORAGE',
         locationArea: 'Warehouse Storage',
         currentLocation: locStr,
@@ -223,7 +227,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
         rackNumber: activeRackNumber,
         rackSlot: slotItem.slot,
         sourceType: 'LINE_POPULATE', // Direct Line Stock (Excluded from Inward Register, included in Total Stock)
-        isWithoutPlate: slotItem.packNumber.toUpperCase().startsWith('NP-'),
+        isWithoutPlate: parsed.isWithoutPlate,
         inwardDate: nowIso,
         documentNo: 'LINE-LOAD-' + selectedLine,
         dealershipName: 'Varale B300 Line Stock',
@@ -278,42 +282,42 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
 
       // If code is '0' or empty -> keep slot empty without creating pack
       if (rawCode && rawCode !== '0') {
-        const cleanNum = rawCode.replace(/[^0-9A-Za-z_-]/g, '');
-        const normModel = deriveModelFromShorthand(cleanNum, modelStr);
-        const locStr = selectedLine + ', R-' + String(currentRackIndex).padStart(2, '0') + ', L-0' + slotInRack;
-
-        newPacks.push({
-          id: 'pack-matrix-' + Date.now() + '-' + currentRackIndex + '-' + slotInRack + '-' + idx,
-          packNumber: cleanNum,
-          packType: normModel,
-          status: 'IN_STORAGE',
-          locationArea: 'Warehouse Storage',
-          currentLocation: locStr,
-          lineId: selectedLine,
-          rackNumber: currentRackIndex,
-          rackSlot: slotInRack,
-          sourceType: 'LINE_POPULATE',
-          isWithoutPlate: cleanNum.toUpperCase().startsWith('NP-'),
-          inwardDate: nowIso,
-          documentNo: 'MATRIX-LOAD-' + selectedLine,
-          dealershipName: 'Varale B300 Line Stock',
-          receivedState: 'Maharashtra',
-          transportName: 'Direct Line Matrix Allocation',
-          hasInwardStamp: true,
-          inwardBy: operatorName,
-          inwardApprovedBy: operatorName,
-          inwardApprovedAt: nowIso,
-          movementHistory: [
-            {
-              id: 'mov-mat-' + Date.now() + '-' + idx,
-              timestamp: nowIso,
-              fromLocation: 'Matrix Batch Stock',
-              toLocation: locStr,
-              movedBy: operatorName,
-              reason: 'Excel Batch Line Stock (Line ' + selectedLine + ', Rack ' + currentRackIndex + ', Slot ' + slotInRack + ')',
-            },
-          ],
-        });
+        const parsed = parseBoxCodeAndModel(rawCode, modelStr);
+        if (parsed.cleanPackNumber) {
+          const locStr = selectedLine + ', R-' + String(currentRackIndex).padStart(2, '0') + ', L-0' + slotInRack;
+          newPacks.push({
+            id: 'pack-matrix-' + Date.now() + '-' + currentRackIndex + '-' + slotInRack + '-' + idx,
+            packNumber: parsed.cleanPackNumber,
+            packType: parsed.derivedModel,
+            status: 'IN_STORAGE',
+            locationArea: 'Warehouse Storage',
+            currentLocation: locStr,
+            lineId: selectedLine,
+            rackNumber: currentRackIndex,
+            rackSlot: slotInRack,
+            sourceType: 'LINE_POPULATE',
+            isWithoutPlate: parsed.isWithoutPlate,
+            inwardDate: nowIso,
+            documentNo: 'MATRIX-LOAD-' + selectedLine,
+            dealershipName: 'Varale B300 Line Stock',
+            receivedState: 'Maharashtra',
+            transportName: 'Direct Line Matrix Allocation',
+            hasInwardStamp: true,
+            inwardBy: operatorName,
+            inwardApprovedBy: operatorName,
+            inwardApprovedAt: nowIso,
+            movementHistory: [
+              {
+                id: 'mov-mat-' + Date.now() + '-' + idx,
+                timestamp: nowIso,
+                fromLocation: 'Matrix Batch Stock',
+                toLocation: locStr,
+                movedBy: operatorName,
+                reason: 'Excel Batch Line Stock (Line ' + selectedLine + ', Rack ' + currentRackIndex + ', Slot ' + slotInRack + ')',
+              },
+            ],
+          });
+        }
       }
 
       // Increment slot (4 slots per rack)

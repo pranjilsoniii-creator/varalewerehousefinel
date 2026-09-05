@@ -21,7 +21,9 @@ import { useAuth } from '../context/AuthContext';
 interface NavbarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  totalActivePacks: number;
+  totalActivePacks?: number;
+  inwardPacksCount?: number;
+  totalStockCount?: number;
   cartPacksCount: number;
   dispatchedLotsCount: number;
   onOpenSupabaseModal: () => void;
@@ -34,7 +36,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   onTabChange,
-  totalActivePacks,
+  totalActivePacks = 0,
+  inwardPacksCount,
+  totalStockCount = 0,
   cartPacksCount,
   dispatchedLotsCount,
   onOpenSupabaseModal,
@@ -46,6 +50,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { currentUser, isSuperAdmin, isManager, hasPermission, isMaintenanceMode, setMaintenanceMode, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
+
+  const finalInwardCount = inwardPacksCount !== undefined ? inwardPacksCount : totalActivePacks;
 
   const allNavItems = [
     {
@@ -59,13 +65,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Inward Register',
       icon: FileSpreadsheet,
       permissionKey: 'canInward' as const,
-      badge: totalActivePacks > 0 ? `${totalActivePacks}` : null,
+      badge: finalInwardCount > 0 ? `${finalInwardCount}` : null,
     },
     {
       id: 'TOTAL_STOCK',
       label: 'Total Stock',
       icon: Layers,
       permissionKey: 'canViewStock' as const,
+      badge: totalStockCount > 0 ? `${totalStockCount}` : null,
     },
     {
       id: 'LINE_INSPECTOR',
