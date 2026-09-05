@@ -55,6 +55,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [editDealership, setEditDealership] = useState('');
   const [editReceivedState, setEditReceivedState] = useState('');
   const [editRemark, setEditRemark] = useState('');
+  const [editIsDifferentSerial, setEditIsDifferentSerial] = useState(false);
+  const [editChallanPackNumber, setEditChallanPackNumber] = useState('');
+  const [editMismatchReason, setEditMismatchReason] = useState('');
 
   // ISOLATION: Only show packs received via Inward Receiving Dock / Delivery Challan
   const inwardOnlyPacks = useMemo(() => {
@@ -70,9 +73,11 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     let k2Count = 0;
     let limberCount = 0;
     let pendingCount = 0;
+    let diffCount = 0;
 
     inwardOnlyPacks.forEach((p) => {
       if (p.status === 'PENDING_APPROVAL') pendingCount += 1;
+      if (p.isDifferentSerial) diffCount += 1;
       if (p.packType.startsWith('Kanger1.0')) k1Count += 1;
       else if (p.packType.startsWith('Kanger2.0')) k2Count += 1;
       else if (p.packType.startsWith('Limber')) limberCount += 1;
@@ -84,6 +89,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       k2: k2Count,
       limber: limberCount,
       pending: pendingCount,
+      diff: diffCount,
     };
   }, [inwardOnlyPacks]);
 
@@ -98,10 +104,12 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesPack = p.packNumber.toLowerCase().includes(q);
+        const matchesChallan = p.challanPackNumber?.toLowerCase().includes(q);
         const matchesDoc = p.documentNo?.toLowerCase().includes(q);
         const matchesDealer = p.dealershipName?.toLowerCase().includes(q);
         const matchesModel = p.packType.toLowerCase().includes(q);
-        if (!matchesPack && !matchesDoc && !matchesDealer && !matchesModel) return false;
+        const matchesReason = p.mismatchReason?.toLowerCase().includes(q);
+        if (!matchesPack && !matchesChallan && !matchesDoc && !matchesDealer && !matchesModel && !matchesReason) return false;
       }
 
       // 2. Model Filter
@@ -151,6 +159,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     setEditDealership(pack.dealershipName || '');
     setEditReceivedState(pack.receivedState || '');
     setEditRemark(pack.remark || '');
+    setEditIsDifferentSerial(Boolean(pack.isDifferentSerial));
+    setEditChallanPackNumber(pack.challanPackNumber || '');
+    setEditMismatchReason(pack.mismatchReason || '');
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -170,6 +181,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       dealershipName: editDealership.trim(),
       receivedState: editReceivedState.trim(),
       remark: editRemark.trim(),
+      isDifferentSerial: editIsDifferentSerial,
+      challanPackNumber: editIsDifferentSerial ? editChallanPackNumber.trim() : undefined,
+      mismatchReason: editIsDifferentSerial ? editMismatchReason.trim() : undefined,
     };
 
     if (onEditPack) {
@@ -218,7 +232,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       </div>
 
       {/* Inward Series KPI Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
           <p className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Total Inward Packs</p>
           <p className="text-2xl font-extrabold font-mono-code text-slate-900">{inwardSeriesSummary.total}</p>
@@ -243,10 +257,16 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
           <p className="text-[11px] text-slate-400">Limber Series</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1 col-span-2 sm:col-span-1">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
           <p className="text-amber-600 font-bold uppercase tracking-wider text-[10px]">Pending Approval</p>
           <p className="text-2xl font-extrabold font-mono-code text-amber-600">{inwardSeriesSummary.pending}</p>
-          <p className="text-[11px] text-slate-400">Supervisor Check Required</p>
+          <p className="text-[11px] text-slate-400">Supervisor Check</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+          <p className="text-purple-700 font-bold uppercase tracking-wider text-[10px]">Diff No / Mismatch</p>
+          <p className="text-2xl font-extrabold font-mono-code text-purple-700">{inwardSeriesSummary.diff}</p>
+          <p className="text-[11px] text-slate-400">Challan Mismatches</p>
         </div>
       </div>
 
@@ -408,13 +428,30 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                 return (
                   <tr key={pack.id} className="hover:bg-slate-50/80 transition">
                     <td className="p-3 font-mono-code text-slate-400">{index + 1}</td>
-                    <td className="p-3 font-mono-code font-extrabold text-slate-900 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <span>#{pack.packNumber}</span>
-                        {pack.isWithoutPlate && (
-                          <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
-                            NO-PLATE
+                    <td className="p-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono-code font-extrabold text-slate-900 text-sm">
+                            #{pack.packNumber}
                           </span>
+                          {pack.isWithoutPlate && (
+                            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
+                              NO-PLATE
+                            </span>
+                          )}
+                          {pack.isDifferentSerial && (
+                            <span
+                              className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[9px] font-bold flex items-center gap-0.5"
+                              title={`Challan Doc Serial: #${pack.challanPackNumber || '—'}${pack.mismatchReason ? ` (${pack.mismatchReason})` : ''}`}
+                            >
+                              ⚠️ DIFF-NO
+                            </span>
+                          )}
+                        </div>
+                        {pack.isDifferentSerial && pack.challanPackNumber && (
+                          <div className="text-[10px] text-purple-700 font-medium font-mono-code">
+                            Challan: #{pack.challanPackNumber}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -502,7 +539,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
             <form onSubmit={handleSaveEdit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Pack Number (Serial)</label>
+                <label className="block font-bold text-slate-700 mb-1">Physical Pack Number (Serial)</label>
                 <input
                   type="text"
                   value={editPackNumber}
@@ -510,6 +547,45 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-mono-code font-bold text-slate-900"
                   required
                 />
+              </div>
+
+              {/* Discrepancy Toggle & Inputs */}
+              <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-purple-900 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={editIsDifferentSerial}
+                    onChange={(e) => setEditIsDifferentSerial(e.target.checked)}
+                    className="w-4 h-4 text-purple-600 rounded"
+                  />
+                  <span>Challan Mismatch / Different Serial Number?</span>
+                </label>
+
+                {editIsDifferentSerial && (
+                  <div className="space-y-2 pt-1 animate-fadeIn">
+                    <div>
+                      <label className="block font-bold text-purple-900 mb-1">Challan / Invoice Serial #</label>
+                      <input
+                        type="text"
+                        value={editChallanPackNumber}
+                        onChange={(e) => setEditChallanPackNumber(e.target.value)}
+                        placeholder="Challan document serial (e.g. 2190)..."
+                        className="w-full bg-white border border-purple-300 rounded-lg p-2 font-mono-code font-bold text-purple-900 focus:outline-none focus:border-purple-600"
+                        required={editIsDifferentSerial}
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-purple-900 mb-1">Mismatch Note / Reason</label>
+                      <input
+                        type="text"
+                        value={editMismatchReason}
+                        onChange={(e) => setEditMismatchReason(e.target.value)}
+                        placeholder="Reason for serial difference..."
+                        className="w-full bg-white border border-purple-200 rounded-lg p-2 text-slate-700"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

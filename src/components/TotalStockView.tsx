@@ -596,13 +596,30 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   return (
                     <tr key={pack.id} className="hover:bg-slate-50/80 transition">
                       <td className="p-3 font-mono-code text-slate-400">{index + 1}</td>
-                      <td className="p-3 font-mono-code font-extrabold text-slate-900 text-sm">
-                        <div className="flex items-center gap-1.5">
-                          <span>#{pack.packNumber}</span>
-                          {pack.isWithoutPlate && (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
-                              NO-PLATE
+                      <td className="p-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono-code font-extrabold text-slate-900 text-sm">
+                              #{pack.packNumber}
                             </span>
+                            {pack.isWithoutPlate && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
+                                NO-PLATE
+                              </span>
+                            )}
+                            {pack.isDifferentSerial && (
+                              <span
+                                className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[9px] font-bold"
+                                title={`Challan Doc Serial: #${pack.challanPackNumber || '—'}${pack.mismatchReason ? ` (${pack.mismatchReason})` : ''}`}
+                              >
+                                ⚠️ DIFF-NO
+                              </span>
+                            )}
+                          </div>
+                          {pack.isDifferentSerial && pack.challanPackNumber && (
+                            <div className="text-[10px] text-purple-700 font-medium font-mono-code">
+                              Challan: #{pack.challanPackNumber}
+                            </div>
                           )}
                         </div>
                       </td>

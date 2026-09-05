@@ -318,7 +318,12 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                       {index + 1}
                     </td>
                     <td className="p-2.5 border-r border-slate-100 font-mono-code font-extrabold text-slate-900 text-sm">
-                      #{pack.packNumber}
+                      <div>#{pack.packNumber}</div>
+                      {pack.isDifferentSerial && pack.challanPackNumber && (
+                        <div className="text-[9px] text-purple-700 font-bold font-mono-code">
+                          (Challan: #{pack.challanPackNumber})
+                        </div>
+                      )}
                     </td>
                     <td className="p-2.5 border-r border-slate-100 font-bold text-slate-800">
                       {formatPackDisplayName(pack.packType)}

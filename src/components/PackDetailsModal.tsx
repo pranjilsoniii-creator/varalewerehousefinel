@@ -8,6 +8,7 @@ import {
   Calendar,
   Box,
   CheckCircle2,
+  AlertCircle,
   Clock,
   ExternalLink,
   Tag,
@@ -61,6 +62,16 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
                 <h3 className="text-base font-mono-code font-bold text-slate-900">
                   Pack #{pack.packNumber}
                 </h3>
+                {pack.isWithoutPlate && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                    NO-PLATE
+                  </span>
+                )}
+                {pack.isDifferentSerial && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300">
+                    ⚠️ DIFF-NO
+                  </span>
+                )}
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
                     model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'
@@ -123,6 +134,34 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Challan Discrepancy Notice (If Diff No) */}
+          {pack.isDifferentSerial && (
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 text-purple-900 font-bold text-xs">
+                <AlertCircle className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                <span>Challan Document Serial Discrepancy</span>
+              </div>
+              <p className="text-slate-600 text-[11px]">
+                The physical battery received on dock has serial number <strong>#{pack.packNumber}</strong>, which differs from the serial number printed on the vendor delivery challan/invoice.
+              </p>
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-purple-200/60 font-mono-code">
+                <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Physical Received #</span>
+                  <span className="font-extrabold text-slate-900 text-sm">#{pack.packNumber}</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-purple-200">
+                  <span className="text-purple-600 block text-[10px] uppercase font-bold">Challan / Doc Serial #</span>
+                  <span className="font-extrabold text-purple-800 text-sm">#{pack.challanPackNumber || '—'}</span>
+                </div>
+              </div>
+              {pack.mismatchReason && (
+                <div className="text-[11px] text-purple-900 pt-1">
+                  <strong>Discrepancy Note:</strong> {pack.mismatchReason}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Logistics Inward Pedigree */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">

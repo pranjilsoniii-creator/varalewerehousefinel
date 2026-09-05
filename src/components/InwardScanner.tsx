@@ -32,6 +32,9 @@ interface PackRow {
   packNumber: string;
   packType: BatteryPackType;
   isWithoutPlate?: boolean;
+  isDifferentSerial?: boolean;
+  challanPackNumber?: string;
+  mismatchReason?: string;
 }
 
 // Common Tata Dealership & Vendor Directory
@@ -102,7 +105,15 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
   // Dynamic Pack Rows
   const [packRows, setPackRows] = useState<PackRow[]>([
-    { id: 'row-1', packNumber: '', packType: 'Kanger1.0_AIO', isWithoutPlate: false },
+    {
+      id: 'row-1',
+      packNumber: '',
+      packType: 'Kanger1.0_AIO',
+      isWithoutPlate: false,
+      isDifferentSerial: false,
+      challanPackNumber: '',
+      mismatchReason: '',
+    },
   ]);
 
   // Bulk Paste Text
@@ -139,6 +150,9 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         packNumber: '',
         packType: packRows[packRows.length - 1]?.packType || 'Kanger1.0_AIO',
         isWithoutPlate: false,
+        isDifferentSerial: false,
+        challanPackNumber: '',
+        mismatchReason: '',
       });
     }
     setPackRows((prev) => [...prev, ...newRows]);
@@ -149,7 +163,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     setPackRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const handleRowChange = (id: string, field: 'packNumber' | 'packType', value: string) => {
+  const handleRowChange = (id: string, field: 'packNumber' | 'packType' | 'challanPackNumber' | 'mismatchReason', value: string) => {
     setPackRows((prev) =>
       prev.map((r) => {
         if (r.id === id) {
@@ -157,6 +171,10 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
             const cleanNum = value.replace(/[^0-9]/g, '');
             const autoType = deriveModelFromShorthand(cleanNum, r.packType);
             return { ...r, packNumber: cleanNum, packType: autoType };
+          }
+          if (field === 'challanPackNumber') {
+            const cleanChallan = value.replace(/[^0-9]/g, '');
+            return { ...r, challanPackNumber: cleanChallan };
           }
           return { ...r, [field]: value };
         }
@@ -174,6 +192,23 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
             ...r,
             isWithoutPlate: nextWithout,
             packNumber: nextWithout ? generateNoPlateCode() : '',
+          };
+        }
+        return r;
+      })
+    );
+  };
+
+  const handleToggleDifferentSerial = (id: string) => {
+    setPackRows((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          const nextDiff = !r.isDifferentSerial;
+          return {
+            ...r,
+            isDifferentSerial: nextDiff,
+            challanPackNumber: nextDiff ? (r.challanPackNumber || '') : '',
+            mismatchReason: nextDiff ? (r.mismatchReason || '') : '',
           };
         }
         return r;
@@ -200,6 +235,9 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         packNumber: cleanNum,
         packType: derived,
         isWithoutPlate: token.toUpperCase().startsWith('NP-'),
+        isDifferentSerial: false,
+        challanPackNumber: '',
+        mismatchReason: '',
       };
     });
 
@@ -314,6 +352,9 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       locationArea: 'Inward Area',
       currentLocation: 'Inward Area',
       isWithoutPlate: r.isWithoutPlate,
+      isDifferentSerial: Boolean(r.isDifferentSerial),
+      challanPackNumber: r.isDifferentSerial ? (r.challanPackNumber?.trim() || undefined) : undefined,
+      mismatchReason: r.isDifferentSerial ? (r.mismatchReason?.trim() || undefined) : undefined,
       sourceType: 'INWARD',
       inwardDate: receivedDate || nowIso,
       documentNo: documentNo.trim(),
@@ -332,7 +373,9 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
           fromLocation: 'Receiving Dock',
           toLocation: 'Inward Area',
           movedBy: operatorName,
-          reason: `Initial Inward Receiving (Doc #${documentNo})`,
+          reason: r.isDifferentSerial
+            ? `Initial Inward Receiving (Doc #${documentNo}) - [DIFF NO: Challan #${r.challanPackNumber || '—'} vs Phys #${r.packNumber}]`
+            : `Initial Inward Receiving (Doc #${documentNo})`,
         },
       ],
     }));
@@ -373,7 +416,17 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     setReceivedState('');
     setReceivedCity('');
     setRemark('');
-    setPackRows([{ id: `row-${Date.now()}`, packNumber: '', packType: 'Kanger1.0_AIO', isWithoutPlate: false }]);
+    setPackRows([
+      {
+        id: `row-${Date.now()}`,
+        packNumber: '',
+        packType: 'Kanger1.0_AIO',
+        isWithoutPlate: false,
+        isDifferentSerial: false,
+        challanPackNumber: '',
+        mismatchReason: '',
+      },
+    ]);
   };
 
   return (
@@ -743,31 +796,60 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="p-3 w-12">#</th>
-                  <th className="p-3">Pack Number (Serial)</th>
-                  <th className="p-3">Product Name (Auto-Derived)</th>
-                  <th className="p-3">Missing Plate?</th>
+                  <th className="p-3 min-w-[200px]">Pack Number (Physical Serial)</th>
+                  <th className="p-3 min-w-[180px]">Product Name (Auto-Derived)</th>
+                  <th className="p-3 min-w-[160px]">Flags & Discrepancies</th>
                   <th className="p-3">Destination</th>
                   <th className="p-3 text-right w-16">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {packRows.map((row, index) => (
-                  <tr key={row.id} className="hover:bg-slate-50/80">
+                  <tr key={row.id} className="hover:bg-slate-50/80 align-top">
                     <td className="p-3 font-mono-code text-slate-400 font-bold">{index + 1}</td>
-                    <td className="p-2.5">
-                      <input
-                        type="text"
-                        value={row.packNumber}
-                        readOnly={row.isWithoutPlate}
-                        onChange={(e) => handleRowChange(row.id, 'packNumber', e.target.value)}
-                        placeholder="Enter numeric serial..."
-                        className={`w-full border rounded-lg px-3 py-2 text-xs font-mono-code font-bold focus:outline-none ${
-                          row.isWithoutPlate
-                            ? 'bg-amber-50 border-amber-300 text-amber-900'
-                            : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500'
-                        }`}
-                        required
-                      />
+                    <td className="p-2.5 space-y-1.5">
+                      <div>
+                        <input
+                          type="text"
+                          value={row.packNumber}
+                          readOnly={row.isWithoutPlate}
+                          onChange={(e) => handleRowChange(row.id, 'packNumber', e.target.value)}
+                          placeholder={row.isWithoutPlate ? 'Auto NP Code' : 'Enter physical serial (e.g. 2195)...'}
+                          className={`w-full border rounded-lg px-3 py-2 text-xs font-mono-code font-bold focus:outline-none ${
+                            row.isWithoutPlate
+                              ? 'bg-amber-50 border-amber-300 text-amber-900'
+                              : row.isDifferentSerial
+                              ? 'bg-purple-50/50 border-purple-300 text-slate-900 focus:bg-white focus:border-purple-500'
+                              : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white focus:border-blue-500'
+                          }`}
+                          required
+                        />
+                      </div>
+
+                      {/* Discrepancy / Challan Mismatch Expandable Input */}
+                      {row.isDifferentSerial && (
+                        <div className="p-2 bg-purple-50 border border-purple-200 rounded-lg space-y-1.5 animate-fadeIn">
+                          <div className="flex items-center justify-between text-[10px] font-bold text-purple-900">
+                            <span>Challan / Invoice Document Serial:</span>
+                            <span className="text-[9px] text-purple-600 uppercase">Audit Tracked</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={row.challanPackNumber || ''}
+                            onChange={(e) => handleRowChange(row.id, 'challanPackNumber', e.target.value)}
+                            placeholder="Challan Doc Serial # (e.g. 2190)..."
+                            className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-mono-code font-bold text-purple-900 focus:outline-none focus:border-purple-600"
+                            required
+                          />
+                          <input
+                            type="text"
+                            value={row.mismatchReason || ''}
+                            onChange={(e) => handleRowChange(row.id, 'mismatchReason', e.target.value)}
+                            placeholder="Mismatch reason (e.g. Received #2195 instead of #2190)..."
+                            className="w-full bg-white border border-purple-200 rounded px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      )}
                     </td>
                     <td className="p-2.5">
                       <select
@@ -783,19 +865,35 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                       </select>
                     </td>
                     <td className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleWithoutPlate(row.id)}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ${
-                          row.isWithoutPlate
-                            ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
-                        }`}
-                        title="Toggle if pack has no physical serial sticker/plate"
-                      >
-                        <Tag className="w-3 h-3" />
-                        <span>{row.isWithoutPlate ? 'NO-PLATE' : 'No Plate?'}</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleWithoutPlate(row.id)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ${
+                            row.isWithoutPlate
+                              ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
+                          }`}
+                          title="Toggle if pack has no physical serial sticker/plate"
+                        >
+                          <Tag className="w-3 h-3" />
+                          <span>{row.isWithoutPlate ? 'NO-PLATE' : 'No Plate?'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDifferentSerial(row.id)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ${
+                            row.isDifferentSerial
+                              ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
+                          }`}
+                          title="Toggle if physical serial number differs from delivery challan serial"
+                        >
+                          <AlertCircle className="w-3 h-3" />
+                          <span>{row.isDifferentSerial ? 'DIFF-NO' : 'Diff No?'}</span>
+                        </button>
+                      </div>
                     </td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[11px]">
