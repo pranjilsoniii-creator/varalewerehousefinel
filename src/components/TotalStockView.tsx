@@ -59,10 +59,10 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
     return packs.filter((p) => p.status !== 'DISPATCHED').length;
   }, [packs]);
 
-  // 2. Today's Inward (Batteries inwarded today)
+  // 2. Today's Inward (Batteries inwarded today via dock receiving)
   const todayInwardCount = useMemo(() => {
     return packs.filter(
-      (p) => p.inwardDate && p.inwardDate.slice(0, 10) === todayStr
+      (p) => p.sourceType !== 'LINE_POPULATE' && p.inwardDate && p.inwardDate.slice(0, 10) === todayStr
     ).length;
   }, [packs, todayStr]);
 
