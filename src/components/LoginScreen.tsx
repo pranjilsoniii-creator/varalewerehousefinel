@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, User, Key, ShieldCheck, AlertCircle, Eye, EyeOff, ArrowRight } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Lock, User, Key, ShieldCheck, AlertCircle, Eye, EyeOff, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { useAuth, DEFAULT_USERS } from '../context/AuthContext';
 
 export const LoginScreen: React.FC = () => {
   const { login } = useAuth();
@@ -24,8 +24,14 @@ export const LoginScreen: React.FC = () => {
 
     const success = login(username.trim(), password.trim());
     if (!success) {
-      setError('Invalid username or password. Please verify credentials or contact Super Admin.');
+      setError('Invalid username or password. Please verify credentials or select an account below.');
     }
+  };
+
+  const handleQuickSelect = (u: typeof DEFAULT_USERS[0]) => {
+    setUsername(u.username);
+    setPassword(u.password || '');
+    setError(null);
   };
 
   return (
@@ -57,14 +63,14 @@ export const LoginScreen: React.FC = () => {
       </div>
 
       {/* Center Login Box */}
-      <div className="max-w-md mx-auto w-full py-8">
-        <div className="bg-white text-slate-900 rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-6">
-          <div className="text-center space-y-3 border-b border-slate-100 pb-5">
-            <div className="h-16 w-16 mx-auto bg-slate-50 p-2 rounded-2xl border border-slate-200 flex items-center justify-center shadow-2xs">
+      <div className="max-w-lg mx-auto w-full py-6 space-y-4">
+        <div className="bg-white text-slate-900 rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-5">
+          <div className="text-center space-y-2 border-b border-slate-100 pb-4">
+            <div className="h-14 w-14 mx-auto bg-slate-50 p-2 rounded-2xl border border-slate-200 flex items-center justify-center shadow-2xs">
               <img
                 src="/tata-logo.png"
                 alt="TATA Logo"
-                className="h-12 w-12 object-contain"
+                className="h-10 w-10 object-contain"
               />
             </div>
             <div>
@@ -135,8 +141,25 @@ export const LoginScreen: React.FC = () => {
             </button>
           </form>
 
-          <div className="pt-2 text-center text-[11px] text-slate-400 border-t border-slate-100 font-mono-code">
-            Secure Warehouse Access • Plant B300
+          {/* Quick-Fill 1-Click Login Testing Panel */}
+          <div className="pt-3 border-t border-slate-100 space-y-2">
+            <p className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>1-Click Test Login Accounts:</span>
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px]">
+              {DEFAULT_USERS.map((u) => (
+                <button
+                  key={u.username}
+                  type="button"
+                  onClick={() => handleQuickSelect(u)}
+                  className="p-2 text-left bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg transition cursor-pointer space-y-0.5"
+                >
+                  <p className="font-bold text-slate-900 truncate">{u.name.split(' ')[0]}</p>
+                  <p className="text-[10px] text-blue-600 uppercase font-bold tracking-wider">{u.role}</p>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

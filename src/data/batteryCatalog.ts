@@ -259,14 +259,17 @@ export function deriveModelFromShorthand(serial: string, shorthand: string = 'AI
 }
 
 export const COMMON_TRANSPORTERS = [
+  'Sahyadri Enterprises',
+  'Aai Saheb Freight Line',
+  'TCI Express (Transport Corporation of India)',
+  'Atlantic Road Line',
+  'OM Logistics Limited',
+  'Safe Express Private Limited',
+  'Maitri Transport',
   'VRL Logistics Limited',
-  'TCI Freight (Transport Corporation of India)',
-  'Safechem Logistics Private Limited',
-  'Gati-KWE Logistics',
-  'Blue Dart Express',
-  'Delhivery Supply Chain',
   'Tata Motors Dedicated Fleet',
-  'Om Logistics Limited',
+  'Delhivery Supply Chain',
+  'Blue Dart Express',
   'Other',
 ];
 

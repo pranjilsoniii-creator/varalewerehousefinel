@@ -19,7 +19,7 @@ interface AuthContextType {
   setMaintenanceMode: (active: boolean) => void;
 }
 
-const DEFAULT_USERS: UserAccount[] = [
+export const DEFAULT_USERS: UserAccount[] = [
   {
     username: 'Pranjils0ni',
     password: 'Suhani@12',
@@ -122,28 +122,41 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<UserAccount[]>(() => {
-    const saved = localStorage.getItem('tata_wms_users_v3');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse users', e);
+    try {
+      const saved = localStorage.getItem('tata_wms_users_v3');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Merge defaults with saved users so no default user is ever missing
+          const merged = [...DEFAULT_USERS];
+          parsed.forEach((pu: UserAccount) => {
+            const idx = merged.findIndex((du) => du.username.toLowerCase() === pu.username.toLowerCase());
+            if (idx >= 0) {
+              merged[idx] = pu;
+            } else {
+              merged.push(pu);
+            }
+          });
+          return merged;
+        }
       }
+    } catch (e) {
+      console.error('Failed to parse users', e);
     }
     return DEFAULT_USERS;
   });
 
   // Strict Login Wall: Default to null if no valid saved session
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('tata_wms_current_user_v3');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('tata_wms_current_user_v3');
+      if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.username) {
           return parsed;
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
     return null; // Strict Login Screen
   });
 
@@ -170,12 +183,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [currentUser]);
 
   const login = (username: string, password?: string): boolean => {
-    const user = users.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase().trim() && u.active
+    const cleanUser = username.trim().toLowerCase();
+    const cleanPass = password ? password.trim() : '';
+
+    // Search in current users state + defaults
+    const combined = [...users];
+    DEFAULT_USERS.forEach((du) => {
+      if (!combined.some((u) => u.username.toLowerCase() === du.username.toLowerCase())) {
+        combined.push(du);
+      }
+    });
+
+    const user = combined.find(
+      (u) => u.username.toLowerCase() === cleanUser && u.active
     );
     if (!user) return false;
 
-    if (password && user.password && user.password !== password.trim()) {
+    if (cleanPass && user.password && user.password !== cleanPass) {
       return false;
     }
 
@@ -198,7 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const toggleUserActive = (username: string) => {
     setUsers((prev) =>
-      prev.map((u) => (u.username === username ? { ...u, active: !u.active } : u))
+      prev.map((u) => (u.username.toLowerCase() === username.toLowerCase() ? { ...u, active: !u.active } : u))
     );
   };
 

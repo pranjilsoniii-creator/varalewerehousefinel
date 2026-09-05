@@ -1,14 +1,21 @@
 -- ==============================================================================
 -- TATA AUTOCOMP SYSTEMS LIMITED (VARALE B300 PLANT)
 -- LITHIUM BATTERY WAREHOUSE MANAGEMENT SYSTEM (WMS)
--- SUPABASE POSTGRESQL COMPLETE DATABASE SCHEMA & REALTIME SETUP
+-- SUPABASE POSTGRESQL COMPLETE 0-RESET DATABASE SCHEMA & REALTIME SETUP
 -- ==============================================================================
 
--- 1. EXTENSIONS
+-- 1. CLEAN 0-RESET: DROP OLD TABLES (CASCADE REMOVES ALL INCOMPATIBLE OLD SCHEMAS)
+DROP TABLE IF EXISTS public.battery_packs CASCADE;
+DROP TABLE IF EXISTS public.inward_shipments CASCADE;
+DROP TABLE IF EXISTS public.dispatch_lots CASCADE;
+DROP TABLE IF EXISTS public.warehouse_users CASCADE;
+DROP TABLE IF EXISTS public.system_config CASCADE;
+
+-- 2. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. TABLE: battery_packs (Master Battery Inventory & Traceability)
-CREATE TABLE IF NOT EXISTS public.battery_packs (
+-- 3. TABLE: battery_packs (Master Battery Inventory & Traceability)
+CREATE TABLE public.battery_packs (
     id TEXT PRIMARY KEY,
     pack_number TEXT NOT NULL,
     pack_type TEXT NOT NULL,
@@ -52,8 +59,8 @@ CREATE TABLE IF NOT EXISTS public.battery_packs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. TABLE: inward_shipments (Inward Delivery Challans & Origin Logs)
-CREATE TABLE IF NOT EXISTS public.inward_shipments (
+-- 4. TABLE: inward_shipments (Inward Delivery Challans & Origin Logs)
+CREATE TABLE public.inward_shipments (
     id TEXT PRIMARY KEY,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     document_no TEXT NOT NULL,
@@ -71,8 +78,8 @@ CREATE TABLE IF NOT EXISTS public.inward_shipments (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. TABLE: dispatch_lots (Outward Vehicle Lots & Gate Passes)
-CREATE TABLE IF NOT EXISTS public.dispatch_lots (
+-- 5. TABLE: dispatch_lots (Outward Vehicle Lots & Gate Passes)
+CREATE TABLE public.dispatch_lots (
     id TEXT PRIMARY KEY,
     lot_number TEXT NOT NULL,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
@@ -96,8 +103,8 @@ CREATE TABLE IF NOT EXISTS public.dispatch_lots (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. TABLE: warehouse_users (Staff Authentication & Granular Permissions)
-CREATE TABLE IF NOT EXISTS public.warehouse_users (
+-- 6. TABLE: warehouse_users (Staff Authentication & Granular Permissions)
+CREATE TABLE public.warehouse_users (
     username TEXT PRIMARY KEY,
     password TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -108,25 +115,25 @@ CREATE TABLE IF NOT EXISTS public.warehouse_users (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. TABLE: system_config (Maintenance Mode & Warehouse Settings)
-CREATE TABLE IF NOT EXISTS public.system_config (
+-- 7. TABLE: system_config (Maintenance Mode & Warehouse Settings)
+CREATE TABLE public.system_config (
     key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
     updated_by TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. PERFORMANCE INDEXES
-CREATE INDEX IF NOT EXISTS idx_battery_packs_pack_num ON public.battery_packs (pack_number);
-CREATE INDEX IF NOT EXISTS idx_battery_packs_status ON public.battery_packs (status);
-CREATE INDEX IF NOT EXISTS idx_battery_packs_source_type ON public.battery_packs (source_type);
-CREATE INDEX IF NOT EXISTS idx_battery_packs_line_rack ON public.battery_packs (line_id, rack_number);
-CREATE INDEX IF NOT EXISTS idx_battery_packs_doc_no ON public.battery_packs (document_no);
-CREATE INDEX IF NOT EXISTS idx_battery_packs_dispatched_at ON public.battery_packs (dispatched_at);
-CREATE INDEX IF NOT EXISTS idx_inward_shipments_doc_no ON public.inward_shipments (document_no);
-CREATE INDEX IF NOT EXISTS idx_dispatch_lots_lot_num ON public.dispatch_lots (lot_number);
+-- 8. PERFORMANCE INDEXES
+CREATE INDEX idx_battery_packs_pack_num ON public.battery_packs (pack_number);
+CREATE INDEX idx_battery_packs_status ON public.battery_packs (status);
+CREATE INDEX idx_battery_packs_source_type ON public.battery_packs (source_type);
+CREATE INDEX idx_battery_packs_line_rack ON public.battery_packs (line_id, rack_number);
+CREATE INDEX idx_battery_packs_doc_no ON public.battery_packs (document_no);
+CREATE INDEX idx_battery_packs_dispatched_at ON public.battery_packs (dispatched_at);
+CREATE INDEX idx_inward_shipments_doc_no ON public.inward_shipments (document_no);
+CREATE INDEX idx_dispatch_lots_lot_num ON public.dispatch_lots (lot_number);
 
--- 8. ROW LEVEL SECURITY (Enable Open Access for Anon Key)
+-- 9. ROW LEVEL SECURITY (Enable Open Access for Anon Key)
 ALTER TABLE public.battery_packs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inward_shipments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dispatch_lots ENABLE ROW LEVEL SECURITY;
@@ -148,7 +155,7 @@ CREATE POLICY "Public Full Access Users" ON public.warehouse_users FOR ALL USING
 DROP POLICY IF EXISTS "Public Full Access Config" ON public.system_config;
 CREATE POLICY "Public Full Access Config" ON public.system_config FOR ALL USING (true) WITH CHECK (true);
 
--- 9. ENABLE REALTIME PUBLICATION
+-- 10. ENABLE REALTIME PUBLICATION
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'battery_packs') THEN
@@ -162,7 +169,7 @@ BEGIN
     END IF;
 END $$;
 
--- 10. INSERT DEFAULT USERS
+-- 11. INSERT DEFAULT USERS (All 6 Accounts Pre-configured)
 INSERT INTO public.warehouse_users (username, password, name, role, plant, active, permissions)
 VALUES
     ('Pranjils0ni', 'Suhani@12', 'Pranjil Soni', 'superadmin', 'Tata AutoComp Systems Limited - Varale / Chakan', true, '{"canInward": true, "canDispatch": true, "canLineManage": true, "canViewStock": true, "canInvoices": true, "canAnalytics": true}'),

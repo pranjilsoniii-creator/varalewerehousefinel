@@ -64,6 +64,29 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   // Today Date String
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
+  // Series Breakdown for Inward Packs
+  const inwardSeriesSummary = useMemo(() => {
+    let k1Count = 0;
+    let k2Count = 0;
+    let limberCount = 0;
+    let pendingCount = 0;
+
+    inwardOnlyPacks.forEach((p) => {
+      if (p.status === 'PENDING_APPROVAL') pendingCount += 1;
+      if (p.packType.startsWith('Kanger1.0')) k1Count += 1;
+      else if (p.packType.startsWith('Kanger2.0')) k2Count += 1;
+      else if (p.packType.startsWith('Limber')) limberCount += 1;
+    });
+
+    return {
+      total: inwardOnlyPacks.length,
+      k1: k1Count,
+      k2: k2Count,
+      limber: limberCount,
+      pending: pendingCount,
+    };
+  }, [inwardOnlyPacks]);
+
   // Filtered Packs
   const filteredPacks = useMemo(() => {
     const now = new Date();
@@ -191,6 +214,39 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
           <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono-code font-bold text-slate-800">
             Total Inwarded: <span className="text-blue-700">{inwardOnlyPacks.length}</span>
           </div>
+        </div>
+      </div>
+
+      {/* Inward Series KPI Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+          <p className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Total Inward Packs</p>
+          <p className="text-2xl font-extrabold font-mono-code text-slate-900">{inwardSeriesSummary.total}</p>
+          <p className="text-[11px] text-slate-400">Dock Delivery Challans</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+          <p className="text-blue-600 font-bold uppercase tracking-wider text-[10px]">Kanger 1.0 Series</p>
+          <p className="text-2xl font-extrabold font-mono-code text-blue-700">{inwardSeriesSummary.k1}</p>
+          <p className="text-[11px] text-slate-400">AIO / Gen3 / CKD / FBU</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+          <p className="text-purple-600 font-bold uppercase tracking-wider text-[10px]">Kanger 2.0 Series</p>
+          <p className="text-2xl font-extrabold font-mono-code text-purple-700">{inwardSeriesSummary.k2}</p>
+          <p className="text-[11px] text-slate-400">Standard & AIS</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+          <p className="text-emerald-600 font-bold uppercase tracking-wider text-[10px]">Limber Series</p>
+          <p className="text-2xl font-extrabold font-mono-code text-emerald-700">{inwardSeriesSummary.limber}</p>
+          <p className="text-[11px] text-slate-400">AIS & Non-AIS</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1 col-span-2 sm:col-span-1">
+          <p className="text-amber-600 font-bold uppercase tracking-wider text-[10px]">Pending Approval</p>
+          <p className="text-2xl font-extrabold font-mono-code text-amber-600">{inwardSeriesSummary.pending}</p>
+          <p className="text-[11px] text-slate-400">Supervisor Check Required</p>
         </div>
       </div>
 

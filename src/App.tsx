@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { InwardScanner } from './components/InwardScanner';
 import { InwardRegisterView } from './components/InwardRegisterView';
@@ -12,6 +12,8 @@ import { LoginModal } from './components/LoginModal';
 import { LoginScreen } from './components/LoginScreen';
 import { UserManagementModal } from './components/UserManagementModal';
 import { AdminLineDataPopulator } from './components/AdminLineDataPopulator';
+import { WelcomeHeader } from './components/WelcomeHeader';
+import { SuperSearchModal } from './components/SuperSearchModal';
 import {
   BatteryPack,
   DispatchLot,
@@ -27,11 +29,15 @@ import {
 import {
   getSupabase,
   fetchPacksFromCloud,
+  fetchInwardsFromCloud,
+  fetchLotsFromCloud,
   syncPacksToCloud,
   syncLotToCloud,
   syncInwardToCloud,
   deletePackFromCloud,
   mapRowToPack,
+  mapRowToInward,
+  mapRowToLot,
 } from './lib/supabaseClient';
 import { useAuth } from './context/AuthContext';
 import { Wrench, ShieldAlert } from 'lucide-react';
@@ -81,16 +87,15 @@ export function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState<boolean>(false);
   const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
+  const [isSuperSearchOpen, setIsSuperSearchOpen] = useState<boolean>(false);
 
-  // Core Warehouse State
+  // Core Warehouse State initialized with clean local cache
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
     const saved = localStorage.getItem('tata_wms_packs_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse saved packs', e);
-      }
+      } catch (e) {}
     }
     return createInitialWarehousePacks();
   });
@@ -100,9 +105,7 @@ export function App() {
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse saved inward shipments', e);
-      }
+      } catch (e) {}
     }
     return createInitialInwardShipments();
   });
@@ -112,9 +115,7 @@ export function App() {
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse saved dispatch lots', e);
-      }
+      } catch (e) {}
     }
     return createInitialDispatchLots();
   });
@@ -122,6 +123,11 @@ export function App() {
   const [warehouseLines, setWarehouseLines] = useState<string[]>(() => {
     return getStoredWarehouseLines();
   });
+
+  // Realtime Cloud Connection State
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   // Handle URL changes & browser back/forward buttons
   useEffect(() => {
@@ -140,7 +146,7 @@ export function App() {
     }
   };
 
-  // Synchronize LocalStorage
+  // Synchronize LocalStorage as offline fallback
   useEffect(() => {
     localStorage.setItem('tata_wms_packs_v4', JSON.stringify(packs));
   }, [packs]);
@@ -157,33 +163,47 @@ export function App() {
     saveStoredWarehouseLines(warehouseLines);
   }, [warehouseLines]);
 
-  // Initial Supabase Cloud Sync
-  useEffect(() => {
-    const loadFromCloud = async () => {
-      try {
-        const cloudPacks = await fetchPacksFromCloud();
-        if (cloudPacks && cloudPacks.length > 0) {
-          setPacks((prev) => {
-            const map = new Map<string, BatteryPack>();
-            prev.forEach((p) => map.set(p.id, p));
-            cloudPacks.forEach((cp) => map.set(cp.id, cp));
-            return Array.from(map.values());
-          });
-        }
-      } catch (err) {
-        console.warn('Initial cloud sync notice:', err);
+  // Master Cloud Refresh (Pulls source of truth directly from Supabase Cloud)
+  const refreshFromCloud = useCallback(async () => {
+    setIsCloudSyncing(true);
+    try {
+      const [cloudPacks, cloudInwards, cloudLots] = await Promise.all([
+        fetchPacksFromCloud(),
+        fetchInwardsFromCloud(),
+        fetchLotsFromCloud(),
+      ]);
+
+      if (cloudPacks !== null) {
+        setPacks(cloudPacks);
       }
-    };
-    loadFromCloud();
+      if (cloudInwards !== null) {
+        setInwardShipments(cloudInwards);
+      }
+      if (cloudLots !== null) {
+        setDispatchLots(cloudLots);
+      }
+      setLastSyncTime(new Date());
+      setIsCloudConnected(true);
+    } catch (err) {
+      console.warn('Manual cloud sync failed:', err);
+      setIsCloudConnected(false);
+    } finally {
+      setIsCloudSyncing(false);
+    }
   }, []);
 
-  // Supabase Real-time Cloud Subscriptions
+  // Initial Cloud Load on Component Mount
+  useEffect(() => {
+    refreshFromCloud();
+  }, [refreshFromCloud]);
+
+  // Supabase Real-time Cloud Subscriptions across all three core tables
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) return;
 
     const channel = sb
-      .channel('schema-db-changes')
+      .channel('warehouse-realtime-master')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'battery_packs' },
@@ -191,7 +211,9 @@ export function App() {
           if (payload.eventType === 'INSERT') {
             const newPack = mapRowToPack(payload.new);
             setPacks((prev) => {
-              if (prev.some((p) => p.id === newPack.id)) return prev;
+              if (prev.some((p) => p.id === newPack.id)) {
+                return prev.map((p) => (p.id === newPack.id ? newPack : p));
+              }
               return [newPack, ...prev];
             });
           } else if (payload.eventType === 'UPDATE') {
@@ -200,12 +222,66 @@ export function App() {
               prev.map((p) => (p.id === updatedPack.id ? updatedPack : p))
             );
           } else if (payload.eventType === 'DELETE') {
-            const deletedId = payload.old.id;
-            setPacks((prev) => prev.filter((p) => p.id !== deletedId));
+            const deletedId = payload.old?.id || payload.new?.id;
+            if (deletedId) {
+              setPacks((prev) => prev.filter((p) => p.id !== deletedId));
+            }
           }
         }
       )
-      .subscribe();
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inward_shipments' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newInward = mapRowToInward(payload.new);
+            setInwardShipments((prev) => {
+              if (prev.some((i) => i.id === newInward.id)) {
+                return prev.map((i) => (i.id === newInward.id ? newInward : i));
+              }
+              return [newInward, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedInward = mapRowToInward(payload.new);
+            setInwardShipments((prev) =>
+              prev.map((i) => (i.id === updatedInward.id ? updatedInward : i))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.id || payload.new?.id;
+            if (deletedId) {
+              setInwardShipments((prev) => prev.filter((i) => i.id !== deletedId));
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_lots' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newLot = mapRowToLot(payload.new);
+            setDispatchLots((prev) => {
+              if (prev.some((l) => l.id === newLot.id)) {
+                return prev.map((l) => (l.id === newLot.id ? newLot : l));
+              }
+              return [newLot, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedLot = mapRowToLot(payload.new);
+            setDispatchLots((prev) =>
+              prev.map((l) => (l.id === updatedLot.id ? updatedLot : l))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.id || payload.new?.id;
+            if (deletedId) {
+              setDispatchLots((prev) => prev.filter((l) => l.id !== deletedId));
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        setIsCloudConnected(status === 'SUBSCRIBED');
+      });
 
     return () => {
       sb.removeChannel(channel);
@@ -217,12 +293,15 @@ export function App() {
     newPacks: BatteryPack[],
     shipmentRecord: InwardShipmentRecord
   ) => {
+    // Optimistic UI Update
     setPacks((prev) => [...newPacks, ...prev]);
     setInwardShipments((prev) => [shipmentRecord, ...prev]);
 
     try {
-      await syncPacksToCloud(newPacks);
-      await syncInwardToCloud(shipmentRecord);
+      await Promise.all([
+        syncPacksToCloud(newPacks),
+        syncInwardToCloud(shipmentRecord),
+      ]);
     } catch (err) {
       console.warn('Cloud sync on inward:', err);
     }
@@ -442,6 +521,12 @@ export function App() {
           locationArea: 'Dispatched to EV Plant',
           dispatchLotId: lot.id,
           dispatchedAt: lot.timestamp,
+          dispatchDocNo: lot.transportDocNo || lot.lotNumber,
+          dispatchLrNo: lot.lrNumber || '',
+          dispatchVehicleNo: lot.vehicleNumber || '',
+          dispatchTransporter: lot.transportName || 'Sahyadri Enterprises',
+          dispatchToCustomer: lot.consigneeName || 'TATA AUTOCOMP',
+          dispatchToAddress: lot.consigneeAddress || 'Pune / Maharashtra',
         };
       }
       return p;
@@ -518,6 +603,15 @@ export function App() {
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
         onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
+      />
+
+      {/* Dynamic Personalized Greeting & Live Realtime Cloud Sync Banner */}
+      <WelcomeHeader
+        onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+        isCloudConnected={isCloudConnected}
+        isCloudSyncing={isCloudSyncing}
+        lastSyncTime={lastSyncTime}
+        onRefreshCloud={refreshFromCloud}
       />
 
       {/* Main Body View Rendering */}
@@ -650,6 +744,14 @@ export function App() {
       <UserManagementModal
         isOpen={isUserManagementModalOpen}
         onClose={() => setIsUserManagementModalOpen(false)}
+      />
+
+      {/* MODAL 0: Universal Super Search ("Janamkundli") */}
+      <SuperSearchModal
+        isOpen={isSuperSearchOpen}
+        onClose={() => setIsSuperSearchOpen(false)}
+        packs={packs}
+        dispatchLots={dispatchLots}
       />
 
       {/* MODAL 5: Historical Line & Rack Data Populator Modal */}

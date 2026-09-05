@@ -45,6 +45,26 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
 }) => {
   const { currentUser, isSupervisor, isManager, isSuperAdmin, canDirectApprove } = useAuth();
 
+  // Staged Series Breakdown
+  const stagedSeriesSummary = useMemo(() => {
+    let k1Count = 0;
+    let k2Count = 0;
+    let limberCount = 0;
+
+    stagedPacks.forEach((p) => {
+      if (p.packType.startsWith('Kanger1.0')) k1Count += 1;
+      else if (p.packType.startsWith('Kanger2.0')) k2Count += 1;
+      else if (p.packType.startsWith('Limber')) limberCount += 1;
+    });
+
+    return {
+      total: stagedPacks.length,
+      k1: k1Count,
+      k2: k2Count,
+      limber: limberCount,
+    };
+  }, [stagedPacks]);
+
   // Selection inside cart
   const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
 
