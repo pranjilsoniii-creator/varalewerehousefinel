@@ -17,7 +17,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, InwardShipmentRecord } from '../types';
-import { ALL_PACK_TYPES, COMMON_TRANSPORTERS, deriveModelFromShorthand, INITIAL_SAVED_ADDRESSES } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, COMMON_TRANSPORTERS, deriveModelFromShorthand, parseBoxCodeAndModel, INITIAL_SAVED_ADDRESSES } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 import { TataLoadingSpinner } from './TataLoadingSpinner';
 
@@ -210,12 +210,16 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       prev.map((r) => {
         if (r.id === id) {
           if (field === 'packNumber') {
-            const cleanNum = value.replace(/[^0-9]/g, '');
-            const autoType = deriveModelFromShorthand(cleanNum, r.packType);
-            return { ...r, packNumber: cleanNum, packType: autoType };
+            const parsed = parseBoxCodeAndModel(value, r.packType);
+            return {
+              ...r,
+              packNumber: parsed.cleanPackNumber,
+              packType: parsed.derivedModel,
+              isWithoutPlate: parsed.isWithoutPlate ? true : r.isWithoutPlate,
+            };
           }
           if (field === 'challanPackNumber') {
-            const cleanChallan = value.replace(/[^0-9]/g, '');
+            const cleanChallan = value.replace(/[^0-9A-Za-z_-]/g, '');
             return { ...r, challanPackNumber: cleanChallan };
           }
           return { ...r, [field]: value };
@@ -264,19 +268,18 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     const tokens = bulkText
       .split(/[\n,;\t]+/)
       .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+      .filter((s) => s.length > 0 && s !== '0');
 
     if (tokens.length === 0) return;
 
     const newRows: PackRow[] = tokens.map((token, index) => {
-      const cleanNum = token.replace(/[^0-9]/g, '') || token;
       const initialType = packRows[0]?.packType || 'Kanger1.0_AIO';
-      const derived = deriveModelFromShorthand(cleanNum, initialType);
+      const parsed = parseBoxCodeAndModel(token, initialType);
       return {
         id: `bulk-${Date.now()}-${index}`,
-        packNumber: cleanNum,
-        packType: derived,
-        isWithoutPlate: token.toUpperCase().startsWith('NP-'),
+        packNumber: parsed.cleanPackNumber || token,
+        packType: parsed.derivedModel,
+        isWithoutPlate: parsed.isWithoutPlate,
         isDifferentSerial: false,
         challanPackNumber: '',
         mismatchReason: '',
@@ -330,14 +333,13 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         if (Array.isArray(data.packs) && data.packs.length > 0) {
           const extractedRows: PackRow[] = data.packs.map((p: any, idx: number) => {
             const rawSerial = String(p.packNumber || '').trim();
-            const cleanNum = rawSerial.replace(/[^0-9]/g, '') || rawSerial;
-            const modelKey = (p.packType as BatteryPackType) || 'Kanger1.0_AIO';
-            const autoType = deriveModelFromShorthand(cleanNum, modelKey);
+            const fallbackModel = (p.packType as BatteryPackType) || 'Kanger1.0_AIO';
+            const parsed = parseBoxCodeAndModel(rawSerial, fallbackModel);
             return {
               id: `ocr-${Date.now()}-${idx}`,
-              packNumber: cleanNum,
-              packType: autoType,
-              isWithoutPlate: rawSerial.toUpperCase().startsWith('NP-'),
+              packNumber: parsed.cleanPackNumber || rawSerial,
+              packType: parsed.derivedModel,
+              isWithoutPlate: parsed.isWithoutPlate,
             };
           });
           setPackRows(extractedRows);
