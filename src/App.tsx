@@ -764,6 +764,7 @@ export function App() {
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onSendToDispatch={handleSendToDispatch}
             onDeletePack={handleDeletePack}
+            onEditPack={handleEditPack}
           />
         )}
 
@@ -826,6 +827,7 @@ export function App() {
             dispatchLots={dispatchLots}
             inwardShipments={inwardShipments}
             warehouseLines={warehouseLines}
+            onEditPack={handleEditPack}
             onResetToDemoData={() => {
               if (confirm('Reset warehouse inventory and lots to fresh demo state?')) {
                 localStorage.removeItem('tata_wms_packs_v4');

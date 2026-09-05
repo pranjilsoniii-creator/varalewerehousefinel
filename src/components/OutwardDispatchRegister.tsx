@@ -9,13 +9,20 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Filter,
+  Pencil,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
 } from 'lucide-react';
-import { BatteryPack, DispatchLot } from '../types';
+import { BatteryPack, BatteryPackType, DispatchLot } from '../types';
+import { ALL_PACK_TYPES, BATTERY_MODELS, COMMON_TRANSPORTERS } from '../data/batteryCatalog';
 import * as XLSX from 'xlsx';
 
 interface OutwardDispatchRegisterProps {
   packs: BatteryPack[];
   dispatchLots: DispatchLot[];
+  onEditPack?: (updatedPack: BatteryPack) => void;
 }
 
 export function formatPackDisplayName(packType: string): string {
@@ -48,11 +55,39 @@ export function formatIndianDate(dateStr?: string): string {
 export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = ({
   packs,
   dispatchLots,
+  onEditPack,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'CUSTOM'>('ALL');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'SPECIFIC_DATE' | 'CUSTOM'>('ALL');
+  const [specificDate, setSpecificDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  // Edit Pack Modal State
+  const [editingPack, setEditingPack] = useState<BatteryPack | null>(null);
+  const [editForm, setEditForm] = useState<{
+    packNumber: string;
+    packType: BatteryPackType;
+    dispatchDate: string;
+    dispatchDocNo: string;
+    dispatchLrNo: string;
+    dispatchTransporter: string;
+    dispatchVehicleNo: string;
+    dispatchToCustomer: string;
+    dispatchToAddress: string;
+    notes: string;
+  }>({
+    packNumber: '',
+    packType: 'Kanger1.0_AIO',
+    dispatchDate: '',
+    dispatchDocNo: '',
+    dispatchLrNo: '',
+    dispatchTransporter: '',
+    dispatchVehicleNo: '',
+    dispatchToCustomer: '',
+    dispatchToAddress: '',
+    notes: '',
+  });
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -109,6 +144,9 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
         if (!dispDate) return false;
         const time = new Date(dispDate).getTime();
         if (now.getTime() - time > ms30Days) return false;
+      } else if (dateFilter === 'SPECIFIC_DATE') {
+        if (!dispDate) return false;
+        if (specificDate && dispDate.slice(0, 10) !== specificDate) return false;
       } else if (dateFilter === 'CUSTOM') {
         if (!dispDate) return false;
         const datePart = dispDate.slice(0, 10);
@@ -118,7 +156,56 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
 
       return true;
     });
-  }, [dispatchedPacks, lotMap, searchQuery, dateFilter, customStartDate, customEndDate, todayStr]);
+  }, [dispatchedPacks, lotMap, searchQuery, dateFilter, specificDate, customStartDate, customEndDate, todayStr]);
+
+  // Open Edit Modal
+  const handleOpenEditModal = (pack: BatteryPack) => {
+    const lot = pack.dispatchLotId ? lotMap.get(pack.dispatchLotId) : undefined;
+    const rawDispDate = pack.dispatchedAt || lot?.timestamp || new Date().toISOString();
+    const dateFormatted = rawDispDate.slice(0, 10);
+
+    setEditingPack(pack);
+    setEditForm({
+      packNumber: pack.packNumber,
+      packType: pack.packType,
+      dispatchDate: dateFormatted,
+      dispatchDocNo: pack.dispatchDocNo || lot?.transportDocNo || lot?.lotNumber || '',
+      dispatchLrNo: pack.dispatchLrNo || lot?.lrNumber || '',
+      dispatchTransporter: pack.dispatchTransporter || lot?.transportName || COMMON_TRANSPORTERS[0],
+      dispatchVehicleNo: pack.dispatchVehicleNo || lot?.vehicleNumber || '',
+      dispatchToCustomer: pack.dispatchToCustomer || lot?.consigneeName || '',
+      dispatchToAddress: pack.dispatchToAddress || lot?.consigneeAddress || '',
+      notes: pack.notes || lot?.notes || '',
+    });
+  };
+
+  // Save Edit Pack
+  const handleSaveEditPack = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPack || !onEditPack) return;
+
+    const finalDispIso = editForm.dispatchDate
+      ? new Date(editForm.dispatchDate + 'T12:00:00.000Z').toISOString()
+      : editingPack.dispatchedAt || new Date().toISOString();
+
+    const updated: BatteryPack = {
+      ...editingPack,
+      packNumber: editForm.packNumber.trim(),
+      packType: editForm.packType,
+      dispatchedAt: finalDispIso,
+      dispatchDocNo: editForm.dispatchDocNo.trim(),
+      dispatchLrNo: editForm.dispatchLrNo.trim(),
+      dispatchTransporter: editForm.dispatchTransporter.trim(),
+      dispatchVehicleNo: editForm.dispatchVehicleNo.trim(),
+      dispatchToCustomer: editForm.dispatchToCustomer.trim(),
+      dispatchToAddress: editForm.dispatchToAddress.trim(),
+      notes: editForm.notes.trim(),
+      currentLocation: `Dispatched to ${editForm.dispatchToCustomer.trim() || 'EV Plant'}`,
+    };
+
+    onEditPack(updated);
+    setEditingPack(null);
+  };
 
   // Export to Excel matching exact column layout from photo
   const handleExportExcel = () => {
@@ -190,7 +277,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
 
         {/* Filter Controls Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs pt-3 border-t border-slate-100">
-          <div className="sm:col-span-6 relative">
+          <div className="sm:col-span-5 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -201,7 +288,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
             />
           </div>
 
-          <div className="sm:col-span-6 flex flex-wrap items-center gap-1.5 justify-start sm:justify-end">
+          <div className="sm:col-span-7 flex flex-wrap items-center gap-1.5 justify-start sm:justify-end">
             <button
               type="button"
               onClick={() => setDateFilter('ALL')}
@@ -248,6 +335,18 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
             </button>
             <button
               type="button"
+              onClick={() => setDateFilter('SPECIFIC_DATE')}
+              className={`px-3 py-1.5 rounded-md font-bold transition cursor-pointer flex items-center gap-1 ${
+                dateFilter === 'SPECIFIC_DATE'
+                  ? 'bg-blue-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Select Date</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setDateFilter('CUSTOM')}
               className={`px-3 py-1.5 rounded-md font-bold transition cursor-pointer ${
                 dateFilter === 'CUSTOM'
@@ -255,27 +354,64 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Custom
+              Range
             </button>
           </div>
         </div>
 
+        {/* Specific Date Filter Selector */}
+        {dateFilter === 'SPECIFIC_DATE' && (
+          <div className="flex items-center gap-2 animate-fadeIn text-xs pt-2 bg-blue-50/60 p-2.5 rounded-lg border border-blue-200">
+            <span className="font-bold text-blue-900 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-blue-600" />
+              Filter by Specific Dispatch Date:
+            </span>
+            <input
+              type="date"
+              value={specificDate}
+              onChange={(e) => setSpecificDate(e.target.value)}
+              className="bg-white border border-blue-300 rounded px-2.5 py-1 text-xs font-mono-code font-bold text-slate-900 focus:outline-none focus:border-blue-600"
+            />
+            {specificDate && (
+              <button
+                type="button"
+                onClick={() => setDateFilter('ALL')}
+                className="text-xs text-blue-700 hover:text-blue-900 font-bold underline ml-2 cursor-pointer"
+              >
+                Reset Filter
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Custom Range Filter */}
         {dateFilter === 'CUSTOM' && (
-          <div className="flex items-center gap-2 animate-fadeIn text-xs pt-2">
-            <span className="font-bold text-slate-600">Custom Date Range:</span>
+          <div className="flex items-center gap-2 animate-fadeIn text-xs pt-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+            <span className="font-bold text-slate-700">Date Range:</span>
             <input
               type="date"
               value={customStartDate}
               onChange={(e) => setCustomStartDate(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded px-2.5 py-1 text-xs font-mono-code font-bold text-slate-900"
+              className="bg-white border border-slate-300 rounded px-2.5 py-1 text-xs font-mono-code font-bold text-slate-900"
             />
-            <span className="text-slate-400">to</span>
+            <span className="text-slate-400 font-bold">to</span>
             <input
               type="date"
               value={customEndDate}
               onChange={(e) => setCustomEndDate(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded px-2.5 py-1 text-xs font-mono-code font-bold text-slate-900"
+              className="bg-white border border-slate-300 rounded px-2.5 py-1 text-xs font-mono-code font-bold text-slate-900"
             />
+            <button
+              type="button"
+              onClick={() => {
+                setCustomStartDate('');
+                setCustomEndDate('');
+                setDateFilter('ALL');
+              }}
+              className="text-xs text-slate-600 hover:text-slate-900 font-bold underline ml-2 cursor-pointer"
+            >
+              Clear
+            </button>
           </div>
         )}
       </div>
@@ -291,7 +427,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-amber-200/60 border-b border-amber-300 text-[11px] font-extrabold text-slate-900 whitespace-nowrap">
-                <th className="p-2.5 border-r border-amber-300/70 text-center w-14">Sr. No</th>
+                <th className="p-2.5 border-r border-amber-300/70 text-center w-12">Sr. No</th>
                 <th className="p-2.5 border-r border-amber-300/70">Pack Number</th>
                 <th className="p-2.5 border-r border-amber-300/70">Pack Name (Type)</th>
                 <th className="p-2.5 border-r border-amber-300/70">Dispatch Date</th>
@@ -299,7 +435,8 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                 <th className="p-2.5 border-r border-amber-300/70">LR Number</th>
                 <th className="p-2.5 border-r border-amber-300/70">Transporter Name</th>
                 <th className="p-2.5 border-r border-amber-300/70">Vehicle Number</th>
-                <th className="p-2.5">Destination (Company - City/State)</th>
+                <th className="p-2.5 border-r border-amber-300/70">Destination (Company - City/State)</th>
+                <th className="p-2.5 text-right w-16">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -343,8 +480,20 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                     <td className="p-2.5 border-r border-slate-100 font-mono-code font-bold text-slate-900">
                       {vehicleNo}
                     </td>
-                    <td className="p-2.5 text-slate-800 font-medium">
+                    <td className="p-2.5 border-r border-slate-100 text-slate-800 font-medium">
                       {destination}
+                    </td>
+                    <td className="p-2.5 text-right">
+                      {onEditPack && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(pack)}
+                          className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded transition cursor-pointer"
+                          title="Edit Dispatch Details"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -352,7 +501,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
 
               {filteredDispatches.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400 text-xs">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 text-xs">
                     No dispatched packs matching this filter. Once a lot is approved in Dispatch Staging, all packs will appear here automatically.
                   </td>
                 </tr>
@@ -361,6 +510,169 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
           </table>
         </div>
       </div>
+
+      {/* Edit Dispatched Pack Modal */}
+      {editingPack && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-blue-600" />
+                <h3 className="font-bold text-slate-900 text-sm">
+                  Edit Dispatched Pack Details (#{editingPack.packNumber})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPack(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPack} className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Pack Serial Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.packNumber}
+                    onChange={(e) => setEditForm({ ...editForm, packNumber: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Product Model <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={editForm.packType}
+                    onChange={(e) => setEditForm({ ...editForm, packType: e.target.value as BatteryPackType })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  >
+                    {ALL_PACK_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Dispatch Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.dispatchDate}
+                    onChange={(e) => setEditForm({ ...editForm, dispatchDate: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Document / Gate Pass No. <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.dispatchDocNo}
+                    onChange={(e) => setEditForm({ ...editForm, dispatchDocNo: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">LR / Bilty No.</label>
+                  <input
+                    type="text"
+                    value={editForm.dispatchLrNo}
+                    onChange={(e) => setEditForm({ ...editForm, dispatchLrNo: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Transporter Name</label>
+                  <input
+                    type="text"
+                    value={editForm.dispatchTransporter}
+                    onChange={(e) => setEditForm({ ...editForm, dispatchTransporter: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Vehicle Truck No.</label>
+                  <input
+                    type="text"
+                    value={editForm.dispatchVehicleNo}
+                    onChange={(e) => setEditForm({ ...editForm, dispatchVehicleNo: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Destination Customer / Plant <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.dispatchToCustomer}
+                    onChange={(e) => setEditForm({ ...editForm, dispatchToCustomer: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Full Destination Address</label>
+                  <textarea
+                    value={editForm.dispatchToAddress}
+                    onChange={(e) => setEditForm({ ...editForm, dispatchToAddress: e.target.value })}
+                    rows={2}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Remarks / Notes</label>
+                  <input
+                    type="text"
+                    value={editForm.notes}
+                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between -mx-5 -mb-5 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingPack(null)}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save Changes & Sync</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

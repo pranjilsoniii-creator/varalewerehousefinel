@@ -109,11 +109,14 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
   const [saveCurrentAddressToBook, setSaveCurrentAddressToBook] = useState(false);
   const [newAddressTitle, setNewAddressTitle] = useState('');
 
+  // Dispatch Date (defaults to today's date YYYY-MM-DD)
+  const [dispatchDate, setDispatchDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+
   // Form Fields
-  const [consigneeName, setConsigneeName] = useState(DEFAULT_SAVED_ADDRESSES[0].title);
-  const [consigneeAddress, setConsigneeAddress] = useState(DEFAULT_SAVED_ADDRESSES[0].address);
-  const [consigneeGstin, setConsigneeGstin] = useState(DEFAULT_SAVED_ADDRESSES[0].gstin || '27AAACT2727Q1ZR');
-  const [consigneeState, setConsigneeState] = useState(DEFAULT_SAVED_ADDRESSES[0].state || 'Maharashtra');
+  const [consigneeName, setConsigneeName] = useState(savedAddresses[0]?.title || 'TATA AUTOCOMP SYSTEMS LTD - Chakan Plant 2');
+  const [consigneeAddress, setConsigneeAddress] = useState(savedAddresses[0]?.address || 'Plot No. 2, Sector 11, Tata Motors Complex, Chakan Industrial Area, Pune, Maharashtra - 410501');
+  const [consigneeGstin, setConsigneeGstin] = useState(savedAddresses[0]?.gstin || '27AAACT2727Q1ZR');
+  const [consigneeState, setConsigneeState] = useState(savedAddresses[0]?.state || 'Maharashtra');
 
   const [transportName, setTransportName] = useState(COMMON_TRANSPORTERS[0]);
   const [customTransport, setCustomTransport] = useState('');
@@ -123,6 +126,18 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
   const [driverName, setDriverName] = useState('');
   const [driverMobile, setDriverMobile] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Dynamic suggestions derived strictly from saved addresses and historical dispatches
+  const dynamicCustomerSuggestions = useMemo(() => {
+    const list = new Set<string>();
+    savedAddresses.forEach((a) => {
+      if (a.title) list.add(a.title);
+    });
+    availableStoragePacks.forEach((p) => {
+      if (p.dispatchToCustomer) list.add(p.dispatchToCustomer);
+    });
+    return Array.from(list);
+  }, [savedAddresses, availableStoragePacks]);
 
   // UI Modals & Inspection
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -293,8 +308,10 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
       setNewAddressTitle('');
     }
 
-    const nowIso = new Date().toISOString();
-    const lotNo = 'LOT-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+    const finalDispatchIso = dispatchDate
+      ? new Date(dispatchDate + 'T' + new Date().toTimeString().slice(0, 8) + '.000Z').toISOString()
+      : new Date().toISOString();
+    const lotNo = 'LOT-' + (dispatchDate ? dispatchDate.replace(/-/g, '') : new Date().toISOString().slice(0, 10).replace(/-/g, '')) + '-' + Math.floor(100 + Math.random() * 900);
     const finalTransport = transportName === 'Other' ? (customTransport || 'Other') : transportName;
     const operatorName = currentUser?.name || currentUser?.username || 'Dispatch Lead';
     const autoApproved = canDirectApprove;
@@ -306,7 +323,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
         return {
           ...existing,
           status: 'DISPATCHED' as const,
-          dispatchedAt: nowIso,
+          dispatchedAt: finalDispatchIso,
           dispatchedBy: operatorName,
           dispatchLotId: 'lot-' + Date.now(),
           dispatchDocNo: transportDocNo.trim() || ('GP-' + Date.now().toString().slice(-4)),
@@ -335,7 +352,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
         isWithoutPlate: dp.isWithoutPlate,
         pendingInwardReconciliation: true,
         reconciliationValidUntil: validUntil,
-        dispatchedAt: nowIso,
+        dispatchedAt: finalDispatchIso,
         dispatchedBy: operatorName,
         dispatchLotId: 'lot-' + Date.now(),
         dispatchDocNo: transportDocNo.trim() || ('GP-' + Date.now().toString().slice(-4)),
@@ -348,7 +365,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
         movementHistory: [
           {
             id: `mov-${Date.now()}-${idx}`,
-            timestamp: nowIso,
+            timestamp: finalDispatchIso,
             fromLocation: 'Direct Plant Dispatch Bay',
             toLocation: `Dispatched to ${consigneeName.trim()}`,
             movedBy: operatorName,
@@ -361,7 +378,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
     const newLot: DispatchLot = {
       id: 'lot-' + Date.now(),
       lotNumber: lotNo,
-      timestamp: nowIso,
+      timestamp: finalDispatchIso,
       status: autoApproved ? 'DISPATCHED' : 'PENDING_APPROVAL',
       fromPlant: DEFAULT_PLANT_LOCATION.name + ', ' + DEFAULT_PLANT_LOCATION.address,
       consigneeName: consigneeName.trim(),
@@ -377,7 +394,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
       packCount: directPacksToCreate.length,
       dispatchedBy: operatorName,
       approvedBy: autoApproved ? operatorName : 'Pending Supervisor Approval',
-      approvedAt: autoApproved ? nowIso : undefined,
+      approvedAt: autoApproved ? finalDispatchIso : undefined,
       notes: (notes.trim() ? `${notes.trim()} • ` : '') + '⚡ Direct Fast Dispatch (30-Day Auto-Reconciliation Window Active)',
     };
 
@@ -411,8 +428,10 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
       setNewAddressTitle('');
     }
 
-    const nowIso = new Date().toISOString();
-    const lotNo = 'LOT-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+    const finalDispatchIso = dispatchDate
+      ? new Date(dispatchDate + 'T' + new Date().toTimeString().slice(0, 8) + '.000Z').toISOString()
+      : new Date().toISOString();
+    const lotNo = 'LOT-' + (dispatchDate ? dispatchDate.replace(/-/g, '') : new Date().toISOString().slice(0, 10).replace(/-/g, '')) + '-' + Math.floor(100 + Math.random() * 900);
     const finalTransport = transportName === 'Other' ? (customTransport || 'Other') : transportName;
     const operatorName = currentUser?.name || currentUser?.username || 'Dispatch Lead';
     const autoApproved = canDirectApprove;
@@ -420,7 +439,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
     const newLot: DispatchLot = {
       id: 'lot-' + Date.now(),
       lotNumber: lotNo,
-      timestamp: nowIso,
+      timestamp: finalDispatchIso,
       status: autoApproved ? 'DISPATCHED' : 'PENDING_APPROVAL',
       fromPlant: DEFAULT_PLANT_LOCATION.name + ', ' + DEFAULT_PLANT_LOCATION.address,
       consigneeName: consigneeName.trim(),
@@ -436,7 +455,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
       packCount: selectedPacksList.length,
       dispatchedBy: operatorName,
       approvedBy: autoApproved ? operatorName : 'Pending Supervisor Approval',
-      approvedAt: autoApproved ? nowIso : undefined,
+      approvedAt: autoApproved ? finalDispatchIso : undefined,
       notes: notes.trim(),
     };
 
@@ -536,17 +555,6 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn">
           {/* Left Column: Direct Batch Entry & Quantity Builder (7 cols) */}
           <div className="lg:col-span-7 space-y-5">
-            {/* Quick 30-Day Auto Reconciliation Banner */}
-            <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl space-y-1.5 text-xs text-amber-900 shadow-xs">
-              <div className="flex items-center gap-2 font-bold text-amber-950">
-                <Zap className="w-4 h-4 text-amber-600 fill-current" />
-                <span>High-Load Fast Direct Dispatch (30-Day Auto-Reconciliation Active)</span>
-              </div>
-              <p className="text-amber-800 text-[11px] leading-relaxed">
-                गोदाम में पुराना डेटा पहले से सेव न होने पर भी आप तुरंत ट्रक लोड डिस्पैच कर सकते हैं। जब भी अगले <strong>30 दिनों</strong> के अंदर इस पैक का Inward Delivery Challan या Line Matrix सिस्टम में सेव होगा, सिस्टम स्वचालित रूप से इनवर्ड डेट और डिस्पैच डेट को आपस में लिंक कर देगा।
-              </p>
-            </div>
-
             {/* Direct Entry Card */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -707,36 +715,56 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                 Outward Consignee & Vehicle Dispatch
               </h3>
 
-              {/* Quick Destination Hub Buttons */}
-              <div className="space-y-1.5 text-xs">
-                <label className="font-bold text-slate-700 block text-[11px]">Quick Destination Selector:</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {DEFAULT_SAVED_ADDRESSES.map((addr) => (
-                    <button
-                      key={addr.id}
-                      type="button"
-                      onClick={() => handleSelectSavedAddress(addr.id)}
-                      className={`p-2 rounded-lg border text-left text-[11px] font-bold transition cursor-pointer ${
-                        consigneeName === addr.title
-                          ? 'bg-blue-50 border-blue-500 text-blue-900 shadow-2xs'
-                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <div className="truncate">{addr.title.split('-')[1]?.trim() || addr.title}</div>
-                      <div className="text-[9px] text-slate-500 font-mono-code">{addr.state}</div>
-                    </button>
-                  ))}
+              {/* Datalist for dynamic customer suggestions from saved data */}
+              <datalist id="dispatch-saved-customers">
+                {dynamicCustomerSuggestions.map((c, i) => (
+                  <option key={i} value={c} />
+                ))}
+              </datalist>
+
+              {/* Saved Address Selector Dropdown (if user has saved addresses) */}
+              {savedAddresses.length > 0 && (
+                <div className="space-y-1.5 text-xs">
+                  <label className="font-bold text-slate-700 block text-[11px]">Select from Saved Directory:</label>
+                  <select
+                    value={selectedAddressId}
+                    onChange={(e) => handleSelectSavedAddress(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
+                  >
+                    <option value="">-- Choose Saved Address / Custom Entry --</option>
+                    {savedAddresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.title} ({a.state || 'India'})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
+              )}
 
               {/* Destination Facility & Address */}
               <div className="space-y-3 text-xs">
+                {/* Dispatch Date Picker */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Dispatch Date</span> <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dispatchDate}
+                    onChange={(e) => setDispatchDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Customer / Plant Facility Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
+                    list="dispatch-saved-customers"
                     value={consigneeName}
                     onChange={(e) => setConsigneeName(e.target.value)}
                     placeholder="Enter Customer / Destination Facility Name..."
@@ -1098,12 +1126,28 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   ))}
                 </select>
 
+                {/* Dispatch Date Picker */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Dispatch Date</span> <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dispatchDate}
+                    onChange={(e) => setDispatchDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Customer / Destination Facility Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
+                    list="dispatch-saved-customers"
                     value={consigneeName}
                     onChange={(e) => setConsigneeName(e.target.value)}
                     placeholder="Enter Customer / Destination Facility Name..."

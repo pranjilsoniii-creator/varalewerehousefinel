@@ -37,51 +37,6 @@ interface PackRow {
   mismatchReason?: string;
 }
 
-// Common Tata Dealership & Vendor Directory
-const POPULAR_DEALERSHIPS = [
-  'Tata Motors CVBU - Pune Assembly Plant',
-  'Tata Motors EV Division - Sanand Plant (Gujarat)',
-  'Tata AutoComp Systems - Chakan Plant 2',
-  'Tata Motors - Jamshedpur Plant',
-  'Tata Motors - Dharwad Plant (Karnataka)',
-  'Mahalaxmi Automotives Private Limited',
-  'Bafna Motors (Pune) Private Limited',
-  'Parijat Motors (Automotive Hub)',
-  'National Motors Dealership',
-  'Sai Service EV Logistics Desk',
-];
-
-const POPULAR_STATES = [
-  'Maharashtra',
-  'Gujarat',
-  'Karnataka',
-  'Jharkhand',
-  'Tamil Nadu',
-  'Haryana',
-  'Delhi NCR',
-  'Rajasthan',
-  'Uttar Pradesh',
-  'Madhya Pradesh',
-  'Telangana',
-  'West Bengal',
-];
-
-const POPULAR_CITIES = [
-  'Pune',
-  'Chakan',
-  'Varale',
-  'Bhosari',
-  'Sanand',
-  'Ahmedabad',
-  'Jamshedpur',
-  'Dharwad',
-  'Bengaluru',
-  'Chennai',
-  'Gurugram',
-  'Mumbai',
-  'Nagpur',
-];
-
 export const InwardScanner: React.FC<InwardScannerProps> = ({
   existingPacks,
   onAddPacks,
@@ -128,12 +83,99 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Dynamic Dealership suggestions from previous packs + directory
-  const dealershipSuggestions = useMemo(() => {
-    const historical = Array.from(new Set(existingPacks.map((p) => p.dealershipName).filter(Boolean)));
-    const combined = Array.from(new Set([...historical, ...POPULAR_DEALERSHIPS]));
-    return combined;
+  // Dynamic Suggestions derived strictly from saved records & catalog directory
+  const { dealershipSuggestions, stateSuggestions, citySuggestions } = useMemo(() => {
+    const dealerSet = new Set<string>();
+    const stateSet = new Set<string>();
+    const citySet = new Set<string>();
+
+    // Initial catalog directory
+    INITIAL_SAVED_ADDRESSES.forEach((addr) => {
+      if (addr.title) dealerSet.add(addr.title);
+      if (addr.state) stateSet.add(addr.state);
+    });
+
+    // Populate from existing real-time packs
+    existingPacks.forEach((p) => {
+      if (p.dealershipName && p.dealershipName.trim()) {
+        dealerSet.add(p.dealershipName.trim());
+      }
+      if (p.receivedState && p.receivedState.trim()) {
+        const raw = p.receivedState.trim();
+        if (raw.includes(',')) {
+          const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+          if (parts.length >= 2) {
+            citySet.add(parts[0]);
+            stateSet.add(parts[1]);
+          } else if (parts.length === 1) {
+            stateSet.add(parts[0]);
+          }
+        } else {
+          stateSet.add(raw);
+        }
+      }
+      if (p.dispatchToCustomer && p.dispatchToCustomer.trim()) {
+        dealerSet.add(p.dispatchToCustomer.trim());
+      }
+    });
+
+    return {
+      dealershipSuggestions: Array.from(dealerSet).filter(Boolean),
+      stateSuggestions: Array.from(stateSet).filter(Boolean),
+      citySuggestions: Array.from(citySet).filter(Boolean),
+    };
   }, [existingPacks]);
+
+  // Keyboard Enter-step navigation helper
+  const handleKeyDownStep = (e: React.KeyboardEvent, nextElementId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nextEl = document.getElementById(nextElementId);
+      if (nextEl) {
+        nextEl.focus();
+      }
+    }
+  };
+
+  // Pack row Enter-key handler to jump to next row or auto-create a new row
+  const handlePackRowKeyDown = (e: React.KeyboardEvent, index: number, isChallan?: boolean, isReason?: boolean) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const row = packRows[index];
+
+      if (row.isDifferentSerial && !isChallan && !isReason) {
+        // Move to challan pack number input
+        const challanInput = document.getElementById(`inward-challan-pack-${index}`);
+        if (challanInput) {
+          challanInput.focus();
+          return;
+        }
+      } else if (row.isDifferentSerial && isChallan && !isReason) {
+        // Move to mismatch reason input
+        const reasonInput = document.getElementById(`inward-mismatch-reason-${index}`);
+        if (reasonInput) {
+          reasonInput.focus();
+          return;
+        }
+      }
+
+      if (index < packRows.length - 1) {
+        const nextInput = document.getElementById(`inward-pack-${index + 1}`);
+        if (nextInput) {
+          nextInput.focus();
+        }
+      } else {
+        // Last row: Auto add a new row and focus it!
+        handleAddRow(1);
+        setTimeout(() => {
+          const nextInput = document.getElementById(`inward-pack-${index + 1}`);
+          if (nextInput) {
+            nextInput.focus();
+          }
+        }, 50);
+      }
+    }
+  };
 
   // Helper to generate Without-Plate tracked code
   const generateNoPlateCode = () => {
@@ -567,13 +609,13 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
           </datalist>
 
           <datalist id="state-suggestions">
-            {POPULAR_STATES.map((s, i) => (
+            {stateSuggestions.map((s, i) => (
               <option key={i} value={s} />
             ))}
           </datalist>
 
           <datalist id="city-suggestions">
-            {POPULAR_CITIES.map((c, i) => (
+            {citySuggestions.map((c, i) => (
               <option key={i} value={c} />
             ))}
           </datalist>
@@ -584,9 +626,11 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Document / Invoice / Challan No. <span className="text-rose-500">*</span>
               </label>
               <input
+                id="inward-doc-no"
                 type="text"
                 value={documentNo}
                 onChange={(e) => setDocumentNo(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-rec-date')}
                 placeholder="Enter Document / Challan Number..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
@@ -598,9 +642,11 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Received Date <span className="text-rose-500">*</span>
               </label>
               <input
+                id="inward-rec-date"
                 type="date"
                 value={receivedDate}
                 onChange={(e) => setReceivedDate(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-dealer-name')}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
               />
@@ -612,10 +658,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Dealership / Supplier Name <span className="text-rose-500">*</span>
               </label>
               <input
+                id="inward-dealer-name"
                 type="text"
                 list="dealership-suggestions"
                 value={dealershipName}
                 onChange={(e) => setDealershipName(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-rec-state')}
                 placeholder="Type or select dealership..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
@@ -628,10 +676,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Received State <span className="text-rose-500">*</span>
               </label>
               <input
+                id="inward-rec-state"
                 type="text"
                 list="state-suggestions"
                 value={receivedState}
                 onChange={(e) => setReceivedState(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-rec-city')}
                 placeholder="Select or type State (e.g. Maharashtra)..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
@@ -644,10 +694,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Received City / Location
               </label>
               <input
+                id="inward-rec-city"
                 type="text"
                 list="city-suggestions"
                 value={receivedCity}
                 onChange={(e) => setReceivedCity(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-transport-name')}
                 placeholder="Select or type City (e.g. Pune, Chakan)..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
               />
@@ -658,8 +710,10 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Transporter Name <span className="text-rose-500">*</span>
               </label>
               <select
+                id="inward-transport-name"
                 value={transportName}
                 onChange={(e) => setTransportName(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, transportName === 'Other' ? 'inward-custom-transport' : 'inward-pack-0')}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
               >
                 {COMMON_TRANSPORTERS.map((t) => (
@@ -670,9 +724,11 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               </select>
               {transportName === 'Other' && (
                 <input
+                  id="inward-custom-transport"
                   type="text"
                   value={customTransport}
                   onChange={(e) => setCustomTransport(e.target.value)}
+                  onKeyDown={(e) => handleKeyDownStep(e, 'inward-pack-0')}
                   placeholder="Enter custom transporter name..."
                   className="mt-2 w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                   required
@@ -700,9 +756,11 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
             <div className="sm:col-span-2 lg:col-span-3">
               <label className="block font-bold text-slate-700 mb-1">Remark / Notes</label>
               <input
+                id="inward-remark"
                 type="text"
                 value={remark}
                 onChange={(e) => setRemark(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-pack-0')}
                 placeholder="Enter remark notes (optional)..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
               />
@@ -719,7 +777,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Battery Packs in this Document ({packRows.length} Packs)
               </h3>
               <p className="text-xs text-slate-500">
-                Enter pack numbers (Auto-detects model shorthands like FBU, CKD, AIO, K2, LIMBER).
+                Enter pack numbers (Auto-detects model shorthands like FBU, CKD, AIO, K2, LIMBER). Press Enter to add next row.
               </p>
             </div>
 
@@ -810,10 +868,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                     <td className="p-2.5 space-y-1.5">
                       <div>
                         <input
+                          id={`inward-pack-${index}`}
                           type="text"
                           value={row.packNumber}
                           readOnly={row.isWithoutPlate}
                           onChange={(e) => handleRowChange(row.id, 'packNumber', e.target.value)}
+                          onKeyDown={(e) => handlePackRowKeyDown(e, index)}
                           placeholder={row.isWithoutPlate ? 'Auto NP Code' : 'Enter physical serial (e.g. 2195)...'}
                           className={`w-full border rounded-lg px-3 py-2 text-xs font-mono-code font-bold focus:outline-none ${
                             row.isWithoutPlate
@@ -834,17 +894,21 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                             <span className="text-[9px] text-purple-600 uppercase">Audit Tracked</span>
                           </div>
                           <input
+                            id={`inward-challan-pack-${index}`}
                             type="text"
                             value={row.challanPackNumber || ''}
                             onChange={(e) => handleRowChange(row.id, 'challanPackNumber', e.target.value)}
+                            onKeyDown={(e) => handlePackRowKeyDown(e, index, true, false)}
                             placeholder="Challan Doc Serial # (e.g. 2190)..."
                             className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-mono-code font-bold text-purple-900 focus:outline-none focus:border-purple-600"
                             required
                           />
                           <input
+                            id={`inward-mismatch-reason-${index}`}
                             type="text"
                             value={row.mismatchReason || ''}
                             onChange={(e) => handleRowChange(row.id, 'mismatchReason', e.target.value)}
+                            onKeyDown={(e) => handlePackRowKeyDown(e, index, true, true)}
                             placeholder="Mismatch reason (e.g. Received #2195 instead of #2190)..."
                             className="w-full bg-white border border-purple-200 rounded px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:border-purple-500"
                           />

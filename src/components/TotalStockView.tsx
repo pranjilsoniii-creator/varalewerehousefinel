@@ -28,6 +28,7 @@ interface TotalStockViewProps {
   onOpenPackDetails: (pack: BatteryPack) => void;
   onSendToDispatch: (pack: BatteryPack) => void;
   onDeletePack?: (packId: string) => void;
+  onEditPack?: (updatedPack: BatteryPack) => void;
 }
 
 export const TotalStockView: React.FC<TotalStockViewProps> = ({
@@ -36,6 +37,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
   onOpenPackDetails,
   onSendToDispatch,
   onDeletePack,
+  onEditPack,
 }) => {
   const { isSuperAdmin, isManager } = useAuth();
 
@@ -561,7 +563,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
 
       {/* DISPATCH SHEET VIEW OR MASTER INVENTORY TABLE */}
       {activeSearchTab === 'DISPATCH_SHEET' ? (
-        <OutwardDispatchRegister packs={packs} dispatchLots={dispatchLots} />
+        <OutwardDispatchRegister packs={packs} dispatchLots={dispatchLots} onEditPack={onEditPack} />
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
