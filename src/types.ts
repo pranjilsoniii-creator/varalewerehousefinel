@@ -89,7 +89,12 @@ export interface BatteryPack {
   locationArea: string;               // Default: "Inward Area"
   currentLocation: string;            // e.g. "Inward Area" or "A-04, R-12, L-02"
   isWithoutPlate?: boolean;           // True if pack arrived without serial plate/sticker
-  sourceType?: 'INWARD' | 'LINE_POPULATE'; // Source: Inward Dock vs Direct Line Matrix Populator
+  sourceType?: 'INWARD' | 'LINE_POPULATE' | 'DIRECT_DISPATCH'; // Source: Inward Dock vs Direct Line Matrix vs Fast Direct Dispatch
+
+  // 30-Day Auto Reconciliation (For Direct Fast Dispatch before Inward)
+  pendingInwardReconciliation?: boolean;
+  reconciliationValidUntil?: string;
+  reconciledAt?: string;
 
   // Inward Details
   inwardDate: string;                 // ISO date string

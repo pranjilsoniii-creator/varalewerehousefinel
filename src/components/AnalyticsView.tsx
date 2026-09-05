@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Table,
 } from 'lucide-react';
-import { BatteryPack, DispatchLot, InwardShipmentRecord } from '../types';
+import { BatteryPack, BatteryPackType, DispatchLot, InwardShipmentRecord } from '../types';
 import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
 import { exportInventoryToExcel, exportDispatchLotsToExcel } from '../utils/excelExport';
 import { OutwardDispatchRegister } from './OutwardDispatchRegister';
@@ -41,12 +41,27 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     ? Math.round((activeStoragePacks.length / totalLineCapacity) * 100)
     : 0;
 
-  // Distribution by model
-  const modelStats = ALL_PACK_TYPES.map((typeKey) => {
-    const count = activeStoragePacks.filter((p) => p.packType === typeKey).length;
-    const model = BATTERY_MODELS[typeKey];
+  // Unified standard models list for analytics
+  const STANDARD_ANALYTICS_MODELS: { typeKey: BatteryPackType; displayName: string; matchKeys: BatteryPackType[] }[] = [
+    { typeKey: 'Kanger1.0_AIO', displayName: 'Kanger1.0_AIO', matchKeys: ['Kanger1.0_AIO', 'Kanger1.0_AIO_Ais'] },
+    { typeKey: 'Kanger1.0_Gen3', displayName: 'Kanger1.0_Gen3', matchKeys: ['Kanger1.0_Gen3', 'Kanger1.0_Gen3_Ais'] },
+    { typeKey: 'Kanger1.0_CKD', displayName: 'Kanger1.0_CKD', matchKeys: ['Kanger1.0_CKD', 'Kanger1.0_CKD_Ais'] },
+    { typeKey: 'Kanger1.0_FBU', displayName: 'Kanger1.0_FBU', matchKeys: ['Kanger1.0_FBU', 'Kanger1.0_FBU_Ais'] },
+    { typeKey: 'Kanger2.0', displayName: 'Kanger2.0', matchKeys: ['Kanger2.0', 'Kanger2.0_Ais'] },
+    { typeKey: 'Kanger3.0', displayName: 'Kanger3.0', matchKeys: ['Kanger3.0'] },
+    { typeKey: 'Limber_Non_Ais', displayName: 'Limber', matchKeys: ['Limber_Non_Ais', 'Limber_Ais'] },
+    { typeKey: 'Tamor_ELR', displayName: 'Tamor_ELR', matchKeys: ['Tamor_ELR'] },
+    { typeKey: 'Nova_LRP', displayName: 'Nova_LRP', matchKeys: ['Nova_LRP'] },
+    { typeKey: 'Challenger_LR', displayName: 'Challenger_LR', matchKeys: ['Challenger_LR'] },
+    { typeKey: 'Challenger_MR', displayName: 'Challenger_MR', matchKeys: ['Challenger_MR'] },
+  ];
+
+  // Distribution by model (Grouping all legacy AIS variants into standard models)
+  const modelStats = STANDARD_ANALYTICS_MODELS.map((item) => {
+    const count = activeStoragePacks.filter((p) => item.matchKeys.includes(p.packType)).length;
+    const model = BATTERY_MODELS[item.typeKey];
     return {
-      type: typeKey,
+      type: item.displayName,
       count,
       color: model?.color || '#2563eb',
     };

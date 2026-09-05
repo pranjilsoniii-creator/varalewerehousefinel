@@ -288,22 +288,65 @@ export function App() {
     };
   }, []);
 
-  // Handler: Add Inward Packs
+  // Handler: Add Inward Packs (with 30-Day Auto Reconciliation for Direct Dispatches)
   const handleAddInwardPacks = async (
     newPacks: BatteryPack[],
     shipmentRecord: InwardShipmentRecord
   ) => {
-    // Optimistic UI Update
-    setPacks((prev) => [...newPacks, ...prev]);
+    let reconciledCount = 0;
+    const packsMap = new Map<string, BatteryPack>();
+    packs.forEach((p) => packsMap.set(p.id, p));
+
+    const packsToSync: BatteryPack[] = [];
+
+    newPacks.forEach((newP) => {
+      // Find matching dispatched pack by packNumber that was waiting for inward reconciliation
+      const pendingMatch = Array.from(packsMap.values()).find(
+        (p) =>
+          p.status === 'DISPATCHED' &&
+          p.packNumber === newP.packNumber &&
+          (p.pendingInwardReconciliation || p.sourceType === 'DIRECT_DISPATCH' || !p.inwardDate)
+      );
+
+      if (pendingMatch) {
+        // Link inward data to the previously dispatched pack
+        const reconciledPack: BatteryPack = {
+          ...pendingMatch,
+          inwardDate: shipmentRecord.timestamp || new Date().toISOString(),
+          documentNo: shipmentRecord.documentNo,
+          dealershipName: shipmentRecord.dealershipName,
+          receivedState: shipmentRecord.receivedState,
+          transportName: shipmentRecord.transportName,
+          hasInwardStamp: shipmentRecord.hasInwardStamp,
+          inwardBy: shipmentRecord.inwardBy,
+          pendingInwardReconciliation: false,
+          reconciledAt: new Date().toISOString(),
+          notes: `${pendingMatch.notes || ''} [Auto-Reconciled with Inward DC #${shipmentRecord.documentNo} on ${new Date().toLocaleDateString('en-IN')}]`.trim(),
+        };
+        packsMap.set(pendingMatch.id, reconciledPack);
+        packsToSync.push(reconciledPack);
+        reconciledCount++;
+      } else {
+        packsMap.set(newP.id, newP);
+        packsToSync.push(newP);
+      }
+    });
+
+    const finalPacks = Array.from(packsMap.values());
+    setPacks(finalPacks);
     setInwardShipments((prev) => [shipmentRecord, ...prev]);
 
     try {
       await Promise.all([
-        syncPacksToCloud(newPacks),
+        syncPacksToCloud(packsToSync),
         syncInwardToCloud(shipmentRecord),
       ]);
     } catch (err) {
       console.warn('Cloud sync on inward:', err);
+    }
+
+    if (reconciledCount > 0) {
+      alert(`⚡ 30-Day Auto-Reconciliation Complete: ${reconciledCount} inward pack(s) were automatically matched & linked with previously dispatched records!`);
     }
   };
 
@@ -346,17 +389,44 @@ export function App() {
     }
   };
 
-  // Handler: Save Historical Line Matrix Packs
+  // Handler: Save Historical Line Matrix Packs (with 30-Day Auto Reconciliation)
   const handleSaveAdminLinePacks = async (newPacks: BatteryPack[]) => {
-    setPacks((prev) => {
-      const lineMap = new Map<string, BatteryPack>();
-      prev.forEach((p) => lineMap.set(p.id, p));
-      newPacks.forEach((np) => lineMap.set(np.id, np));
-      return Array.from(lineMap.values());
+    const packsMap = new Map<string, BatteryPack>();
+    packs.forEach((p) => packsMap.set(p.id, p));
+
+    const packsToSync: BatteryPack[] = [];
+
+    newPacks.forEach((newP) => {
+      const pendingMatch = Array.from(packsMap.values()).find(
+        (p) =>
+          p.status === 'DISPATCHED' &&
+          p.packNumber === newP.packNumber &&
+          (p.pendingInwardReconciliation || p.sourceType === 'DIRECT_DISPATCH' || !p.inwardDate)
+      );
+
+      if (pendingMatch) {
+        const reconciledPack: BatteryPack = {
+          ...pendingMatch,
+          lineId: newP.lineId,
+          rackNumber: newP.rackNumber,
+          rackSlot: newP.rackSlot,
+          pendingInwardReconciliation: false,
+          reconciledAt: new Date().toISOString(),
+          notes: `${pendingMatch.notes || ''} [Matrix Line Pos: Line ${newP.lineId} Rack ${newP.rackNumber}]`.trim(),
+        };
+        packsMap.set(pendingMatch.id, reconciledPack);
+        packsToSync.push(reconciledPack);
+      } else {
+        packsMap.set(newP.id, newP);
+        packsToSync.push(newP);
+      }
     });
 
+    const finalPacks = Array.from(packsMap.values());
+    setPacks(finalPacks);
+
     try {
-      await syncPacksToCloud(newPacks);
+      await syncPacksToCloud(packsToSync);
     } catch (err) {
       console.warn('Cloud sync on line populator:', err);
     }
@@ -507,15 +577,24 @@ export function App() {
     }
   };
 
-  // Handler: Approve Outward Dispatch Lot
+  // Handler: Approve Outward Dispatch Lot (supports both Staged Packs & Direct Fast Bulk Dispatch Packs)
   const handleApproveDispatchLot = async (lot: DispatchLot) => {
     setDispatchLots((prev) => [lot, ...prev]);
 
-    const lotPackIds = new Set(lot.packs.map((p) => p.id));
-    const updatedPacks = packs.map((p) => {
-      if (lotPackIds.has(p.id)) {
-        return {
-          ...p,
+    const existingPackMap = new Map<string, BatteryPack>();
+    packs.forEach((p) => existingPackMap.set(p.id, p));
+
+    // Also index existing by packNumber
+    const existingNumberMap = new Map<string, BatteryPack>();
+    packs.forEach((p) => existingNumberMap.set(p.packNumber, p));
+
+    const dispatchedPacksToSync: BatteryPack[] = [];
+
+    lot.packs.forEach((lotPack) => {
+      const existing = existingPackMap.get(lotPack.id) || existingNumberMap.get(lotPack.packNumber);
+      if (existing) {
+        const updated: BatteryPack = {
+          ...existing,
           status: 'DISPATCHED' as const,
           currentLocation: `Dispatched to ${lot.consigneeName}`,
           locationArea: 'Dispatched to EV Plant',
@@ -528,15 +607,57 @@ export function App() {
           dispatchToCustomer: lot.consigneeName || 'TATA AUTOCOMP',
           dispatchToAddress: lot.consigneeAddress || 'Pune / Maharashtra',
         };
+        existingPackMap.set(existing.id, updated);
+        dispatchedPacksToSync.push(updated);
+      } else {
+        // Brand new direct dispatched pack (Pre-inward direct dispatch)
+        const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const newDirectPack: BatteryPack = {
+          ...lotPack,
+          id: lotPack.id || `pack-direct-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          status: 'DISPATCHED' as const,
+          sourceType: 'DIRECT_DISPATCH' as const,
+          currentLocation: `Dispatched to ${lot.consigneeName}`,
+          locationArea: 'Dispatched to EV Plant',
+          dispatchLotId: lot.id,
+          dispatchedAt: lot.timestamp,
+          dispatchDocNo: lot.transportDocNo || lot.lotNumber,
+          dispatchLrNo: lot.lrNumber || '',
+          dispatchVehicleNo: lot.vehicleNumber || '',
+          dispatchTransporter: lot.transportName || 'Sahyadri Enterprises',
+          dispatchToCustomer: lot.consigneeName || 'TATA AUTOCOMP',
+          dispatchToAddress: lot.consigneeAddress || 'Pune / Maharashtra',
+          pendingInwardReconciliation: true,
+          reconciliationValidUntil: validUntil,
+          inwardDate: '',
+          documentNo: 'DIRECT-DISPATCH',
+          dealershipName: 'Direct Plant Dispatch',
+          receivedState: 'Maharashtra',
+          transportName: lot.transportName || 'Sahyadri Enterprises',
+          hasInwardStamp: false,
+          inwardBy: lot.dispatchedBy || 'Dispatcher',
+          movementHistory: [
+            {
+              id: `mov-${Date.now()}`,
+              timestamp: lot.timestamp,
+              fromLocation: 'High-Load Direct Dispatch',
+              toLocation: `Dispatched to ${lot.consigneeName}`,
+              movedBy: lot.dispatchedBy || 'Dispatcher',
+              reason: 'Direct Bulk Dispatch (30-Day Auto-Reconciliation Window)',
+            },
+          ],
+        };
+        existingPackMap.set(newDirectPack.id, newDirectPack);
+        dispatchedPacksToSync.push(newDirectPack);
       }
-      return p;
     });
 
-    setPacks(updatedPacks);
+    const finalPacks = Array.from(existingPackMap.values());
+    setPacks(finalPacks);
+
     try {
       await syncLotToCloud(lot);
-      const dispatchedList = updatedPacks.filter((p) => lotPackIds.has(p.id));
-      await syncPacksToCloud(dispatchedList);
+      await syncPacksToCloud(dispatchedPacksToSync);
     } catch (err) {
       console.warn('Cloud sync on lot dispatch:', err);
     }
