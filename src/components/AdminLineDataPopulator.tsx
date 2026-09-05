@@ -350,7 +350,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
             <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
               <Table className="w-3.5 h-3.5 text-purple-700" /> Line & Rack Data Management
             </span>
-            <span className="text-slate-500 font-mono-code font-medium">Auto-Ais Compliant • Max 4 Packs / Rack</span>
+            <span className="text-slate-500 font-mono-code font-medium">Auto Model Detection • Max 4 Packs / Rack</span>
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight font-display">
             Sequential Rack Loader & Line Stock Matrix

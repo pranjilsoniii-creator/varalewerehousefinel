@@ -234,13 +234,13 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
           <p className="text-purple-600 font-bold uppercase tracking-wider text-[10px]">Kanger 2.0 Series</p>
           <p className="text-2xl font-extrabold font-mono-code text-purple-700">{inwardSeriesSummary.k2}</p>
-          <p className="text-[11px] text-slate-400">Standard & AIS</p>
+          <p className="text-[11px] text-slate-400">Kanger 2.0</p>
         </div>
 
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
           <p className="text-emerald-600 font-bold uppercase tracking-wider text-[10px]">Limber Series</p>
           <p className="text-2xl font-extrabold font-mono-code text-emerald-700">{inwardSeriesSummary.limber}</p>
-          <p className="text-[11px] text-slate-400">AIS & Non-AIS</p>
+          <p className="text-[11px] text-slate-400">Limber Series</p>
         </div>
 
         <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1 col-span-2 sm:col-span-1">

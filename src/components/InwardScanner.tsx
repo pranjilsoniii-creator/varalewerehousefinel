@@ -666,7 +666,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 Battery Packs in this Document ({packRows.length} Packs)
               </h3>
               <p className="text-xs text-slate-500">
-                Enter numeric pack numbers (Auto-detects Ais models by digit length / &gt;= 30000 threshold).
+                Enter pack numbers (Auto-detects model shorthands like FBU, CKD, AIO, K2, LIMBER).
               </p>
             </div>
 

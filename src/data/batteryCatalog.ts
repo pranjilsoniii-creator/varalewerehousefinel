@@ -2,22 +2,16 @@ import { BatteryModelInfo, BatteryPackType, SavedAddress } from '../types';
 
 export const ALL_PACK_TYPES: BatteryPackType[] = [
   'Kanger1.0_AIO',
-  'Kanger1.0_AIO_Ais',
   'Kanger1.0_Gen3',
-  'Kanger1.0_Gen3_Ais',
   'Kanger1.0_CKD',
-  'Kanger1.0_CKD_Ais',
   'Kanger1.0_FBU',
-  'Kanger1.0_FBU_Ais',
   'Kanger2.0',
-  'Kanger2.0_Ais',
   'Kanger3.0',
+  'Limber_Non_Ais',
   'Tamor_ELR',
   'Nova_LRP',
   'Challenger_LR',
   'Challenger_MR',
-  'Limber_Ais',
-  'Limber_Non_Ais',
 ];
 
 export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
@@ -29,17 +23,17 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
     color: '#2563eb',
     badgeBg: 'bg-blue-100 text-blue-800 border-blue-200',
     borderColor: 'border-blue-500',
-    description: 'Kanger 1.0 All-In-One Standard Pack',
+    description: 'Kanger 1.0 All-In-One Pack',
   },
   'Kanger1.0_AIO_Ais': {
     id: 'Kanger1.0_AIO_Ais',
-    name: 'Kanger1.0_AIO_Ais',
-    shortCode: 'K1-AIO-AIS',
+    name: 'Kanger1.0_AIO',
+    shortCode: 'K1-AIO',
     category: 'Kanger Series',
-    color: '#1d4ed8',
-    badgeBg: 'bg-indigo-100 text-indigo-900 border-indigo-200',
-    borderColor: 'border-indigo-500',
-    description: 'Kanger 1.0 All-In-One AIS Compliant Pack (>= 30000)',
+    color: '#2563eb',
+    badgeBg: 'bg-blue-100 text-blue-800 border-blue-200',
+    borderColor: 'border-blue-500',
+    description: 'Kanger 1.0 All-In-One Pack',
   },
   'Kanger1.0_Gen3': {
     id: 'Kanger1.0_Gen3',
@@ -49,17 +43,17 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
     color: '#0284c7',
     badgeBg: 'bg-sky-100 text-sky-800 border-sky-200',
     borderColor: 'border-sky-500',
-    description: 'Kanger 1.0 Gen3 Standard Pack',
+    description: 'Kanger 1.0 Gen3 Pack',
   },
   'Kanger1.0_Gen3_Ais': {
     id: 'Kanger1.0_Gen3_Ais',
-    name: 'Kanger1.0_Gen3_Ais',
-    shortCode: 'K1-GEN3-AIS',
+    name: 'Kanger1.0_Gen3',
+    shortCode: 'K1-GEN3',
     category: 'Kanger Series',
-    color: '#0369a1',
-    badgeBg: 'bg-cyan-100 text-cyan-900 border-cyan-300',
-    borderColor: 'border-cyan-600',
-    description: 'Kanger 1.0 Gen3 AIS Compliant Pack (>= 30000)',
+    color: '#0284c7',
+    badgeBg: 'bg-sky-100 text-sky-800 border-sky-200',
+    borderColor: 'border-sky-500',
+    description: 'Kanger 1.0 Gen3 Pack',
   },
   'Kanger1.0_CKD': {
     id: 'Kanger1.0_CKD',
@@ -69,17 +63,17 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
     color: '#0d9488',
     badgeBg: 'bg-teal-100 text-teal-800 border-teal-200',
     borderColor: 'border-teal-500',
-    description: 'Kanger 1.0 CKD Standard Pack',
+    description: 'Kanger 1.0 CKD Pack',
   },
   'Kanger1.0_CKD_Ais': {
     id: 'Kanger1.0_CKD_Ais',
-    name: 'Kanger1.0_CKD_Ais',
-    shortCode: 'K1-CKD-AIS',
+    name: 'Kanger1.0_CKD',
+    shortCode: 'K1-CKD',
     category: 'Kanger Series',
-    color: '#0f766e',
-    badgeBg: 'bg-teal-100 text-teal-900 border-teal-300',
-    borderColor: 'border-teal-600',
-    description: 'Kanger 1.0 CKD AIS Compliant Pack (>= 30000)',
+    color: '#0d9488',
+    badgeBg: 'bg-teal-100 text-teal-800 border-teal-200',
+    borderColor: 'border-teal-500',
+    description: 'Kanger 1.0 CKD Pack',
   },
   'Kanger1.0_FBU': {
     id: 'Kanger1.0_FBU',
@@ -89,17 +83,17 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
     color: '#059669',
     badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     borderColor: 'border-emerald-500',
-    description: 'Kanger 1.0 Fully Built Unit Standard Pack',
+    description: 'Kanger 1.0 Fully Built Unit Pack',
   },
   'Kanger1.0_FBU_Ais': {
     id: 'Kanger1.0_FBU_Ais',
-    name: 'Kanger1.0_FBU_Ais',
-    shortCode: 'K1-FBU-AIS',
+    name: 'Kanger1.0_FBU',
+    shortCode: 'K1-FBU',
     category: 'Kanger Series',
-    color: '#047857',
-    badgeBg: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-    borderColor: 'border-emerald-600',
-    description: 'Kanger 1.0 FBU AIS Compliant Pack (>= 30000)',
+    color: '#059669',
+    badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    borderColor: 'border-emerald-500',
+    description: 'Kanger 1.0 Fully Built Unit Pack',
   },
   'Kanger2.0': {
     id: 'Kanger2.0',
@@ -109,17 +103,17 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
     color: '#7c3aed',
     badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
     borderColor: 'border-purple-500',
-    description: 'Kanger 2.0 Standard Pack (4 Digits)',
+    description: 'Kanger 2.0 Pack',
   },
   'Kanger2.0_Ais': {
     id: 'Kanger2.0_Ais',
-    name: 'Kanger2.0_Ais',
-    shortCode: 'K2-AIS',
+    name: 'Kanger2.0',
+    shortCode: 'K2',
     category: 'Kanger Series',
-    color: '#6d28d9',
-    badgeBg: 'bg-purple-100 text-purple-900 border-purple-300',
-    borderColor: 'border-purple-600',
-    description: 'Kanger 2.0 AIS Compliant Pack (5 Digits e.g. 11242)',
+    color: '#7c3aed',
+    badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
+    borderColor: 'border-purple-500',
+    description: 'Kanger 2.0 Pack',
   },
   'Kanger3.0': {
     id: 'Kanger3.0',
@@ -173,79 +167,70 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
   },
   'Limber_Ais': {
     id: 'Limber_Ais',
-    name: 'Limber_Ais',
-    shortCode: 'LIM-AIS',
+    name: 'Limber',
+    shortCode: 'LIMBER',
     category: 'Limber',
     color: '#16a34a',
     badgeBg: 'bg-green-100 text-green-800 border-green-200',
     borderColor: 'border-green-500',
-    description: 'Limber AIS Compliant Pack (5 Digits e.g. 11111)',
+    description: 'Limber Pack',
   },
   'Limber_Non_Ais': {
     id: 'Limber_Non_Ais',
-    name: 'Limber_Non_Ais',
-    shortCode: 'LIM-NON',
+    name: 'Limber',
+    shortCode: 'LIMBER',
     category: 'Limber',
-    color: '#65a30d',
-    badgeBg: 'bg-lime-100 text-lime-800 border-lime-200',
-    borderColor: 'border-lime-500',
-    description: 'Limber Standard Non-AIS Pack (4 Digits e.g. 1111, 9999)',
+    color: '#16a34a',
+    badgeBg: 'bg-green-100 text-green-800 border-green-200',
+    borderColor: 'border-green-500',
+    description: 'Limber Pack',
   },
 };
 
 export const MODEL_KEYWORDS = [
-  'K1-AIO-AIS', 'K1-GEN3-AIS', 'K1-CKD-AIS', 'K1-FBU-AIS', 'K2-AIS', 'LIM-AIS', 'LIM-NON',
-  'K1-AIO', 'K1-GEN3', 'K1-CKD', 'K1-FBU', 'K2AIS', 'K1AIS', 'GEN3-AIS', 'CKD-AIS', 'FBU-AIS',
-  'NONAIS', 'NON-AIS', 'LIMBER', 'GEN3', 'TAMOR', 'NOVA', 'CHALLENGER',
-  'FBU', 'CKD', 'AIO', 'G3', 'K2', 'K3', 'K1', 'AIS'
+  'K1-AIO', 'K1-GEN3', 'K1-CKD', 'K1-FBU', 'K2', 'K3', 'LIMBER',
+  'GEN3', 'TAMOR', 'NOVA', 'CHALLENGER',
+  'FBU', 'CKD', 'AIO', 'G3', 'K1'
 ];
 
 /**
- * Intelligent Shorthand & Digit-Threshold Model Auto-Derivation Helper
+ * Intelligent Shorthand Model Auto-Derivation Helper
  * Rules:
- * - FBU / CKD / GEN3 / AIO keywords anywhere in string are auto-detected.
- * - Limber: 4 digits -> Limber_Non_Ais, 5 digits -> Limber_Ais
- * - Kanger 2.0: 4 digits -> Kanger2.0, 5 digits -> Kanger2.0_Ais
- * - Kanger 1.0 (AIO / Gen3 / CKD / FBU): serial >= 30000 -> _Ais variant
+ * - FBU -> Kanger1.0_FBU
+ * - CKD -> Kanger1.0_CKD
+ * - GEN3 / G3 -> Kanger1.0_Gen3
+ * - Kanger 2.0 / K2 -> Kanger2.0
+ * - Limber -> Limber_Non_Ais (Limber)
+ * - Kanger 3.0 / K3 -> Kanger3.0
+ * - Tamor / Nova / Challenger -> Tamor_ELR / Nova_LRP / Challenger_LR / Challenger_MR
+ * - AIO / Default -> Kanger1.0_AIO
  */
 export function deriveModelFromShorthand(serial: string, shorthand: string = 'AIO'): BatteryPackType {
   const rawCombined = `${serial || ''} ${shorthand || ''}`.toUpperCase();
-  const cleanSerial = (serial || '').replace(/[^0-9]/g, '');
-  const serialNum = parseInt(cleanSerial, 10) || 0;
-  const digitCount = cleanSerial.length;
 
   // 1. Check for FBU
   if (rawCombined.includes('FBU')) {
-    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_FBU_Ais' : 'Kanger1.0_FBU';
+    return 'Kanger1.0_FBU';
   }
 
   // 2. Check for CKD
   if (rawCombined.includes('CKD')) {
-    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_CKD_Ais' : 'Kanger1.0_CKD';
+    return 'Kanger1.0_CKD';
   }
 
   // 3. Check for GEN3
   if (rawCombined.includes('GEN3') || rawCombined.includes('GEN 3') || rawCombined.includes('G3')) {
-    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_Gen3_Ais' : 'Kanger1.0_Gen3';
+    return 'Kanger1.0_Gen3';
   }
 
   // 4. Check for Kanger 2.0 / K2
   if (rawCombined.includes('KANGER2') || rawCombined.includes('K2') || rawCombined.includes('KANGER 2')) {
-    if (rawCombined.includes('AIS') || digitCount >= 5) {
-      return 'Kanger2.0_Ais';
-    }
     return 'Kanger2.0';
   }
 
   // 5. Check for Limber
   if (rawCombined.includes('LIMBER') || rawCombined.includes('LIM')) {
-    if (rawCombined.includes('NON') || rawCombined.includes('NONAIS') || rawCombined.includes('NON-AIS')) {
-      return 'Limber_Non_Ais';
-    }
-    if (rawCombined.includes('AIS')) {
-      return 'Limber_Ais';
-    }
-    return digitCount >= 5 ? 'Limber_Ais' : 'Limber_Non_Ais';
+    return 'Limber_Non_Ais';
   }
 
   // 6. Check for Kanger 3.0 / K3
@@ -261,15 +246,7 @@ export function deriveModelFromShorthand(serial: string, shorthand: string = 'AI
 
   // 8. Check for AIO
   if (rawCombined.includes('AIO') || rawCombined.includes('ALL IN ONE')) {
-    return (serialNum >= 30000 || rawCombined.includes('AIS')) ? 'Kanger1.0_AIO_Ais' : 'Kanger1.0_AIO';
-  }
-
-  // 9. Numeric threshold fallback if no explicit letters:
-  if (serialNum >= 30000) {
-    return 'Kanger1.0_AIO_Ais';
-  }
-  if (digitCount === 5) {
-    return 'Kanger2.0_Ais';
+    return 'Kanger1.0_AIO';
   }
 
   return 'Kanger1.0_AIO';

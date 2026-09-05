@@ -336,7 +336,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
 
       {/* Unified Executive Series Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Kanger 1.0 Unified Card (AIO, Gen3, CKD, FBU + AIS Counted Together) */}
+        {/* Kanger 1.0 Unified Card (AIO, Gen3, CKD, FBU) */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3 hover:border-blue-300 transition">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
@@ -349,10 +349,10 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
             <p className="text-xs text-slate-500 mt-0.5">Available in Plant</p>
           </div>
           <div className="pt-2 border-t border-slate-100 grid grid-cols-4 gap-1 text-[10px] text-slate-600 font-mono-code">
-            <div>AIO: {modelCounts['Kanger1.0_AIO']?.available || 0}</div>
-            <div>Gen3: {modelCounts['Kanger1.0_Gen3']?.available || 0}</div>
-            <div>CKD: {modelCounts['Kanger1.0_CKD']?.available || 0}</div>
-            <div>FBU: {modelCounts['Kanger1.0_FBU']?.available || 0}</div>
+            <div>AIO: {(modelCounts['Kanger1.0_AIO']?.available || 0) + (modelCounts['Kanger1.0_AIO_Ais']?.available || 0)}</div>
+            <div>Gen3: {(modelCounts['Kanger1.0_Gen3']?.available || 0) + (modelCounts['Kanger1.0_Gen3_Ais']?.available || 0)}</div>
+            <div>CKD: {(modelCounts['Kanger1.0_CKD']?.available || 0) + (modelCounts['Kanger1.0_CKD_Ais']?.available || 0)}</div>
+            <div>FBU: {(modelCounts['Kanger1.0_FBU']?.available || 0) + (modelCounts['Kanger1.0_FBU_Ais']?.available || 0)}</div>
           </div>
         </div>
 
@@ -362,33 +362,33 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
             <span className="text-xs font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
               Kanger 2.0 Series
             </span>
-            <span className="text-[11px] font-mono-code text-slate-500">Standard & AIS</span>
+            <span className="text-[11px] font-mono-code text-slate-500">Kanger 2.0 Model</span>
           </div>
           <div>
             <p className="text-3xl font-extrabold font-mono-code text-slate-900">{kanger2Unified.available}</p>
             <p className="text-xs text-slate-500 mt-0.5">Available in Plant</p>
           </div>
           <div className="pt-2 border-t border-slate-100 flex justify-between text-[11px] text-slate-600 font-mono-code">
-            <span>Standard: {modelCounts['Kanger2.0']?.available || 0}</span>
-            <span>AIS (5D): {modelCounts['Kanger2.0_Ais']?.available || 0}</span>
+            <span>Total Kanger 2.0: {kanger2Unified.available}</span>
+            <span>Dispatched: {kanger2Unified.dispatched}</span>
           </div>
         </div>
 
-        {/* Limber Unified Card (Ais + Non-Ais Counted as 1 Model) */}
+        {/* Limber Unified Card */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3 hover:border-emerald-300 transition">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
               Limber Series
             </span>
-            <span className="text-[11px] font-mono-code text-slate-500">Combined Model</span>
+            <span className="text-[11px] font-mono-code text-slate-500">Limber Standard Model</span>
           </div>
           <div>
             <p className="text-3xl font-extrabold font-mono-code text-slate-900">{limberUnified.available}</p>
             <p className="text-xs text-slate-500 mt-0.5">Available in Plant</p>
           </div>
           <div className="pt-2 border-t border-slate-100 flex justify-between text-[11px] text-slate-600 font-mono-code">
-            <span>Non-AIS: {modelCounts['Limber_Non_Ais']?.available || 0}</span>
-            <span>AIS: {modelCounts['Limber_Ais']?.available || 0}</span>
+            <span>Total Limber: {limberUnified.available}</span>
+            <span>Dispatched: {limberUnified.dispatched}</span>
           </div>
         </div>
 
@@ -431,7 +431,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Mode 1 (Serial / Threshold)
+              Mode 1 (Search by Serial)
             </button>
             <button
               type="button"
@@ -469,7 +469,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   type="text"
                   value={search1PackNumber}
                   onChange={(e) => setSearch1PackNumber(e.target.value)}
-                  placeholder="Enter pack serial (e.g. 7428) or threshold query (e.g. '>= 30000', '30000+')..."
+                  placeholder="Enter pack serial number (e.g. 7428, 2191)..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-10 pr-4 py-2.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
