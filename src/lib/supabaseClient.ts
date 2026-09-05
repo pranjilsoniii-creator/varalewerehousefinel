@@ -94,6 +94,13 @@ export function resetSupabaseClient() {
 // ==========================================
 
 export function mapRowToPack(row: any): BatteryPack {
+  const rawNotes = row.notes || '';
+  const diffMatch = rawNotes.match(/\[DIFF-NO:\s*Challan\s*#([^|\]]+)(?:\|\s*Reason:\s*([^\]]+))?\]/);
+  const isDifferentSerial = Boolean(diffMatch || row.is_different_serial);
+  const challanPackNumber = diffMatch ? diffMatch[1]?.trim() : (row.challan_pack_number || undefined);
+  const mismatchReason = diffMatch ? diffMatch[2]?.trim() : (row.mismatch_reason || undefined);
+  const pendingReconcile = Boolean(row.pending_inward_reconciliation || rawNotes.includes('[PendingReconcileUntil:'));
+
   return {
     id: row.id,
     packNumber: String(row.pack_number || ''),
@@ -101,7 +108,7 @@ export function mapRowToPack(row: any): BatteryPack {
     status: row.status || 'INWARD_AREA',
     locationArea: row.location_area || 'Inward Area',
     currentLocation: row.current_location || row.location_area || 'Inward Area',
-    inwardDate: row.inward_date || new Date().toISOString(),
+    inwardDate: row.inward_date || '',
     documentNo: row.document_no || '',
     dealershipName: row.dealership_name || '',
     receivedState: row.received_state || 'Maharashtra',
@@ -123,10 +130,10 @@ export function mapRowToPack(row: any): BatteryPack {
     dispatchTransporter: row.dispatch_transporter || row.transport_name || undefined,
     sourceType: row.source_type || 'INWARD',
     isWithoutPlate: Boolean(row.is_without_plate),
-    isDifferentSerial: Boolean(row.is_different_serial),
-    challanPackNumber: row.challan_pack_number || undefined,
-    mismatchReason: row.mismatch_reason || undefined,
-    pendingInwardReconciliation: Boolean(row.pending_inward_reconciliation),
+    isDifferentSerial: isDifferentSerial,
+    challanPackNumber: challanPackNumber,
+    mismatchReason: mismatchReason,
+    pendingInwardReconciliation: pendingReconcile,
     reconciliationValidUntil: row.reconciliation_valid_until || undefined,
     reconciledAt: row.reconciled_at || undefined,
     dispatchToAddress: row.dispatch_to_address || undefined,
@@ -137,14 +144,23 @@ export function mapRowToPack(row: any): BatteryPack {
 }
 
 export function mapPackToRow(p: BatteryPack): any {
+  // Cleanly compose discrepancy notes if present
+  let composedNotes = p.notes || '';
+  if (p.isDifferentSerial && !composedNotes.includes('[DIFF-NO:')) {
+    composedNotes = `[DIFF-NO: Challan #${p.challanPackNumber || '—'} | Reason: ${p.mismatchReason || 'Serial mismatch'}] ${composedNotes}`.trim();
+  }
+  if (p.pendingInwardReconciliation && !composedNotes.includes('[PendingReconcileUntil:')) {
+    composedNotes = `[PendingReconcileUntil: ${p.reconciliationValidUntil || ''}] ${composedNotes}`.trim();
+  }
+
   return {
     id: p.id,
-    pack_number: p.packNumber,
-    pack_type: p.packType,
-    status: p.status,
+    pack_number: String(p.packNumber || '').trim(),
+    pack_type: p.packType || 'Kanger1.0_AIO',
+    status: p.status || 'INWARD_AREA',
     location_area: p.locationArea || 'Inward Area',
     current_location: p.currentLocation || p.locationArea || 'Inward Area',
-    inward_date: p.inwardDate || new Date().toISOString(),
+    inward_date: p.inwardDate ? p.inwardDate : null,
     document_no: p.documentNo || '',
     dealership_name: p.dealershipName || '',
     received_state: p.receivedState || 'Maharashtra',
@@ -164,17 +180,11 @@ export function mapPackToRow(p: BatteryPack): any {
     dispatch_lr_no: p.dispatchLrNo || null,
     dispatch_vehicle_no: p.dispatchVehicleNo || null,
     dispatch_transporter: p.dispatchTransporter || null,
+    dispatch_to_customer: p.dispatchToCustomer || null,
+    dispatch_to_address: p.dispatchToAddress || null,
     source_type: p.sourceType || 'INWARD',
     is_without_plate: Boolean(p.isWithoutPlate),
-    is_different_serial: Boolean(p.isDifferentSerial),
-    challan_pack_number: p.challanPackNumber || null,
-    mismatch_reason: p.mismatchReason || null,
-    pending_inward_reconciliation: Boolean(p.pendingInwardReconciliation),
-    reconciliation_valid_until: p.reconciliationValidUntil || null,
-    reconciled_at: p.reconciledAt || null,
-    dispatch_to_address: p.dispatchToAddress || null,
-    dispatch_to_customer: p.dispatchToCustomer || null,
-    notes: p.notes || null,
+    notes: composedNotes || null,
     movement_history: p.movementHistory || [],
     updated_at: new Date().toISOString(),
   };
