@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, User, Key, ShieldCheck, AlertCircle, Eye, EyeOff, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
-import { useAuth, DEFAULT_USERS } from '../context/AuthContext';
+import { Lock, User, Key, ShieldCheck, AlertCircle, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const LoginScreen: React.FC = () => {
   const { login } = useAuth();
@@ -14,7 +14,7 @@ export const LoginScreen: React.FC = () => {
     setError(null);
 
     if (!username.trim()) {
-      setError('Please enter your Staff Username.');
+      setError('Please enter your Staff Username / Login ID.');
       return;
     }
     if (!password.trim()) {
@@ -24,14 +24,8 @@ export const LoginScreen: React.FC = () => {
 
     const success = login(username.trim(), password.trim());
     if (!success) {
-      setError('Invalid username or password. Please verify credentials or select an account below.');
+      setError('Invalid username or password. Please verify your confidential credentials or contact Super Admin.');
     }
-  };
-
-  const handleQuickSelect = (u: typeof DEFAULT_USERS[0]) => {
-    setUsername(u.username);
-    setPassword(u.password || '');
-    setError(null);
   };
 
   return (
@@ -63,7 +57,7 @@ export const LoginScreen: React.FC = () => {
       </div>
 
       {/* Center Login Box */}
-      <div className="max-w-lg mx-auto w-full py-6 space-y-4">
+      <div className="max-w-md mx-auto w-full py-8 space-y-4">
         <div className="bg-white text-slate-900 rounded-2xl p-6 sm:p-8 shadow-2xl border border-slate-100 space-y-5">
           <div className="text-center space-y-2 border-b border-slate-100 pb-4">
             <div className="h-14 w-14 mx-auto bg-slate-50 p-2 rounded-2xl border border-slate-200 flex items-center justify-center shadow-2xs">
@@ -100,15 +94,16 @@ export const LoginScreen: React.FC = () => {
                     setUsername(e.target.value);
                     setError(null);
                   }}
-                  placeholder="Enter staff username..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                  placeholder="Enter your authorized staff username..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none shadow-xs"
                   required
+                  autoFocus
                 />
               </div>
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Password</label>
+              <label className="block font-bold text-slate-700 mb-1">Confidential Password</label>
               <div className="relative">
                 <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
@@ -118,8 +113,8 @@ export const LoginScreen: React.FC = () => {
                     setPassword(e.target.value);
                     setError(null);
                   }}
-                  placeholder="Enter your password..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                  placeholder="Enter your confidential password..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none shadow-xs"
                   required
                 />
                 <button
@@ -141,32 +136,17 @@ export const LoginScreen: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick-Fill 1-Click Login Testing Panel */}
-          <div className="pt-3 border-t border-slate-100 space-y-2">
-            <p className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>1-Click Test Login Accounts:</span>
+          <div className="pt-3 border-t border-slate-100 text-center">
+            <p className="text-[11px] text-slate-400">
+              Authorized personnel only. All access is logged and verified with Tata WMS Security.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px]">
-              {DEFAULT_USERS.map((u) => (
-                <button
-                  key={u.username}
-                  type="button"
-                  onClick={() => handleQuickSelect(u)}
-                  className="p-2 text-left bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg transition cursor-pointer space-y-0.5"
-                >
-                  <p className="font-bold text-slate-900 truncate">{u.name.split(' ')[0]}</p>
-                  <p className="text-[10px] text-blue-600 uppercase font-bold tracking-wider">{u.role}</p>
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="max-w-6xl mx-auto w-full text-center text-slate-500 text-xs py-2">
-        <p>© 2026 Tata AutoComp Systems Limited. All rights reserved. Varale Plant (B300).</p>
+      <div className="max-w-6xl mx-auto w-full text-center py-2 text-[11px] text-slate-500 font-mono-code">
+        © 2026 Tata AutoComp Systems Limited. All rights reserved. Varale Plant (B300).
       </div>
     </div>
   );
