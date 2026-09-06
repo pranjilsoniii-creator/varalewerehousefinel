@@ -12,6 +12,17 @@
   .font-display {
     font-family: 'Outfit', sans-serif;
   }
+
+  /* Remove number input spinners / arrows */
+  input[type=number]::-webkit-inner-spin-button, 
+  input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
 /* Custom scrollbar for clean professional workspace */
