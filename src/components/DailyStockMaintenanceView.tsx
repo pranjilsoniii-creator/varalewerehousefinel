@@ -148,33 +148,55 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
 
   // Sync editRows when selectedDate or currentRecord changes
   useEffect(() => {
-    if (currentRecord) {
-      setEditRows(
-        currentRecord.rows.map((r) => ({
-          sr: r.sr,
-          packName: r.packName,
-          openingStock: r.openingStock,
-          receiveQty: r.receiveQty,
-          totalAvailable: r.totalAvailable,
-          dispatchQty: r.dispatchQty,
-          closingStock: r.closingStock,
-          maintainedBy: r.maintainedBy || currentOperatorName,
-        }))
+    const existingRows = currentRecord?.rows || [];
+    const prevClosingRows = previousRecord?.rows;
+
+    // ALWAYS ensure all 10 standard items (Sr. 1 to 10) are present in the table!
+    const all10Rows: EditableStockRow[] = STANDARD_DAILY_PACK_NAMES.map((packName, idx) => {
+      const match = existingRows.find(
+        (r: any) => r.packName.trim().toLowerCase() === packName.trim().toLowerCase()
       );
+
+      if (match) {
+        const op = Number(match.openingStock) || 0;
+        const rc = Number(match.receiveQty) || 0;
+        const dp = Number(match.dispatchQty) || 0;
+        return {
+          sr: idx + 1,
+          packName: packName,
+          openingStock: match.openingStock,
+          receiveQty: match.receiveQty,
+          totalAvailable: match.totalAvailable ?? (op + rc),
+          dispatchQty: match.dispatchQty,
+          closingStock: match.closingStock ?? (op + rc - dp),
+          maintainedBy: match.maintainedBy || currentRecord?.createdByName || currentOperatorName,
+        };
+      }
+
+      // If not in current record, carry forward previous closing stock (or 0)
+      const prevMatch = prevClosingRows?.find(
+        (r: any) => r.packName.trim().toLowerCase() === packName.trim().toLowerCase()
+      );
+      const prevClosing = prevMatch ? Number(prevMatch.closingStock) || 0 : 0;
+
+      return {
+        sr: idx + 1,
+        packName: packName,
+        openingStock: prevClosing,
+        receiveQty: 0,
+        totalAvailable: prevClosing,
+        dispatchQty: 0,
+        closingStock: prevClosing,
+        maintainedBy: currentOperatorName,
+      };
+    });
+
+    setEditRows(all10Rows);
+
+    if (currentRecord) {
       setIsEditing(false);
     } else {
-      // Initialize new rows with opening stock from previous record
-      const prevClosingRows = previousRecord?.rows;
-      const initialRows = createDefaultDailyStockRows(currentOperatorName, prevClosingRows);
-      setEditRows(
-        initialRows.map((r) => ({
-          ...r,
-          openingStock: r.openingStock,
-          receiveQty: r.receiveQty,
-          dispatchQty: r.dispatchQty,
-        }))
-      );
-      setIsEditing(true); // default to edit mode if no record exists yet
+      setIsEditing(true);
     }
   }, [selectedDate, currentRecord, previousRecord, currentOperatorName]);
 

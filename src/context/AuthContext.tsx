@@ -146,18 +146,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return DEFAULT_USERS;
   });
 
-  // Strict Login Wall: Default to null if no valid saved session
+  // Session-Based Login Wall: Stored in sessionStorage so closing tab/browser immediately terminates session
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
-      const saved = localStorage.getItem('tata_wms_current_user_v3');
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      // Clear legacy permanent localStorage login for strict security
+      localStorage.removeItem('tata_wms_current_user_v3');
+      
+      const sessionSaved = sessionStorage.getItem('tata_wms_session_user_v1');
+      if (sessionSaved) {
+        const parsed = JSON.parse(sessionSaved);
         if (parsed && parsed.username) {
           return parsed;
         }
       }
     } catch (e) {}
-    return null; // Strict Login Screen
+    return null; // Strict Login Screen on browser open
   });
 
   // Super Admin Maintenance Mode State
@@ -174,12 +177,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('tata_wms_users_v3', JSON.stringify(users));
   }, [users]);
 
+  // Synchronize active session with sessionStorage only (destroys on tab close)
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('tata_wms_current_user_v3', JSON.stringify(currentUser));
+      sessionStorage.setItem('tata_wms_session_user_v1', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('tata_wms_current_user_v3');
+      sessionStorage.removeItem('tata_wms_session_user_v1');
     }
+  }, [currentUser]);
+
+  // 15-Minute Inactivity Auto-Logout Security Watchdog
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let inactivityTimer: any;
+    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minutes
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        console.warn('Session auto-locked due to 15 minutes of inactivity.');
+        setCurrentUser(null);
+        sessionStorage.removeItem('tata_wms_session_user_v1');
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    resetTimer(); // initialize timer
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, resetTimer));
+    };
   }, [currentUser]);
 
   const login = (username: string, password?: string): boolean => {
@@ -204,11 +235,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setCurrentUser(user);
+    sessionStorage.setItem('tata_wms_session_user_v1', JSON.stringify(user));
     return true;
   };
 
   const logout = () => {
     setCurrentUser(null);
+    sessionStorage.removeItem('tata_wms_session_user_v1');
     localStorage.removeItem('tata_wms_current_user_v3');
   };
 
