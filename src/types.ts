@@ -273,3 +273,31 @@ export interface InvoiceData {
   igst: number;
   grandTotal: number;
 }
+
+export interface DailyStockRow {
+  sr: number;
+  packName: string;
+  openingStock: number;
+  receiveQty: number;
+  totalAvailable: number; // openingStock + receiveQty
+  dispatchQty: number;
+  closingStock: number;   // totalAvailable - dispatchQty
+  maintainedBy: string;   // e.g. "Jitendra Soni" or logged in operator
+}
+
+export interface DailyStockRecord {
+  id: string;             // e.g. "stock-2026-08-08"
+  date: string;           // "YYYY-MM-DD" e.g. "2026-08-08"
+  displayDate?: string;   // "DD/MM/YYYY" e.g. "08/08/2026"
+  rows: DailyStockRow[];
+  totalOpeningStock: number;
+  totalReceivedToday: number;
+  totalDispatchToday: number;
+  totalClosingStock: number;
+  createdAt: string;
+  updatedAt: string;
+  createdByName: string;
+  createdByUsername: string;
+  isLocked?: boolean;
+}
+

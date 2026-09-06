@@ -6,6 +6,7 @@ import {
   Search,
   Truck,
   BarChart3,
+  Calendar,
   Database,
   Menu,
   X,
@@ -99,6 +100,12 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Analytics',
       icon: BarChart3,
       permissionKey: 'canAnalytics' as const,
+    },
+    {
+      id: 'DAILY_STOCK',
+      label: 'Daily Stock Maintance',
+      icon: Calendar,
+      permissionKey: 'canViewStock' as const,
     },
   ];
 

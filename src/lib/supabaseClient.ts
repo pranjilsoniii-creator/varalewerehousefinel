@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { BatteryPack, DispatchLot, InwardShipmentRecord } from '../types';
+import { BatteryPack, DispatchLot, InwardShipmentRecord, DailyStockRecord } from '../types';
 
 // Hardcoded verified Supabase credentials for Tata AutoComp Project
 const DEFAULT_SUPABASE_URL = 'https://eovoqayzvspkpzwpxxic.supabase.co';
@@ -432,3 +432,98 @@ export async function deleteLotFromCloud(lotId: string): Promise<boolean> {
     return false;
   }
 }
+
+// -------------------------------------------------------------
+// Daily Stock Maintenance Cloud Sync & Mapper Functions
+// -------------------------------------------------------------
+export function mapRowToDailyStock(row: any): DailyStockRecord {
+  const rows = Array.isArray(row.rows)
+    ? row.rows
+    : typeof row.rows === 'string'
+    ? JSON.parse(row.rows)
+    : [];
+
+  return {
+    id: row.id || `stock-${row.date}`,
+    date: row.date || new Date().toISOString().slice(0, 10),
+    displayDate: row.display_date || row.displayDate,
+    rows: rows,
+    totalOpeningStock: Number(row.total_opening_stock ?? row.totalOpeningStock) || 0,
+    totalReceivedToday: Number(row.total_received_today ?? row.totalReceivedToday) || 0,
+    totalDispatchToday: Number(row.total_dispatch_today ?? row.totalDispatchToday) || 0,
+    totalClosingStock: Number(row.total_closing_stock ?? row.totalClosingStock) || 0,
+    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+    updatedAt: row.updated_at || row.updatedAt || new Date().toISOString(),
+    createdByName: row.created_by_name || row.createdByName || 'Jitendra Soni',
+    createdByUsername: row.created_by_username || row.createdByUsername || 'operator',
+    isLocked: Boolean(row.is_locked ?? row.isLocked),
+  };
+}
+
+export function mapDailyStockToRow(rec: DailyStockRecord): any {
+  return {
+    id: rec.id,
+    date: rec.date,
+    display_date: rec.displayDate || rec.date,
+    rows: rec.rows,
+    total_opening_stock: rec.totalOpeningStock,
+    total_received_today: rec.totalReceivedToday,
+    total_dispatch_today: rec.totalDispatchToday,
+    total_closing_stock: rec.totalClosingStock,
+    created_at: rec.createdAt,
+    updated_at: rec.updatedAt,
+    created_by_name: rec.createdByName,
+    created_by_username: rec.createdByUsername,
+    is_locked: rec.isLocked || false,
+  };
+}
+
+export async function fetchDailyStockFromCloud(): Promise<DailyStockRecord[] | null> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return null;
+    const { data, error } = await sb.from('daily_stock_records').select('*').order('date', { ascending: false });
+    if (error) {
+      console.warn('Supabase fetch daily stock warning:', error.message);
+      return null;
+    }
+    return (data || []).map(mapRowToDailyStock);
+  } catch (e) {
+    console.warn('Supabase fetch daily stock exception:', e);
+    return null;
+  }
+}
+
+export async function syncDailyStockToCloud(record: DailyStockRecord): Promise<boolean> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return false;
+    const row = mapDailyStockToRow(record);
+    const { error } = await sb.from('daily_stock_records').upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.warn('Supabase daily stock sync error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase daily stock sync exception:', e);
+    return false;
+  }
+}
+
+export async function deleteDailyStockFromCloud(recordId: string): Promise<boolean> {
+  try {
+    const sb = getSupabase();
+    if (!sb || !recordId) return false;
+    const { error } = await sb.from('daily_stock_records').delete().eq('id', recordId);
+    if (error) {
+      console.warn('Supabase delete daily stock error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase delete daily stock exception:', e);
+    return false;
+  }
+}
+

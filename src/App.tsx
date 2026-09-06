@@ -7,6 +7,7 @@ import { TotalStockView } from './components/TotalStockView';
 import { LineInspectorView } from './components/LineInspectorView';
 import { DispatchCart } from './components/DispatchCart';
 import { AnalyticsView } from './components/AnalyticsView';
+import { DailyStockMaintenanceView } from './components/DailyStockMaintenanceView';
 import { PackDetailsModal } from './components/PackDetailsModal';
 import { SupabaseSyncModal } from './components/SupabaseSyncModal';
 import { LoginModal } from './components/LoginModal';
@@ -19,11 +20,13 @@ import {
   BatteryPack,
   DispatchLot,
   InwardShipmentRecord,
+  DailyStockRecord,
 } from './types';
 import {
   createInitialWarehousePacks,
   createInitialDispatchLots,
   createInitialInwardShipments,
+  createInitialDailyStockRecords,
   getStoredWarehouseLines,
   saveStoredWarehouseLines,
 } from './data/seedWarehouse';
@@ -32,13 +35,17 @@ import {
   fetchPacksFromCloud,
   fetchInwardsFromCloud,
   fetchLotsFromCloud,
+  fetchDailyStockFromCloud,
   syncPacksToCloud,
   syncLotToCloud,
   syncInwardToCloud,
+  syncDailyStockToCloud,
   deletePackFromCloud,
+  deleteDailyStockFromCloud,
   mapRowToPack,
   mapRowToInward,
   mapRowToLot,
+  mapRowToDailyStock,
 } from './lib/supabaseClient';
 import { useAuth } from './context/AuthContext';
 import { Wrench, ShieldAlert } from 'lucide-react';
@@ -53,6 +60,7 @@ function getTabFromPath(path: string): string {
   if (cleanPath === 'lines' || cleanPath === 'warehouse-lines') return 'LINE_INSPECTOR';
   if (cleanPath === 'dispatch' || cleanPath === 'dispatch-staging') return 'DISPATCH_CART';
   if (cleanPath === 'analytics' || cleanPath === 'reports') return 'ANALYTICS';
+  if (cleanPath === 'daily-stock' || cleanPath === 'daily-stock-maintenance' || cleanPath === 'stock-maintenance') return 'DAILY_STOCK';
   return 'DASHBOARD';
 }
 
@@ -72,6 +80,8 @@ function getPathFromTab(tab: string): string {
       return '/dispatch';
     case 'ANALYTICS':
       return '/analytics';
+    case 'DAILY_STOCK':
+      return '/daily-stock';
     default:
       return '/dashboard';
   }
@@ -124,6 +134,16 @@ export function App() {
     return createInitialDispatchLots();
   });
 
+  const [dailyStockRecords, setDailyStockRecords] = useState<DailyStockRecord[]>(() => {
+    const saved = localStorage.getItem('tata_wms_daily_stock_v1');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return createInitialDailyStockRecords();
+  });
+
   const [warehouseLines, setWarehouseLines] = useState<string[]>(() => {
     return getStoredWarehouseLines();
   });
@@ -164,6 +184,10 @@ export function App() {
   }, [dispatchLots]);
 
   useEffect(() => {
+    localStorage.setItem('tata_wms_daily_stock_v1', JSON.stringify(dailyStockRecords));
+  }, [dailyStockRecords]);
+
+  useEffect(() => {
     saveStoredWarehouseLines(warehouseLines);
   }, [warehouseLines]);
 
@@ -171,10 +195,11 @@ export function App() {
   const refreshFromCloud = useCallback(async () => {
     setIsCloudSyncing(true);
     try {
-      const [cloudPacks, cloudInwards, cloudLots] = await Promise.all([
+      const [cloudPacks, cloudInwards, cloudLots, cloudDailyStock] = await Promise.all([
         fetchPacksFromCloud(),
         fetchInwardsFromCloud(),
         fetchLotsFromCloud(),
+        fetchDailyStockFromCloud(),
       ]);
 
       if (cloudPacks !== null) {
@@ -185,6 +210,9 @@ export function App() {
       }
       if (cloudLots !== null) {
         setDispatchLots(cloudLots);
+      }
+      if (cloudDailyStock !== null && cloudDailyStock.length > 0) {
+        setDailyStockRecords(cloudDailyStock);
       }
       setLastSyncTime(new Date());
       setIsCloudConnected(true);
@@ -279,6 +307,31 @@ export function App() {
             const deletedId = payload.old?.id || payload.new?.id;
             if (deletedId) {
               setDispatchLots((prev) => prev.filter((l) => l.id !== deletedId));
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_stock_records' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newRec = mapRowToDailyStock(payload.new);
+            setDailyStockRecords((prev) => {
+              if (prev.some((r) => r.id === newRec.id || r.date === newRec.date)) {
+                return prev.map((r) => (r.id === newRec.id || r.date === newRec.date ? newRec : r));
+              }
+              return [newRec, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedRec = mapRowToDailyStock(payload.new);
+            setDailyStockRecords((prev) =>
+              prev.map((r) => (r.id === updatedRec.id || r.date === updatedRec.date ? updatedRec : r))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.id || payload.new?.id;
+            if (deletedId) {
+              setDailyStockRecords((prev) => prev.filter((r) => r.id !== deletedId));
             }
           }
         }
@@ -667,6 +720,35 @@ export function App() {
     }
   };
 
+  // Handler: Save Daily Stock Maintenance Record
+  const handleSaveDailyStockRecord = async (record: DailyStockRecord) => {
+    setDailyStockRecords((prev) => {
+      const idx = prev.findIndex((r) => r.id === record.id || r.date === record.date);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = record;
+        return copy;
+      }
+      return [record, ...prev];
+    });
+
+    try {
+      await syncDailyStockToCloud(record);
+    } catch (err) {
+      console.warn('Cloud sync on daily stock record:', err);
+    }
+  };
+
+  // Handler: Delete Daily Stock Maintenance Record
+  const handleDeleteDailyStockRecord = async (recordId: string) => {
+    setDailyStockRecords((prev) => prev.filter((r) => r.id !== recordId));
+    try {
+      await deleteDailyStockFromCloud(recordId);
+    } catch (err) {
+      console.warn('Cloud sync on delete daily stock record:', err);
+    }
+  };
+
   // Derived state subsets
   const totalActiveStorage = packs.filter((p) => p.status === 'IN_STORAGE').length;
   const stagedCartPacks = packs.filter((p) => p.status === 'IN_DISPATCH_AREA');
@@ -850,6 +932,14 @@ export function App() {
                 window.location.reload();
               }
             }}
+          />
+        )}
+
+        {activeTab === 'DAILY_STOCK' && hasPermission('canViewStock') && (
+          <DailyStockMaintenanceView
+            dailyStockRecords={dailyStockRecords}
+            onSaveDailyStockRecord={handleSaveDailyStockRecord}
+            onDeleteDailyStockRecord={handleDeleteDailyStockRecord}
           />
         )}
       </main>
