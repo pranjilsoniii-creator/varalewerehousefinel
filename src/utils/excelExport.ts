@@ -58,6 +58,46 @@ export function exportInwardShipmentsToExcel(shipments: InwardShipmentRecord[], 
   XLSX.writeFile(wb, filename);
 }
 
+export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename = 'Tata_Inward_Packs_Ledger.xlsx') {
+  const data = packs.map((p, index) => {
+    const model = BATTERY_MODELS[p.packType];
+    const statusLabel = p.status === 'PENDING_APPROVAL'
+      ? 'Pending Supervisor Approval'
+      : p.status === 'IN_STORAGE'
+      ? `Allocated to Lines (Line ${p.lineId || 1})`
+      : 'Inward Dock';
+
+    return {
+      'Sr No': index + 1,
+      'Pack Number / Physical Serial': p.packNumber,
+      'Plate Status': p.isWithoutPlate ? 'Without Plate (NP)' : 'Normal Plate',
+      'Serial Mismatch (Diff No)': p.isDifferentSerial ? 'YES' : 'NO',
+      'Challan Document Serial': p.challanPackNumber || '—',
+      'Mismatch Reason': p.mismatchReason || '—',
+      'Battery Model': model?.name || p.packType,
+      'Model Series': model?.category || 'Kanger Series',
+      'Document / Challan No': p.documentNo || '—',
+      'Dealership / Source Supplier': p.dealershipName || '—',
+      'Received State & City': p.receivedState || 'Maharashtra',
+      'Transporter Carrier': p.transportName || '—',
+      'Inward Date': p.inwardDate ? new Date(p.inwardDate).toLocaleString('en-IN') : '—',
+      'Tata Inward Stamp Verified': p.hasInwardStamp ? 'YES' : 'NO',
+      'Current Status': statusLabel,
+      'Location Area': p.status === 'IN_STORAGE'
+        ? `Line ${p.lineId} (R-${p.rackNumber || 1}, Slot ${p.rackSlot || 1})`
+        : (p.locationArea || 'Inward Area'),
+      'Inwarded By Operator': p.inwardBy || '—',
+      'Approved By': p.inwardApprovedBy || '—',
+      'Remark / Notes': p.remark || '',
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inward Packs Ledger');
+  XLSX.writeFile(wb, filename);
+}
+
 export function exportDispatchLotsToExcel(lots: DispatchLot[], filename = 'Tata_Battery_Dispatch_Lots.xlsx') {
   const rows: any[] = [];
   

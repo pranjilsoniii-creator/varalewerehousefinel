@@ -84,36 +84,78 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Dynamic Suggestions derived strictly from saved records & catalog directory
-  const { dealershipSuggestions, stateSuggestions, citySuggestions } = useMemo(() => {
+  const { dealershipSuggestions, stateSuggestions, citySuggestions, dealershipInfoMap } = useMemo(() => {
     const dealerSet = new Set<string>();
     const stateSet = new Set<string>();
     const citySet = new Set<string>();
+    const dealerMap: Record<string, { name: string; state: string; city: string }> = {};
 
     // Initial catalog directory
     INITIAL_SAVED_ADDRESSES.forEach((addr) => {
-      if (addr.title) dealerSet.add(addr.title);
+      if (addr.title) {
+        dealerSet.add(addr.title);
+        let extractedCity = '';
+        if (addr.address) {
+          const addrLow = addr.address.toLowerCase();
+          if (addrLow.includes('pune') || addrLow.includes('chakan') || addrLow.includes('bhosari')) {
+            extractedCity = 'Pune';
+          } else if (addrLow.includes('sanand') || addrLow.includes('ahmedabad')) {
+            extractedCity = 'Sanand';
+          } else if (addrLow.includes('jamshedpur')) {
+            extractedCity = 'Jamshedpur';
+          } else if (addrLow.includes('dharwad')) {
+            extractedCity = 'Dharwad';
+          }
+        }
+        dealerMap[addr.title.toLowerCase().trim()] = {
+          name: addr.title,
+          state: addr.state || 'Maharashtra',
+          city: extractedCity || (addr.state === 'Maharashtra' ? 'Pune' : ''),
+        };
+      }
       if (addr.state) stateSet.add(addr.state);
     });
 
     // Populate from existing real-time packs
     existingPacks.forEach((p) => {
-      if (p.dealershipName && p.dealershipName.trim()) {
-        dealerSet.add(p.dealershipName.trim());
-      }
+      let packCity = '';
+      let packState = '';
+
       if (p.receivedState && p.receivedState.trim()) {
         const raw = p.receivedState.trim();
         if (raw.includes(',')) {
           const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
           if (parts.length >= 2) {
+            packCity = parts[0];
+            packState = parts[1];
             citySet.add(parts[0]);
             stateSet.add(parts[1]);
           } else if (parts.length === 1) {
+            packState = parts[0];
             stateSet.add(parts[0]);
           }
         } else {
+          packState = raw;
           stateSet.add(raw);
         }
       }
+
+      if (p.dealershipName && p.dealershipName.trim()) {
+        const dName = p.dealershipName.trim();
+        dealerSet.add(dName);
+        const existingInfo = dealerMap[dName.toLowerCase()];
+        if (!existingInfo) {
+          dealerMap[dName.toLowerCase()] = {
+            name: dName,
+            state: packState || 'Maharashtra',
+            city: packCity || '',
+          };
+        } else {
+          if (packState && !existingInfo.state) existingInfo.state = packState;
+          if (packCity && !existingInfo.city) existingInfo.city = packCity;
+        }
+      }
+
       if (p.dispatchToCustomer && p.dispatchToCustomer.trim()) {
         dealerSet.add(p.dispatchToCustomer.trim());
       }
@@ -123,8 +165,32 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
       dealershipSuggestions: Array.from(dealerSet).filter(Boolean),
       stateSuggestions: Array.from(stateSet).filter(Boolean),
       citySuggestions: Array.from(citySet).filter(Boolean),
+      dealershipInfoMap: dealerMap,
     };
   }, [existingPacks]);
+
+  // Handle Dealership selection with automatic State and City autofill
+  const handleDealershipChange = (val: string) => {
+    setDealershipName(val);
+    if (!val || !val.trim()) return;
+
+    const cleanKey = val.trim().toLowerCase();
+    const matched = dealershipInfoMap[cleanKey];
+    if (matched) {
+      if (matched.state) setReceivedState(matched.state);
+      if (matched.city) setReceivedCity(matched.city);
+      return;
+    }
+
+    // Partial match if user typed partial name
+    const partialMatch = (Object.entries(dealershipInfoMap) as [string, { name: string; state: string; city: string }][]).find(
+      ([k, v]) => k.includes(cleanKey) || cleanKey.includes(k) || (v.name && v.name.toLowerCase() === cleanKey)
+    );
+    if (partialMatch && partialMatch[1]) {
+      if (partialMatch[1].state) setReceivedState(partialMatch[1].state);
+      if (partialMatch[1].city) setReceivedCity(partialMatch[1].city);
+    }
+  };
 
   // Keyboard Enter-step navigation helper
   const handleKeyDownStep = (e: React.KeyboardEvent, nextElementId: string) => {
@@ -654,7 +720,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               />
             </div>
 
-            {/* Dealership Name with Predictive Autocomplete */}
+            {/* Dealership Name with Predictive Autocomplete & Auto State/City Fill */}
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Dealership / Supplier Name <span className="text-rose-500">*</span>
@@ -664,7 +730,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 type="text"
                 list="dealership-suggestions"
                 value={dealershipName}
-                onChange={(e) => setDealershipName(e.target.value)}
+                onChange={(e) => handleDealershipChange(e.target.value)}
                 onKeyDown={(e) => handleKeyDownStep(e, 'inward-rec-state')}
                 placeholder="Type or select dealership..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"

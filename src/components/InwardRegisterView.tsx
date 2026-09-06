@@ -14,10 +14,12 @@ import {
   Save,
   Tag,
   Filter,
+  Download,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, INITIAL_SAVED_ADDRESSES } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
+import { exportInwardRegisterPacksToExcel } from '../utils/excelExport';
 
 interface InwardRegisterViewProps {
   packs: BatteryPack[];
@@ -144,6 +146,53 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     });
   }, [inwardOnlyPacks, searchQuery, modelFilter, statusFilter, dateFilter, customStartDate, customEndDate, todayStr]);
 
+  // Dynamic Dealership Info Map for Auto-Filling State & City
+  const { dealershipSuggestions, dealershipInfoMap } = useMemo(() => {
+    const dealerSet = new Set<string>();
+    const dealerMap: Record<string, { name: string; state: string }> = {};
+
+    INITIAL_SAVED_ADDRESSES.forEach((addr) => {
+      if (addr.title) {
+        dealerSet.add(addr.title);
+        dealerMap[addr.title.toLowerCase()] = {
+          name: addr.title,
+          state: addr.state || 'Maharashtra',
+        };
+      }
+    });
+
+    packs.forEach((p) => {
+      if (p.dealershipName && p.dealershipName.trim()) {
+        const dName = p.dealershipName.trim();
+        dealerSet.add(dName);
+        if (!dealerMap[dName.toLowerCase()]) {
+          dealerMap[dName.toLowerCase()] = {
+            name: dName,
+            state: p.receivedState || 'Maharashtra',
+          };
+        }
+      }
+    });
+
+    return {
+      dealershipSuggestions: Array.from(dealerSet).filter(Boolean),
+      dealershipInfoMap: dealerMap,
+    };
+  }, [packs]);
+
+  // Handle Export Visible Filtered Packs to Excel
+  const handleExportExcel = () => {
+    if (filteredPacks.length === 0) {
+      alert('No inward packs match the current filter to export.');
+      return;
+    }
+    const filterTag = dateFilter === 'ALL' ? 'All_Time' : dateFilter === 'TODAY' ? 'Today' : dateFilter === '7_DAYS' ? 'Last7Days' : dateFilter === '30_DAYS' ? 'Last30Days' : 'CustomRange';
+    exportInwardRegisterPacksToExcel(
+      filteredPacks,
+      `Tata_Inward_Register_${filterTag}_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+  };
+
   // Handle Edit Click
   const handleStartEdit = (pack: BatteryPack) => {
     const isApproved = pack.status !== 'PENDING_APPROVAL';
@@ -162,6 +211,15 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     setEditIsDifferentSerial(Boolean(pack.isDifferentSerial));
     setEditChallanPackNumber(pack.challanPackNumber || '');
     setEditMismatchReason(pack.mismatchReason || '');
+  };
+
+  const handleEditDealershipChange = (val: string) => {
+    setEditDealership(val);
+    if (!val || !val.trim()) return;
+    const match = dealershipInfoMap[val.trim().toLowerCase()];
+    if (match && match.state) {
+      setEditReceivedState(match.state);
+    }
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -225,6 +283,15 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Export currently visible filtered records to Excel spreadsheet"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Export to Excel ({filteredPacks.length})</span>
+          </button>
           <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono-code font-bold text-slate-800">
             Total Inwarded: <span className="text-blue-700">{inwardOnlyPacks.length}</span>
           </div>
@@ -399,10 +466,19 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
       {/* Ledger Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
             Inward Ledger Records ({filteredPacks.length} Packs)
           </h3>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Download visible filtered packs as Excel spreadsheet"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Download Excel ({filteredPacks.length})</span>
+          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -615,12 +691,19 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
               </div>
 
               <div>
+                <datalist id="edit-dealership-suggestions">
+                  {dealershipSuggestions.map((d, i) => (
+                    <option key={i} value={d} />
+                  ))}
+                </datalist>
                 <label className="block font-bold text-slate-700 mb-1">Dealership / Source Supplier</label>
                 <input
                   type="text"
+                  list="edit-dealership-suggestions"
                   value={editDealership}
-                  onChange={(e) => setEditDealership(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-900"
+                  onChange={(e) => handleEditDealershipChange(e.target.value)}
+                  placeholder="Type or select dealership..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                   required
                 />
               </div>
@@ -631,7 +714,8 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                   type="text"
                   value={editReceivedState}
                   onChange={(e) => setEditReceivedState(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-900"
+                  placeholder="State / City (e.g. Pune, Maharashtra)..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
