@@ -14,6 +14,8 @@ import {
   ChevronRight,
   ArrowRight,
   Info,
+  ShieldAlert,
+  Timer,
 } from 'lucide-react';
 import { DailyStockRecord, DailyStockRow } from '../types';
 import { STANDARD_DAILY_PACK_NAMES, createDefaultDailyStockRows } from '../data/seedWarehouse';
@@ -64,6 +66,7 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
   onDeleteDailyStockRecord,
 }) => {
   const { currentUser, isSuperAdmin, isManager, isSupervisor } = useAuth();
+  const isAdminOrManager = Boolean(isSuperAdmin || isManager || isSupervisor);
 
   // Selected date state (defaults to today YYYY-MM-DD, minimum 2026-09-01)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -74,6 +77,13 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
   // Edit Mode state
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Live timer tick for 30-minute grace window calculation
+  const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowTimestamp(Date.now()), 20000); // tick every 20s
+    return () => clearInterval(timer);
+  }, []);
 
   // Active user name for Maintained By field
   const currentOperatorName = useMemo(() => {
@@ -86,6 +96,44 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
   const currentRecord = useMemo(() => {
     return dailyStockRecords.find((r) => r.date === selectedDate);
   }, [dailyStockRecords, selectedDate]);
+
+  // 30-Minute Grace Window Calculations
+  const recordSavedTime = useMemo(() => {
+    if (!currentRecord) return null;
+    const timeStr = currentRecord.updatedAt || currentRecord.createdAt;
+    const parsed = new Date(timeStr).getTime();
+    return isNaN(parsed) ? Date.now() : parsed;
+  }, [currentRecord]);
+
+  const minutesElapsed = useMemo(() => {
+    if (!recordSavedTime) return 0;
+    return (nowTimestamp - recordSavedTime) / (1000 * 60);
+  }, [recordSavedTime, nowTimestamp]);
+
+  const isWithin30MinWindow = minutesElapsed <= 30;
+  const minutesLeft = Math.max(0, Math.ceil(30 - minutesElapsed));
+
+  // Permissions: Who can edit this sheet?
+  const canUserEdit = useMemo(() => {
+    // 1. Managers, Super Admin, and Supervisors can ALWAYS edit at any time
+    if (isAdminOrManager) return true;
+
+    // 2. If no record has been created yet, employee can create & fill it
+    if (!currentRecord) return true;
+
+    // 3. If locked by admin, employee cannot edit
+    if (currentRecord.isLocked) return false;
+
+    // 4. Employee has exactly 30 minutes after saving to make corrections
+    return isWithin30MinWindow;
+  }, [isAdminOrManager, currentRecord, isWithin30MinWindow]);
+
+  // If user lost edit permission while editing, auto-exit edit mode
+  useEffect(() => {
+    if (!canUserEdit && isEditing) {
+      setIsEditing(false);
+    }
+  }, [canUserEdit, isEditing]);
 
   // Find nearest previous record before selectedDate to carry forward closing stock
   const previousRecord = useMemo(() => {
@@ -484,9 +532,9 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
           </div>
         </div>
 
-        {/* Status Bar */}
+        {/* Status Bar & Role Policy Badges */}
         <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {currentRecord ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -499,15 +547,26 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
               </span>
             )}
 
-            {currentRecord?.isLocked && (
+            {/* Lock / Grace Window Indicator */}
+            {currentRecord?.isLocked ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900 text-white font-bold text-[10px]">
-                <Lock className="w-3 h-3" /> Locked by Admin
+                <Lock className="w-3 h-3 text-amber-400" /> Locked by Admin
               </span>
-            )}
+            ) : currentRecord && !isAdminOrManager && isWithin30MinWindow ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-bold text-[11px] animate-pulse">
+                <Timer className="w-3.5 h-3.5 text-blue-600" />
+                Employee Grace Window: {minutesLeft} min left to edit typos
+              </span>
+            ) : currentRecord && !isAdminOrManager && !isWithin30MinWindow ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-300 font-bold text-[11px]">
+                <Lock className="w-3 h-3 text-slate-500" /> 30-Min Window Expired (Manager/Admin Only)
+              </span>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
-            {(isSuperAdmin || isManager) && currentRecord && (
+            {/* Manager/Super Admin Lock Toggle */}
+            {isAdminOrManager && currentRecord && (
               <button
                 type="button"
                 onClick={handleToggleLock}
@@ -518,7 +577,8 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
               </button>
             )}
 
-            {!isEditing && currentRecord && !currentRecord.isLocked && (
+            {/* Edit Sheet Button (Controlled by 30-Min / Role Rule) */}
+            {!isEditing && currentRecord && canUserEdit && (
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
@@ -527,6 +587,13 @@ export const DailyStockMaintenanceView: React.FC<DailyStockMaintenanceViewProps>
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit Sheet</span>
               </button>
+            )}
+
+            {!isEditing && currentRecord && !canUserEdit && (
+              <div className="px-3 py-1 bg-slate-100 text-slate-500 rounded-xl text-xs font-medium border border-slate-200 flex items-center gap-1 cursor-not-allowed">
+                <Lock className="w-3 h-3" />
+                <span>Locked for Employee</span>
+              </div>
             )}
 
             {isEditing && (

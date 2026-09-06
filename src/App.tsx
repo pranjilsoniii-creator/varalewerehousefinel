@@ -46,6 +46,7 @@ import {
   mapRowToInward,
   mapRowToLot,
   mapRowToDailyStock,
+  mapLotToDailyStock,
 } from './lib/supabaseClient';
 import { useAuth } from './context/AuthContext';
 import { Wrench, ShieldAlert } from 'lucide-react';
@@ -290,6 +291,35 @@ export function App() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'dispatch_lots' },
         (payload: any) => {
+          // Check if this payload is an internal Daily Stock Maintenance ledger row
+          const isDailyStockRow =
+            payload.new?.consignee_name === 'DAILY_STOCK_MAINTENANCE' ||
+            payload.old?.consignee_name === 'DAILY_STOCK_MAINTENANCE' ||
+            payload.new?.id?.startsWith('daily-stock-') ||
+            payload.old?.id?.startsWith('daily-stock-');
+
+          if (isDailyStockRow) {
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newDaily = mapLotToDailyStock(payload.new);
+              setDailyStockRecords((prev) => {
+                const idx = prev.findIndex((r) => r.id === newDaily.id || r.date === newDaily.date);
+                if (idx >= 0) {
+                  const copy = [...prev];
+                  copy[idx] = newDaily;
+                  return copy;
+                }
+                return [newDaily, ...prev];
+              });
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old?.id || payload.new?.id;
+              if (deletedId) {
+                setDailyStockRecords((prev) => prev.filter((r) => r.id !== deletedId && !deletedId.endsWith(r.date)));
+              }
+            }
+            return;
+          }
+
+          // Normal Dispatch Lot
           if (payload.eventType === 'INSERT') {
             const newLot = mapRowToLot(payload.new);
             setDispatchLots((prev) => {

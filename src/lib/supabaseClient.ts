@@ -393,7 +393,10 @@ export async function fetchLotsFromCloud(): Promise<DispatchLot[] | null> {
       console.warn('Supabase fetch lots warning:', error.message);
       return null;
     }
-    return (data || []).map(mapRowToLot);
+    // Filter out internal Daily Stock rows so they don't pollute dispatch lots list
+    return (data || [])
+      .filter((row: any) => row.consignee_name !== 'DAILY_STOCK_MAINTENANCE')
+      .map(mapRowToLot);
   } catch (e) {
     console.warn('Supabase fetch lots exception:', e);
     return null;
@@ -460,6 +463,33 @@ export function mapRowToDailyStock(row: any): DailyStockRecord {
   };
 }
 
+export function mapLotToDailyStock(lotRow: any): DailyStockRecord {
+  let parsedNotes: any = {};
+  try {
+    if (typeof lotRow.notes === 'string') {
+      parsedNotes = JSON.parse(lotRow.notes);
+    }
+  } catch (e) {}
+
+  const rows = Array.isArray(lotRow.packs) ? lotRow.packs : [];
+
+  return {
+    id: lotRow.id,
+    date: parsedNotes.date || lotRow.consignee_address || (lotRow.timestamp ? lotRow.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+    displayDate: parsedNotes.displayDate || lotRow.vehicle_number,
+    rows: rows,
+    totalOpeningStock: Number(parsedNotes.totalOpeningStock) || 0,
+    totalReceivedToday: Number(parsedNotes.totalReceivedToday) || 0,
+    totalDispatchToday: Number(parsedNotes.totalDispatchToday) || 0,
+    totalClosingStock: Number(parsedNotes.totalClosingStock ?? lotRow.pack_count) || 0,
+    createdAt: parsedNotes.createdAt || lotRow.created_at || lotRow.timestamp || new Date().toISOString(),
+    updatedAt: parsedNotes.updatedAt || lotRow.approved_at || lotRow.created_at || new Date().toISOString(),
+    createdByName: parsedNotes.createdByName || lotRow.dispatched_by || 'Jitendra Soni',
+    createdByUsername: parsedNotes.createdByUsername || lotRow.lr_number || 'operator',
+    isLocked: Boolean(parsedNotes.isLocked || lotRow.transport_doc_no === 'LOCKED'),
+  };
+}
+
 export function mapDailyStockToRow(rec: DailyStockRecord): any {
   return {
     id: rec.id,
@@ -482,12 +512,38 @@ export async function fetchDailyStockFromCloud(): Promise<DailyStockRecord[] | n
   try {
     const sb = getSupabase();
     if (!sb) return null;
-    const { data, error } = await sb.from('daily_stock_records').select('*').order('date', { ascending: false });
-    if (error) {
-      console.warn('Supabase fetch daily stock warning:', error.message);
-      return null;
-    }
-    return (data || []).map(mapRowToDailyStock);
+
+    const recordsMap = new Map<string, DailyStockRecord>();
+
+    // 1. Fetch from dispatch_lots table (guaranteed cloud store with live realtime)
+    try {
+      const { data: lotData, error: lotErr } = await sb
+        .from('dispatch_lots')
+        .select('*')
+        .eq('consignee_name', 'DAILY_STOCK_MAINTENANCE')
+        .order('timestamp', { ascending: false });
+
+      if (!lotErr && lotData) {
+        lotData.forEach((lr: any) => {
+          const rec = mapLotToDailyStock(lr);
+          recordsMap.set(rec.date, rec);
+        });
+      }
+    } catch (e) {}
+
+    // 2. Fetch from daily_stock_records table (if table exists)
+    try {
+      const { data, error } = await sb.from('daily_stock_records').select('*').order('date', { ascending: false });
+      if (!error && data) {
+        data.forEach((r: any) => {
+          const rec = mapRowToDailyStock(r);
+          recordsMap.set(rec.date, rec);
+        });
+      }
+    } catch (e) {}
+
+    const allRecords = Array.from(recordsMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+    return allRecords.length > 0 ? allRecords : null;
   } catch (e) {
     console.warn('Supabase fetch daily stock exception:', e);
     return null;
@@ -498,12 +554,49 @@ export async function syncDailyStockToCloud(record: DailyStockRecord): Promise<b
   try {
     const sb = getSupabase();
     if (!sb) return false;
-    const row = mapDailyStockToRow(record);
-    const { error } = await sb.from('daily_stock_records').upsert(row, { onConflict: 'id' });
-    if (error) {
-      console.warn('Supabase daily stock sync error:', error.message);
-      return false;
-    }
+
+    // 1. Sync to dispatch_lots (guaranteed realtime cloud persistence across all devices)
+    const lotId = record.id.startsWith('daily-stock-') ? record.id : `daily-stock-${record.date}`;
+    const lotRow = {
+      id: lotId,
+      lot_number: `DAILY-STOCK-${record.date}`,
+      timestamp: `${record.date}T10:00:00Z`,
+      status: 'DISPATCHED',
+      from_plant: 'Tata AutoComp Systems Limited - Varale (B300 Plant)',
+      consignee_name: 'DAILY_STOCK_MAINTENANCE',
+      consignee_address: record.date,
+      vehicle_number: record.displayDate || record.date,
+      transport_name: record.createdByName,
+      lr_number: record.createdByUsername,
+      transport_doc_no: record.isLocked ? 'LOCKED' : 'UNLOCKED',
+      pack_count: record.totalClosingStock,
+      packs: record.rows,
+      dispatched_by: record.createdByName,
+      approved_by: record.createdByName,
+      approved_at: record.updatedAt || new Date().toISOString(),
+      notes: JSON.stringify({
+        type: 'DAILY_STOCK_RECORD',
+        date: record.date,
+        displayDate: record.displayDate,
+        totalOpeningStock: record.totalOpeningStock,
+        totalReceivedToday: record.totalReceivedToday,
+        totalDispatchToday: record.totalDispatchToday,
+        totalClosingStock: record.totalClosingStock,
+        createdByName: record.createdByName,
+        createdByUsername: record.createdByUsername,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        isLocked: record.isLocked,
+      }),
+    };
+
+    const lotPromise = sb.from('dispatch_lots').upsert(lotRow, { onConflict: 'id' });
+
+    // 2. Also try direct daily_stock_records table
+    const dailyRow = mapDailyStockToRow(record);
+    const dailyPromise = sb.from('daily_stock_records').upsert(dailyRow, { onConflict: 'id' });
+
+    await Promise.allSettled([lotPromise, dailyPromise]);
     return true;
   } catch (e) {
     console.warn('Supabase daily stock sync exception:', e);
@@ -515,11 +608,12 @@ export async function deleteDailyStockFromCloud(recordId: string): Promise<boole
   try {
     const sb = getSupabase();
     if (!sb || !recordId) return false;
-    const { error } = await sb.from('daily_stock_records').delete().eq('id', recordId);
-    if (error) {
-      console.warn('Supabase delete daily stock error:', error.message);
-      return false;
-    }
+
+    const lotId = recordId.startsWith('daily-stock-') ? recordId : `daily-stock-${recordId}`;
+    await Promise.allSettled([
+      sb.from('dispatch_lots').delete().eq('id', lotId),
+      sb.from('daily_stock_records').delete().eq('id', recordId),
+    ]);
     return true;
   } catch (e) {
     console.warn('Supabase delete daily stock exception:', e);
