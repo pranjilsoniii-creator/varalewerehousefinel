@@ -361,55 +361,9 @@ export const COMMON_TRANSPORTERS = [
   'Other',
 ];
 
-export const INITIAL_SAVED_ADDRESSES: SavedAddress[] = [
-  {
-    id: 'addr-1',
-    title: 'Tata Motors - Pune CVBU Assembly Plant',
-    address: 'Sector 7, PCMC Industrial Area, Bhosari, Pune, Maharashtra 411026',
-    gstin: '27AAACT2727Q1ZR',
-    state: 'Maharashtra',
-    contactPerson: 'Logistics Desk',
-    phone: '+91 20 6613 1111',
-  },
-  {
-    id: 'addr-2',
-    title: 'Tata Motors - Sanand EV Plant (Gujarat)',
-    address: 'Plot No. 1, GIDC Industrial Estate, Phase II, Sanand, Ahmedabad, Gujarat 382170',
-    gstin: '24AAACT2727Q1ZV',
-    state: 'Gujarat',
-    contactPerson: 'Receiving Dock Lead',
-    phone: '+91 2717 662000',
-  },
-  {
-    id: 'addr-3',
-    title: 'Tata AutoComp Systems - Chakan Plant 2',
-    address: 'Plot No. C-2, MIDC Phase II, Chakan, Taluka Khed, Pune, Maharashtra 410501',
-    gstin: '27AAACT2727Q1ZR',
-    state: 'Maharashtra',
-    contactPerson: 'Stores Manager',
-    phone: '+91 2135 664000',
-  },
-  {
-    id: 'addr-4',
-    title: 'Tata Motors - Jamshedpur Plant',
-    address: 'Telco Colony, Jamshedpur, Jharkhand 831010',
-    gstin: '20AAACT2727Q1Z4',
-    state: 'Jharkhand',
-    contactPerson: 'EV Logistics Coordinator',
-    phone: '+91 657 228 2222',
-  },
-  {
-    id: 'addr-5',
-    title: 'Tata Motors - Dharwad Plant (Karnataka)',
-    address: 'Plot 1, KIADB Industrial Area, Belur, Dharwad, Karnataka 580011',
-    gstin: '29AAACT2727Q1ZP',
-    state: 'Karnataka',
-    contactPerson: 'Dock In-charge',
-    phone: '+91 836 248 8000',
-  },
-];
+export const INITIAL_SAVED_ADDRESSES: SavedAddress[] = [];
 
-export const DEFAULT_SAVED_ADDRESSES = INITIAL_SAVED_ADDRESSES;
+export const DEFAULT_SAVED_ADDRESSES: SavedAddress[] = [];
 
 export const DEFAULT_PLANT_LOCATION = {
   name: 'Tata AutoComp Systems Limited - Varale (B300 Plant)',
@@ -419,4 +373,4 @@ export const DEFAULT_PLANT_LOCATION = {
   stateCode: '27',
 };
 
-export const COMMON_DESTINATIONS = INITIAL_SAVED_ADDRESSES.map((a) => ({ name: a.title, address: a.address, gstin: a.gstin || "", state: a.state || "Maharashtra" }));
+export const COMMON_DESTINATIONS: { name: string; address: string; gstin: string; state: string }[] = [];

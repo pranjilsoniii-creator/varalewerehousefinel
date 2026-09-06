@@ -135,7 +135,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return true;
   };
 
-  // 1. STRICT Inward isolation: Exclude direct dispatch and line populate
+  // 1. Inward isolation: Show all packs received via inward dock (regardless of current status)
   const validInwardPacks = useMemo(() => {
     return packs.filter((p) => {
       if (p.sourceType === 'LINE_POPULATE' || p.sourceType === 'DIRECT_DISPATCH') return false;
@@ -353,7 +353,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         'Pack Serial Number': p.packNumber,
         'Product Name': info.productName,
         'Product Type': info.productType,
-        'Gate Pass / Challan No': p.dispatchDocNo || '—',
+        'Document Number': p.dispatchDocNo || '—',
         'LR / Bilty No': p.dispatchLrNo || '—',
         'Destination Consignee / EV Plant': p.dispatchToCustomer || '—',
         'Destination Address': p.dispatchToAddress || '—',
@@ -551,7 +551,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
           <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-emerald-700 font-bold">Inward Area Active</span>
+            <span className="text-emerald-700 font-bold">Total Inward Received</span>
             <span className="font-mono-code font-bold text-slate-700">
               {validInwardPacks.length} total
             </span>
@@ -573,7 +573,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {dispatchedPacksInPeriod.length}
             </div>
             <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-              Across {dispatchLotsInPeriod.length} Gate Pass Lot(s)
+              Across {dispatchLotsInPeriod.length} Dispatch Lot(s)
             </p>
           </div>
           <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
@@ -636,11 +636,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Card 5: Total Outward Gate Pass Lots */}
+        {/* Card 5: Total Outward Dispatch Lots */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">
-              Dispatch Lots (GP)
+              Dispatch Lots
             </span>
             <div className="p-2 rounded-xl bg-slate-100 text-slate-600 border border-slate-200">
               <Truck className="w-4 h-4" />
@@ -655,7 +655,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
           <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-            <span className="text-slate-600 font-bold">All-Time GP Lots</span>
+            <span className="text-slate-600 font-bold">All-Time Dispatch Lots</span>
             <span className="font-mono-code font-bold text-slate-700">
               {dispatchLots.length}
             </span>
@@ -802,7 +802,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Filter serial, DC, model..."
+                  placeholder="Filter serial, doc no, model..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 w-48 sm:w-60"
@@ -993,7 +993,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <td className="py-3 px-4 text-center">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase font-mono-code ${
-                              p.status === 'IN_STORAGE'
+                              p.status === 'DISPATCHED'
+                                ? 'bg-blue-100 text-blue-800'
+                                : p.status === 'IN_STORAGE'
                                 ? 'bg-purple-100 text-purple-800'
                                 : p.status === 'PENDING_APPROVAL'
                                 ? 'bg-amber-100 text-amber-800'
@@ -1030,7 +1032,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <th className="py-3 px-4">Pack Serial Number</th>
                     <th className="py-3 px-4">Product Name</th>
                     <th className="py-3 px-4">Product Type</th>
-                    <th className="py-3 px-4">Gate Pass / Doc No</th>
+                    <th className="py-3 px-4">Document Number</th>
                     <th className="py-3 px-4">LR Number</th>
                     <th className="py-3 px-4">Consignee / EV Plant</th>
                     <th className="py-3 px-4">Vehicle Number</th>

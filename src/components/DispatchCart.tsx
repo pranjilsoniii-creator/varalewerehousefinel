@@ -94,15 +94,25 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
 
   // Address Directory State (Saved in LocalStorage)
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>(() => {
-    const saved = localStorage.getItem('tata_wms_saved_addresses_v2');
+    const saved = localStorage.getItem('tata_wms_saved_addresses_v3');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (a: any) =>
+              !a.id?.startsWith('addr-') &&
+              !a.title?.includes('Dharwad') &&
+              !a.title?.includes('Sanand') &&
+              !a.title?.includes('Jamshedpur') &&
+              !a.title?.includes('Bhosari')
+          );
+        }
       } catch (e) {
         console.error('Failed to parse saved addresses', e);
       }
     }
-    return DEFAULT_SAVED_ADDRESSES;
+    return [];
   });
 
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
@@ -146,7 +156,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
 
   // Sync saved addresses
   useEffect(() => {
-    localStorage.setItem('tata_wms_saved_addresses_v2', JSON.stringify(savedAddresses));
+    localStorage.setItem('tata_wms_saved_addresses_v3', JSON.stringify(savedAddresses));
   }, [savedAddresses]);
 
   // Handle Preset Address Selection
@@ -830,7 +840,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Gate Pass / Doc No.</label>
+                    <label className="block font-bold text-slate-700 mb-1">Document Number</label>
                     <input
                       type="text"
                       value={transportDocNo}
@@ -1105,26 +1115,27 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                 <p className="text-[10px] font-mono-code text-slate-500">GSTIN: {DEFAULT_PLANT_LOCATION.gstin}</p>
               </div>
 
-              {/* TO Saved Address Selector */}
+              {/* TO Saved Address Selector (Only shown if user has saved addresses) */}
               <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-800">
-                    Select Pre-Configured Delivery Address:
-                  </label>
-                </div>
-
-                <select
-                  value={selectedAddressId}
-                  onChange={(e) => handleSelectSavedAddress(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">-- Custom Address / Select Destination Hub --</option>
-                  {savedAddresses.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.title} ({a.state || 'India'})
-                    </option>
-                  ))}
-                </select>
+                {savedAddresses.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-slate-800">
+                      Select Pre-Configured Delivery Address:
+                    </label>
+                    <select
+                      value={selectedAddressId}
+                      onChange={(e) => handleSelectSavedAddress(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">-- Choose from Saved Directory ({savedAddresses.length}) --</option>
+                      {savedAddresses.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.title} ({a.state || 'India'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Dispatch Date Picker */}
                 <div>
@@ -1259,12 +1270,12 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Gate Pass / Doc No.</label>
+                    <label className="block font-bold text-slate-700 mb-1">Document Number</label>
                     <input
                       type="text"
                       value={transportDocNo}
                       onChange={(e) => setTransportDocNo(e.target.value)}
-                      placeholder="Enter Gate Pass / Doc Number..."
+                      placeholder="Enter Document Number..."
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-mono-code text-slate-900"
                     />
                   </div>
@@ -1291,7 +1302,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Review & Generate Outward Gate Pass ({selectedPackIds.size} Packs)</span>
+                  <span>Review & Generate Outward Dispatch ({selectedPackIds.size} Packs)</span>
                 </button>
               </div>
             </div>
@@ -1299,7 +1310,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
         </div>
       )}
 
-      {/* Modal 1: Gate Pass Preview & Approval Dialog with Full Pack Table */}
+      {/* Modal 1: Dispatch Preview & Approval Dialog with Full Pack Table */}
       {isPreviewOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs">
@@ -1307,7 +1318,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
               <div className="flex items-center gap-2">
                 <Truck className="w-5 h-5 text-blue-600" />
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Official Tata Outward Gate Pass Preview</h3>
+                  <h3 className="font-bold text-slate-900 text-sm">Official Tata Outward Dispatch Preview</h3>
                   <p className="text-[11px] text-slate-500">Tata AutoComp Systems Limited - Varale Plant</p>
                 </div>
               </div>

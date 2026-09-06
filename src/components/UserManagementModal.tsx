@@ -211,7 +211,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                         onChange={(e) => setCanInvoices(e.target.checked)}
                         className="w-4 h-4 text-purple-600 rounded"
                       />
-                      <span className="font-bold text-slate-800">Gate Pass & Invoice</span>
+                      <span className="font-bold text-slate-800">Dispatch & Invoice Documents</span>
                     </label>
 
                     <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">

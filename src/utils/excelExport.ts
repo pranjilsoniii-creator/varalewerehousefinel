@@ -25,7 +25,7 @@ export function exportInventoryToExcel(packs: BatteryPack[], filename = 'Tata_Ba
       'Destination Consignee': p.dispatchToCustomer || p.dispatchToAddress || '-',
       'Vehicle Number': p.dispatchVehicleNo || '-',
       'LR Number': p.dispatchLrNo || '-',
-      'Gate Pass No': p.dispatchDocNo || '-',
+      'Document Number': p.dispatchDocNo || '-',
     };
   });
 
@@ -111,7 +111,7 @@ export function exportDispatchLotsToExcel(lots: DispatchLot[], filename = 'Tata_
         'Vehicle Number': lot.vehicleNumber,
         'Transport Carrier': lot.transportName,
         'LR / Bilty No': lot.lrNumber,
-        'Gate Pass No': lot.transportDocNo,
+        'Document Number': lot.transportDocNo,
         'Pack Serial': pack.packNumber,
         'Model Type': model?.name || pack.packType,
         'Dispatched By': lot.dispatchedBy || '-',

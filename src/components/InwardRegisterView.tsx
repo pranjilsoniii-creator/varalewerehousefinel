@@ -15,6 +15,7 @@ import {
   Tag,
   Filter,
   Download,
+  Truck,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
 import { ALL_PACK_TYPES, BATTERY_MODELS, INITIAL_SAVED_ADDRESSES, getProductNameAndType } from '../data/batteryCatalog';
@@ -61,13 +62,12 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [editChallanPackNumber, setEditChallanPackNumber] = useState('');
   const [editMismatchReason, setEditMismatchReason] = useState('');
 
-  // STRICT ISOLATION: Only show active packs received via Inward Receiving Dock / Delivery Challan
+  // STRICT ISOLATION: Show all packs received via Inward Receiving Dock / Delivery Challan
   const inwardOnlyPacks = useMemo(() => {
     return packs.filter((p) => {
       if (p.sourceType === 'LINE_POPULATE' || p.sourceType === 'DIRECT_DISPATCH') return false;
       if (p.documentNo === 'DIRECT-DISPATCH') return false;
       if (p.dealershipName === 'Direct Plant Dispatch') return false;
-      if (p.status === 'DISPATCHED') return false;
       return true;
     });
   }, [packs]);
@@ -554,7 +554,11 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                       {pack.inwardDate ? new Date(pack.inwardDate).toLocaleDateString('en-IN') : '—'}
                     </td>
                     <td className="p-3">
-                      {isPending ? (
+                      {pack.status === 'DISPATCHED' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          <Truck className="w-3 h-3" /> Dispatched
+                        </span>
+                      ) : isPending ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                           <Clock className="w-3 h-3" /> Pending Approval
                         </span>

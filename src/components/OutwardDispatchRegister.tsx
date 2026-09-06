@@ -580,7 +580,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Document / Gate Pass No. <span className="text-rose-500">*</span>
+                    Document Number <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"

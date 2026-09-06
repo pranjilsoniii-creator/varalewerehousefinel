@@ -645,7 +645,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                         <strong className="text-emerald-300">
                           {selectedPackForAudit.dispatchedAt ? new Date(selectedPackForAudit.dispatchedAt).toLocaleDateString('en-IN') : 'Dispatched'}
                         </strong>
-                        <div className="text-slate-300 text-[10px] truncate">Gate Pass: {selectedPackForAudit.dispatchDocNo || '—'}</div>
+                        <div className="text-slate-300 text-[10px] truncate">Document No: {selectedPackForAudit.dispatchDocNo || '—'}</div>
                         <div className="text-slate-400 text-[9px] truncate">Veh: {selectedPackForAudit.dispatchVehicleNo || '—'} • LR: {selectedPackForAudit.dispatchLrNo || '—'}</div>
                       </div>
                     ) : (
@@ -693,7 +693,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Inward Activity Card */}
             <div
-              onClick={() => setAnalyticsSubTab('INWARD_PACKS')}
+              onClick={() => {
+                setAnalyticsSubTab('INWARD_PACKS');
+                setTimeout(() => {
+                  document.getElementById('analytics-inspection-section')?.scrollIntoView({ behavior: 'smooth' });
+                }, 50);
+              }}
               className="bg-white border border-slate-200 hover:border-blue-400 p-5 rounded-xl shadow-2xs space-y-2 cursor-pointer transition"
             >
               <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold uppercase tracking-wider">
@@ -713,7 +718,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
             {/* Outward Dispatch Card */}
             <div
-              onClick={() => setAnalyticsSubTab('DISPATCHED_PACKS')}
+              onClick={() => {
+                setAnalyticsSubTab('DISPATCHED_PACKS');
+                setTimeout(() => {
+                  document.getElementById('analytics-inspection-section')?.scrollIntoView({ behavior: 'smooth' });
+                }, 50);
+              }}
               className="bg-white border border-slate-200 hover:border-emerald-400 p-5 rounded-xl shadow-2xs space-y-2 cursor-pointer transition"
             >
               <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold uppercase tracking-wider">
@@ -724,7 +734,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 {periodDispatchedPacks.length.toLocaleString()} <span className="text-xs text-slate-500 font-sans">Packs</span>
               </div>
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>{periodDispatchLots.length} Gate Pass Lots</span>
+                <span>{periodDispatchLots.length} Dispatch Lots</span>
                 <span className="text-emerald-600 font-bold hover:underline flex items-center gap-0.5 text-[11px]">
                   View List <ChevronRight className="w-3 h-3" />
                 </span>
@@ -819,7 +829,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
 
           {/* Interactive Inspection Tabs: Inwarded Packs vs Dispatched Packs vs Timeline */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
+          <div id="analytics-inspection-section" className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden scroll-mt-20">
             <div className="bg-slate-50 p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-1">
                 <button
@@ -997,7 +1007,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                             <th className="p-3 w-12">#</th>
                             <th className="p-3">Pack Number</th>
                             <th className="p-3">Model</th>
-                            <th className="p-3">Gate Pass / Doc #</th>
+                            <th className="p-3">Document Number</th>
                             <th className="p-3">LR / Bilty #</th>
                             <th className="p-3">Vehicle #</th>
                             <th className="p-3">Transporter</th>
@@ -1122,7 +1132,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Document / Gate Pass No. <span className="text-rose-500">*</span>
+                    Document Number <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"

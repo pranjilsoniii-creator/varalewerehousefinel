@@ -721,7 +721,7 @@ export function App() {
       <Navbar
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.status !== 'DISPATCHED').length}
+        inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
         totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
         cartPacksCount={stagedCartPacks.length}
         dispatchedLotsCount={dispatchLots.length}
