@@ -17,7 +17,7 @@ import {
   Download,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, INITIAL_SAVED_ADDRESSES } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, INITIAL_SAVED_ADDRESSES, getProductNameAndType } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 import { exportInwardRegisterPacksToExcel } from '../utils/excelExport';
 
@@ -61,9 +61,15 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [editChallanPackNumber, setEditChallanPackNumber] = useState('');
   const [editMismatchReason, setEditMismatchReason] = useState('');
 
-  // ISOLATION: Only show packs received via Inward Receiving Dock / Delivery Challan
+  // STRICT ISOLATION: Only show active packs received via Inward Receiving Dock / Delivery Challan
   const inwardOnlyPacks = useMemo(() => {
-    return packs.filter((p) => p.sourceType !== 'LINE_POPULATE');
+    return packs.filter((p) => {
+      if (p.sourceType === 'LINE_POPULATE' || p.sourceType === 'DIRECT_DISPATCH') return false;
+      if (p.documentNo === 'DIRECT-DISPATCH') return false;
+      if (p.dealershipName === 'Direct Plant Dispatch') return false;
+      if (p.status === 'DISPATCHED') return false;
+      return true;
+    });
   }, [packs]);
 
   // Today Date String
@@ -487,7 +493,8 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
               <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                 <th className="p-3">#</th>
                 <th className="p-3">Pack Number</th>
-                <th className="p-3">Model</th>
+                <th className="p-3">Product Name</th>
+                <th className="p-3">Product Type</th>
                 <th className="p-3">Doc / Challan No</th>
                 <th className="p-3">Dealership / Source</th>
                 <th className="p-3">State / City</th>
@@ -499,6 +506,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredPacks.map((pack, index) => {
                 const model = BATTERY_MODELS[pack.packType];
+                const { productName, productType } = getProductNameAndType(pack.packType);
                 const isPending = pack.status === 'PENDING_APPROVAL';
 
                 return (
@@ -531,9 +539,12 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                         )}
                       </div>
                     </td>
-                    <td className="p-3">
+                    <td className="p-3 font-bold text-slate-900 whitespace-nowrap">
+                      {productName}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded font-bold text-[11px] border ${model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                        {pack.packType}
+                        {productType}
                       </span>
                     </td>
                     <td className="p-3 font-mono-code text-slate-900 font-bold">{pack.documentNo || '—'}</td>

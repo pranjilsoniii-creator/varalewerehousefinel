@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
+import { DashboardView } from './components/DashboardView';
 import { InwardScanner } from './components/InwardScanner';
 import { InwardRegisterView } from './components/InwardRegisterView';
 import { TotalStockView } from './components/TotalStockView';
@@ -42,20 +43,23 @@ import {
 import { useAuth } from './context/AuthContext';
 import { Wrench, ShieldAlert } from 'lucide-react';
 
-// Route Helper Mappings (Without Invoices)
+// Route Helper Mappings
 function getTabFromPath(path: string): string {
   const cleanPath = path.toLowerCase().replace(/^\/|\/$/g, '');
+  if (cleanPath === 'dashboard' || cleanPath === '' || cleanPath === 'home') return 'DASHBOARD';
   if (cleanPath === 'inward') return 'INWARD';
   if (cleanPath === 'inward-register' || cleanPath === 'inward-log') return 'INWARD_LOG';
   if (cleanPath === 'stock' || cleanPath === 'total-stock') return 'TOTAL_STOCK';
   if (cleanPath === 'lines' || cleanPath === 'warehouse-lines') return 'LINE_INSPECTOR';
   if (cleanPath === 'dispatch' || cleanPath === 'dispatch-staging') return 'DISPATCH_CART';
   if (cleanPath === 'analytics' || cleanPath === 'reports') return 'ANALYTICS';
-  return 'TOTAL_STOCK';
+  return 'DASHBOARD';
 }
 
 function getPathFromTab(tab: string): string {
   switch (tab) {
+    case 'DASHBOARD':
+      return '/dashboard';
     case 'INWARD':
       return '/inward';
     case 'INWARD_LOG':
@@ -69,7 +73,7 @@ function getPathFromTab(tab: string): string {
     case 'ANALYTICS':
       return '/analytics';
     default:
-      return '/stock';
+      return '/dashboard';
   }
 }
 
@@ -738,6 +742,16 @@ export function App() {
 
       {/* Main Body View Rendering */}
       <main className="flex-1 pb-16">
+        {activeTab === 'DASHBOARD' && (
+          <DashboardView
+            packs={packs}
+            dispatchLots={dispatchLots}
+            inwardShipments={inwardShipments}
+            onOpenPackDetails={(pack) => setInspectingPack(pack)}
+            onNavigateToTab={(tab) => handleTabChange(tab)}
+          />
+        )}
+
         {activeTab === 'INWARD' && hasPermission('canInward') && (
           <InwardScanner
             existingPacks={packs}

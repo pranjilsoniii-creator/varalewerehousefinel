@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  LayoutDashboard,
   Camera,
   Layers,
   Search,
@@ -54,6 +55,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const finalInwardCount = inwardPacksCount !== undefined ? inwardPacksCount : totalActivePacks;
 
   const allNavItems = [
+    {
+      id: 'DASHBOARD',
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+      permissionKey: 'canViewStock' as const,
+    },
     {
       id: 'INWARD',
       label: 'Inward Scan',

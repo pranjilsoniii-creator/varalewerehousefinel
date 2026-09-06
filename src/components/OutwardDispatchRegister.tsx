@@ -16,7 +16,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, DispatchLot } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, COMMON_TRANSPORTERS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, COMMON_TRANSPORTERS, getProductNameAndType } from '../data/batteryCatalog';
 import * as XLSX from 'xlsx';
 
 interface OutwardDispatchRegisterProps {
@@ -26,16 +26,8 @@ interface OutwardDispatchRegisterProps {
 }
 
 export function formatPackDisplayName(packType: string): string {
-  if (packType.includes('AIO')) return 'AiO';
-  if (packType.includes('Gen3')) return 'Gen3';
-  if (packType.includes('CKD')) return 'CKD';
-  if (packType.includes('FBU')) return 'FBU';
-  if (packType.includes('Kanger2.0')) return 'Kanger_2.0';
-  if (packType.includes('Limber')) return 'Limber';
-  if (packType.includes('Tamor')) return 'Tamor';
-  if (packType.includes('Nova')) return 'Nova';
-  if (packType.includes('Challenger')) return 'Challenger';
-  return packType;
+  const info = getProductNameAndType(packType);
+  return info.productType;
 }
 
 export function formatIndianDate(dateStr?: string): string {
@@ -207,14 +199,16 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
     setEditingPack(null);
   };
 
-  // Export to Excel matching exact column layout from photo
+  // Export to Excel matching exact column layout
   const handleExportExcel = () => {
     const rows = filteredDispatches.map((p, index) => {
       const lot = p.dispatchLotId ? lotMap.get(p.dispatchLotId) : undefined;
+      const { productName, productType } = getProductNameAndType(p.packType);
       return {
         'Sr. No': index + 1,
         'Pack Number': p.packNumber,
-        'Pack Name (Type)': formatPackDisplayName(p.packType),
+        'Product Name': productName,
+        'Product Type': productType,
         'Dispatch Date': formatIndianDate(p.dispatchedAt || lot?.timestamp),
         'Document Number': p.dispatchDocNo || lot?.transportDocNo || lot?.lotNumber || 'DCVRL/26-27-0001',
         'LR Number': p.dispatchLrNo || lot?.lrNumber || '32997',
@@ -232,7 +226,8 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
     const colWidths = [
       { wch: 8 },
       { wch: 14 },
-      { wch: 18 },
+      { wch: 16 },
+      { wch: 14 },
       { wch: 14 },
       { wch: 20 },
       { wch: 14 },
@@ -429,7 +424,8 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
               <tr className="bg-amber-200/60 border-b border-amber-300 text-[11px] font-extrabold text-slate-900 whitespace-nowrap">
                 <th className="p-2.5 border-r border-amber-300/70 text-center w-12">Sr. No</th>
                 <th className="p-2.5 border-r border-amber-300/70">Pack Number</th>
-                <th className="p-2.5 border-r border-amber-300/70">Pack Name (Type)</th>
+                <th className="p-2.5 border-r border-amber-300/70">Product Name</th>
+                <th className="p-2.5 border-r border-amber-300/70">Product Type</th>
                 <th className="p-2.5 border-r border-amber-300/70">Dispatch Date</th>
                 <th className="p-2.5 border-r border-amber-300/70">Document Number</th>
                 <th className="p-2.5 border-r border-amber-300/70">LR Number</th>
@@ -442,6 +438,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
             <tbody className="divide-y divide-slate-100">
               {filteredDispatches.map((pack, index) => {
                 const lot = pack.dispatchLotId ? lotMap.get(pack.dispatchLotId) : undefined;
+                const { productName, productType } = getProductNameAndType(pack.packType);
                 const docNo = pack.dispatchDocNo || lot?.transportDocNo || lot?.lotNumber || 'DCVRL/26-27-0001';
                 const lrNo = pack.dispatchLrNo || lot?.lrNumber || '32997';
                 const transportName = pack.dispatchTransporter || lot?.transportName || 'Sahyadri Enterprises';
@@ -462,8 +459,13 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                         </div>
                       )}
                     </td>
-                    <td className="p-2.5 border-r border-slate-100 font-bold text-slate-800">
-                      {formatPackDisplayName(pack.packType)}
+                    <td className="p-2.5 border-r border-slate-100 font-bold text-slate-900 whitespace-nowrap">
+                      {productName}
+                    </td>
+                    <td className="p-2.5 border-r border-slate-100 font-bold text-slate-800 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[11px]">
+                        {productType}
+                      </span>
                     </td>
                     <td className="p-2.5 border-r border-slate-100 font-mono-code text-slate-700">
                       {dispDateStr}

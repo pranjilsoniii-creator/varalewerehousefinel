@@ -112,11 +112,11 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
   // Dispatch Date (defaults to today's date YYYY-MM-DD)
   const [dispatchDate, setDispatchDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
 
-  // Form Fields
-  const [consigneeName, setConsigneeName] = useState(savedAddresses[0]?.title || 'TATA AUTOCOMP SYSTEMS LTD - Chakan Plant 2');
-  const [consigneeAddress, setConsigneeAddress] = useState(savedAddresses[0]?.address || 'Plot No. 2, Sector 11, Tata Motors Complex, Chakan Industrial Area, Pune, Maharashtra - 410501');
-  const [consigneeGstin, setConsigneeGstin] = useState(savedAddresses[0]?.gstin || '27AAACT2727Q1ZR');
-  const [consigneeState, setConsigneeState] = useState(savedAddresses[0]?.state || 'Maharashtra');
+  // Form Fields - Start Completely Blank as requested by warehouse operators
+  const [consigneeName, setConsigneeName] = useState('');
+  const [consigneeAddress, setConsigneeAddress] = useState('');
+  const [consigneeGstin, setConsigneeGstin] = useState('');
+  const [consigneeState, setConsigneeState] = useState('');
 
   const [transportName, setTransportName] = useState(COMMON_TRANSPORTERS[0]);
   const [customTransport, setCustomTransport] = useState('');
