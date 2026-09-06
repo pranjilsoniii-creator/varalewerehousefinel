@@ -7,7 +7,7 @@ export const ALL_PACK_TYPES: BatteryPackType[] = [
   'Kanger1.0_FBU',
   'Kanger2.0',
   'Kanger3.0',
-  'Limber_Non_Ais',
+  'Limber_Ais',
   'Tamor_ELR',
   'Nova_LRP',
   'Challenger_LR',
@@ -167,23 +167,23 @@ export const BATTERY_MODELS: Record<BatteryPackType, BatteryModelInfo> = {
   },
   'Limber_Ais': {
     id: 'Limber_Ais',
-    name: 'Limber',
-    shortCode: 'LIMBER',
+    name: 'Limber_Ais',
+    shortCode: 'LIM-AIS',
     category: 'Limber',
     color: '#16a34a',
     badgeBg: 'bg-green-100 text-green-800 border-green-200',
     borderColor: 'border-green-500',
-    description: 'Limber Pack',
+    description: 'Limber AIS Pack',
   },
   'Limber_Non_Ais': {
-    id: 'Limber_Non_Ais',
-    name: 'Limber',
-    shortCode: 'LIMBER',
+    id: 'Limber_Ais',
+    name: 'Limber_Ais',
+    shortCode: 'LIM-AIS',
     category: 'Limber',
     color: '#16a34a',
     badgeBg: 'bg-green-100 text-green-800 border-green-200',
     borderColor: 'border-green-500',
-    description: 'Limber Pack',
+    description: 'Limber AIS Pack',
   },
 };
 
@@ -200,7 +200,7 @@ export const MODEL_KEYWORDS = [
  * - CKD -> Kanger1.0_CKD
  * - GEN3 / G3 -> Kanger1.0_Gen3
  * - Kanger 2.0 / K2 -> Kanger2.0
- * - Limber -> Limber_Non_Ais (Limber)
+ * - Limber -> Limber_Ais (Limber)
  * - Kanger 3.0 / K3 -> Kanger3.0
  * - Tamor / Nova / Challenger -> Tamor_ELR / Nova_LRP / Challenger_LR / Challenger_MR
  * - AIO / Default -> Kanger1.0_AIO
@@ -230,7 +230,7 @@ export function deriveModelFromShorthand(serial: string, shorthand: string = 'AI
 
   // 5. Check for Limber
   if (rawCombined.includes('LIMBER') || rawCombined.includes('LIM')) {
-    return 'Limber_Non_Ais';
+    return 'Limber_Ais';
   }
 
   // 6. Check for Kanger 3.0 / K3

@@ -169,7 +169,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     { typeKey: 'Kanger1.0_FBU', displayName: 'Kanger 1.0 FBU', matchKeys: ['Kanger1.0_FBU', 'Kanger1.0_FBU_Ais'] },
     { typeKey: 'Kanger2.0', displayName: 'Kanger 2.0', matchKeys: ['Kanger2.0', 'Kanger2.0_Ais'] },
     { typeKey: 'Kanger3.0', displayName: 'Kanger 3.0', matchKeys: ['Kanger3.0'] },
-    { typeKey: 'Limber_Non_Ais', displayName: 'Limber', matchKeys: ['Limber_Non_Ais', 'Limber_Ais'] },
+    { typeKey: 'Limber_Ais', displayName: 'Limber_Ais', matchKeys: ['Limber_Ais', 'Limber_Non_Ais'] },
     { typeKey: 'Tamor_ELR', displayName: 'Tamor ELR', matchKeys: ['Tamor_ELR'] },
     { typeKey: 'Nova_LRP', displayName: 'Nova LRP', matchKeys: ['Nova_LRP'] },
     { typeKey: 'Challenger_LR', displayName: 'Challenger LR', matchKeys: ['Challenger_LR'] },

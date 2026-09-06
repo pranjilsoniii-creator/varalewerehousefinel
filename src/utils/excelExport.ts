@@ -61,21 +61,19 @@ export function exportInwardShipmentsToExcel(shipments: InwardShipmentRecord[], 
 export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename = 'Tata_Inward_Packs_Ledger.xlsx') {
   const data = packs.map((p, index) => {
     const model = BATTERY_MODELS[p.packType];
+    const modelName = p.packType === 'Limber_Non_Ais' || p.packType === 'Limber_Ais' 
+      ? 'Limber_Ais' 
+      : (model?.name || p.packType);
     const statusLabel = p.status === 'PENDING_APPROVAL'
-      ? 'Pending Supervisor Approval'
+      ? 'Pending Approval'
       : p.status === 'IN_STORAGE'
-      ? `Allocated to Lines (Line ${p.lineId || 1})`
-      : 'Inward Dock';
+      ? `Allocated (Line ${p.lineId || 1})`
+      : 'Inward Area';
 
     return {
       'Sr No': index + 1,
-      'Pack Number / Physical Serial': p.packNumber,
-      'Plate Status': p.isWithoutPlate ? 'Without Plate (NP)' : 'Normal Plate',
-      'Serial Mismatch (Diff No)': p.isDifferentSerial ? 'YES' : 'NO',
-      'Challan Document Serial': p.challanPackNumber || '—',
-      'Mismatch Reason': p.mismatchReason || '—',
-      'Battery Model': model?.name || p.packType,
-      'Model Series': model?.category || 'Kanger Series',
+      'Pack Number': p.packNumber,
+      'Model': modelName,
       'Document / Challan No': p.documentNo || '—',
       'Dealership / Source Supplier': p.dealershipName || '—',
       'Received State & City': p.receivedState || 'Maharashtra',
@@ -86,7 +84,7 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
       'Location Area': p.status === 'IN_STORAGE'
         ? `Line ${p.lineId} (R-${p.rackNumber || 1}, Slot ${p.rackSlot || 1})`
         : (p.locationArea || 'Inward Area'),
-      'Inwarded By Operator': p.inwardBy || '—',
+      'Inwarded By': p.inwardBy || '—',
       'Approved By': p.inwardApprovedBy || '—',
       'Remark / Notes': p.remark || '',
     };

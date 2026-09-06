@@ -122,7 +122,7 @@ export const SamplePlatesModal: React.FC<SamplePlatesModalProps> = ({
       packs: [
         { packNo: '501', modelType: 'Nova_LRP' as BatteryPackType },
         { packNo: '502', modelType: 'Limber_Ais' as BatteryPackType },
-        { packNo: '503', modelType: 'Limber_Non_Ais' as BatteryPackType },
+        { packNo: '503', modelType: 'Limber_Ais' as BatteryPackType },
         { packNo: '504', modelType: 'Challenger_LR' as BatteryPackType },
         { packNo: '505', modelType: 'Challenger_MR' as BatteryPackType },
       ],
