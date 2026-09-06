@@ -169,26 +169,18 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     };
   }, [existingPacks]);
 
-  // Handle Dealership selection with automatic State and City autofill
+  // Handle Dealership selection: ONLY exact saved suggestion selection will autofill State & City
   const handleDealershipChange = (val: string) => {
     setDealershipName(val);
     if (!val || !val.trim()) return;
 
     const cleanKey = val.trim().toLowerCase();
     const matched = dealershipInfoMap[cleanKey];
+    
+    // Only autofill when user selects an exact saved dealership from suggestions / database
     if (matched) {
       if (matched.state) setReceivedState(matched.state);
       if (matched.city) setReceivedCity(matched.city);
-      return;
-    }
-
-    // Partial match if user typed partial name
-    const partialMatch = (Object.entries(dealershipInfoMap) as [string, { name: string; state: string; city: string }][]).find(
-      ([k, v]) => k.includes(cleanKey) || cleanKey.includes(k) || (v.name && v.name.toLowerCase() === cleanKey)
-    );
-    if (partialMatch && partialMatch[1]) {
-      if (partialMatch[1].state) setReceivedState(partialMatch[1].state);
-      if (partialMatch[1].city) setReceivedCity(partialMatch[1].city);
     }
   };
 
