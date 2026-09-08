@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { BatteryPack, DispatchLot, InwardShipmentRecord, DailyStockRecord } from '../types';
+import { BatteryPack, DispatchLot, InwardShipmentRecord, DailyStockRecord, UserAccount } from '../types';
 
 // Hardcoded verified Supabase credentials for Tata AutoComp Project
 const DEFAULT_SUPABASE_URL = 'https://eovoqayzvspkpzwpxxic.supabase.co';
@@ -393,9 +393,9 @@ export async function fetchLotsFromCloud(): Promise<DispatchLot[] | null> {
       console.warn('Supabase fetch lots warning:', error.message);
       return null;
     }
-    // Filter out internal Daily Stock rows so they don't pollute dispatch lots list
+    // Filter out internal Daily Stock and User sync rows so they don't pollute dispatch lots list
     return (data || [])
-      .filter((row: any) => row.consignee_name !== 'DAILY_STOCK_MAINTENANCE')
+      .filter((row: any) => row.consignee_name !== 'DAILY_STOCK_MAINTENANCE' && row.consignee_name !== 'SYSTEM_USER_ACCOUNTS')
       .map(mapRowToLot);
   } catch (e) {
     console.warn('Supabase fetch lots exception:', e);
@@ -620,4 +620,71 @@ export async function deleteDailyStockFromCloud(recordId: string): Promise<boole
     return false;
   }
 }
+
+// -------------------------------------------------------------
+// System Users Cloud Sync Functions (Multi-Device Authentication)
+// -------------------------------------------------------------
+export async function fetchUsersFromCloud(): Promise<UserAccount[] | null> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return null;
+
+    const { data, error } = await sb
+      .from('dispatch_lots')
+      .select('*')
+      .eq('id', 'tata-wms-system-users')
+      .maybeSingle();
+
+    if (!error && data && data.notes) {
+      try {
+        const parsed = JSON.parse(data.notes);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (pe) {}
+    }
+    return null;
+  } catch (e) {
+    console.warn('Supabase fetch users exception:', e);
+    return null;
+  }
+}
+
+export async function syncUsersToCloud(users: UserAccount[]): Promise<boolean> {
+  try {
+    const sb = getSupabase();
+    if (!sb || !Array.isArray(users) || users.length === 0) return false;
+
+    const userLotRow = {
+      id: 'tata-wms-system-users',
+      lot_number: 'SYSTEM-USER-SYNC',
+      timestamp: new Date().toISOString(),
+      status: 'DISPATCHED',
+      from_plant: 'Tata AutoComp Systems Limited - Varale (B300 Plant)',
+      consignee_name: 'SYSTEM_USER_ACCOUNTS',
+      consignee_address: 'WMS Auth Registry',
+      vehicle_number: `v${users.length}`,
+      transport_name: 'Auth Sync Service',
+      lr_number: 'AUTH',
+      transport_doc_no: 'USERS',
+      pack_count: users.length,
+      packs: [],
+      dispatched_by: 'System Admin',
+      approved_by: 'System Admin',
+      approved_at: new Date().toISOString(),
+      notes: JSON.stringify(users),
+    };
+
+    const { error } = await sb.from('dispatch_lots').upsert(userLotRow, { onConflict: 'id' });
+    if (error) {
+      console.warn('Supabase user accounts sync warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase user accounts sync exception:', e);
+    return false;
+  }
+}
+
 

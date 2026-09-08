@@ -3,7 +3,7 @@ import { Lock, User, Key, ShieldCheck, AlertCircle, Eye, EyeOff, ArrowRight } fr
 import { useAuth } from '../context/AuthContext';
 
 export const LoginScreen: React.FC = () => {
-  const { login } = useAuth();
+  const { login, users } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -13,18 +13,36 @@ export const LoginScreen: React.FC = () => {
     e.preventDefault();
     setError(null);
 
-    if (!username.trim()) {
+    const cleanU = username.trim().replace(/^@+/, '');
+    const cleanP = password.trim();
+
+    if (!cleanU) {
       setError('Please enter your Staff Username / Login ID.');
       return;
     }
-    if (!password.trim()) {
+    if (!cleanP) {
       setError('Please enter your account password.');
       return;
     }
 
-    const success = login(username.trim(), password.trim());
+    const matchedUser = users.find(
+      (u) =>
+        u.username.toLowerCase() === cleanU.toLowerCase() ||
+        (cleanU.toLowerCase() === 'vikash' && u.username.toLowerCase() === 'vikas')
+    );
+
+    if (matchedUser && !matchedUser.active) {
+      setError(`Account @${matchedUser.username} is deactivated. Please contact Suresh Chavan or Super Admin.`);
+      return;
+    }
+
+    const success = login(cleanU, cleanP);
     if (!success) {
-      setError('Invalid username or password. Please verify your confidential credentials or contact Super Admin.');
+      if (matchedUser) {
+        setError(`Incorrect password for @${matchedUser.username}. Please verify or contact Suresh Chavan.`);
+      } else {
+        setError(`User "@${cleanU}" not found in registered accounts. Please verify spelling with Manager.`);
+      }
     }
   };
 

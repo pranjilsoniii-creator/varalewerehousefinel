@@ -8,7 +8,7 @@ interface LoginModalProps {
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
-  const { login } = useAuth();
+  const { login, users } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,11 +19,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const success = login(username.trim(), password.trim());
+
+    const cleanU = username.trim().replace(/^@+/, '');
+    const cleanP = password.trim();
+
+    if (!cleanU) {
+      setError('Please enter your Staff Username / Login ID.');
+      return;
+    }
+    if (!cleanP) {
+      setError('Please enter your account password.');
+      return;
+    }
+
+    const matchedUser = users.find(
+      (u) =>
+        u.username.toLowerCase() === cleanU.toLowerCase() ||
+        (cleanU.toLowerCase() === 'vikash' && u.username.toLowerCase() === 'vikas')
+    );
+
+    if (matchedUser && !matchedUser.active) {
+      setError(`Account @${matchedUser.username} is deactivated. Please contact Suresh Chavan or Super Admin.`);
+      return;
+    }
+
+    const success = login(cleanU, cleanP);
     if (success) {
       onClose();
     } else {
-      setError('Invalid username or password. Please verify credentials or contact Super Admin.');
+      if (matchedUser) {
+        setError(`Incorrect password for @${matchedUser.username}. Please verify or contact Suresh Chavan.`);
+      } else {
+        setError(`User "@${cleanU}" not found. Please check spelling with Warehouse Manager.`);
+      }
     }
   };
 
