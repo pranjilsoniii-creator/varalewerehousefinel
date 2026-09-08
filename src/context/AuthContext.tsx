@@ -362,6 +362,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('tata_wms_current_user_v3');
   };
 
+  const isSuperAdmin = currentUser?.role === 'superadmin';
+  const isManager = currentUser?.role === 'manager';
+  const isSupervisor = currentUser?.role === 'supervisor';
+  const isEmployee = currentUser?.role === 'employee';
+
   const addUser = (newUser: UserAccount): boolean => {
     const cleanUsername = newUser.username.trim().replace(/^@+/, '');
     const cleanPassword = newUser.password ? newUser.password.trim() : '';
@@ -373,19 +378,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
+    // Strict Rule: Non-SuperAdmin cannot create a SuperAdmin account
+    const assignedRole: UserRole = (!isSuperAdmin && newUser.role === 'superadmin') ? 'employee' : newUser.role;
+
     const created: UserAccount = {
       ...newUser,
       username: cleanUsername,
       password: cleanPassword,
       name: cleanName,
+      role: assignedRole,
       active: true,
       permissions: newUser.permissions || {
         canInward: true,
         canDispatch: true,
-        canLineManage: newUser.role === 'superadmin' || newUser.role === 'manager',
+        canLineManage: assignedRole === 'superadmin' || assignedRole === 'manager',
         canViewStock: true,
-        canInvoices: newUser.role === 'superadmin' || newUser.role === 'manager',
-        canAnalytics: newUser.role === 'superadmin' || newUser.role === 'manager',
+        canInvoices: assignedRole === 'superadmin' || assignedRole === 'manager',
+        canAnalytics: assignedRole === 'superadmin' || assignedRole === 'manager',
       },
     };
 
@@ -401,6 +410,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!cleanNewUsername || !cleanNewName) return false;
 
+    const targetUser = users.find((u) => u.username.toLowerCase() === cleanOld);
+    if (!targetUser) return false;
+
+    // Strict Rule: Non-SuperAdmin CANNOT edit or manage any SuperAdmin account!
+    if (!isSuperAdmin && (targetUser.role === 'superadmin' || cleanOld === 'pranjils0ni')) {
+      console.warn('Unauthorized: Non-SuperAdmin cannot modify SuperAdmin account.');
+      return false;
+    }
+
+    // Strict Rule: Non-SuperAdmin cannot promote anyone to SuperAdmin
+    const safeRole: UserRole = (!isSuperAdmin && updatedUser.role === 'superadmin') ? targetUser.role : updatedUser.role;
+
     // If username changed, ensure not taken by another user
     if (cleanNewUsername.toLowerCase() !== cleanOld) {
       if (users.some((u) => u.username.toLowerCase() === cleanNewUsername.toLowerCase())) {
@@ -413,6 +434,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           ...u,
           ...updatedUser,
+          role: safeRole,
           username: cleanNewUsername,
           password: cleanNewPass || u.password,
           name: cleanNewName,
@@ -428,6 +450,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updatedCurrent: UserAccount = {
         ...currentUser,
         ...updatedUser,
+        role: safeRole,
         username: cleanNewUsername,
         password: cleanNewPass || currentUser.password,
         name: cleanNewName,
@@ -447,36 +470,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'You cannot delete your own active logged-in account.' };
     }
 
-    // Prevent deleting primary SuperAdmin
-    if (clean === 'pranjils0ni') {
-      return { success: false, message: 'Super Admin Pranjil Soni account is protected and cannot be deleted.' };
+    const targetUser = users.find((u) => u.username.toLowerCase() === clean);
+    if (!targetUser) {
+      return { success: false, message: `User @${username} not found.` };
     }
 
-    const exists = users.some((u) => u.username.toLowerCase() === clean);
-    if (!exists) {
-      return { success: false, message: `User @${username} not found.` };
+    // Strict Rule 1: Super Admin accounts cannot be deleted by anyone
+    if (targetUser.role === 'superadmin' || clean === 'pranjils0ni') {
+      return { success: false, message: 'Super Admin accounts are protected and cannot be deleted.' };
+    }
+
+    // Strict Rule 2: Non-SuperAdmin cannot delete managers or superadmins
+    if (!isSuperAdmin && targetUser.role === 'superadmin') {
+      return { success: false, message: 'Unauthorized: Only Super Admin can manage administrative accounts.' };
     }
 
     const nextUsers = users.filter((u) => u.username.toLowerCase() !== clean);
     persistAndBroadcastUsers(nextUsers);
-    return { success: true, message: `User @${username} was deleted successfully.` };
+    return { success: true, message: `Staff account @${username} was deleted successfully.` };
   };
 
   const toggleUserActive = (username: string) => {
     const clean = username.trim().replace(/^@+/, '').toLowerCase();
-    if (currentUser && currentUser.username.toLowerCase() === clean) {
-      return; // Cannot disable self
+    const targetUser = users.find((u) => u.username.toLowerCase() === clean);
+    if (!targetUser) return;
+
+    // Strict Rule: Super Admin cannot be disabled
+    if (targetUser.role === 'superadmin' || clean === 'pranjils0ni') {
+      return;
     }
+
+    // Strict Rule: Cannot disable self
+    if (currentUser && currentUser.username.toLowerCase() === clean) {
+      return;
+    }
+
+    // Strict Rule: Non-SuperAdmin cannot disable another admin
+    if (!isSuperAdmin && targetUser.role === 'superadmin') {
+      return;
+    }
+
     const nextUsers = users.map((u) =>
       u.username.toLowerCase() === clean ? { ...u, active: !u.active } : u
     );
     persistAndBroadcastUsers(nextUsers);
   };
-
-  const isSuperAdmin = currentUser?.role === 'superadmin';
-  const isManager = currentUser?.role === 'manager';
-  const isSupervisor = currentUser?.role === 'supervisor';
-  const isEmployee = currentUser?.role === 'employee';
 
   const canDirectApprove = isSuperAdmin || isManager || isSupervisor;
   const canApproveRequests = isSuperAdmin || isManager || isSupervisor;

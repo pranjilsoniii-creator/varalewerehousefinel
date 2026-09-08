@@ -145,6 +145,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
   };
 
   const startEditUser = (user: UserAccount) => {
+    if (!isSuperAdmin && (user.role === 'superadmin' || user.username.toLowerCase() === 'pranjils0ni')) {
+      setMessage({ type: 'error', text: 'Access Denied: Super Admin accounts cannot be edited by Manager.' });
+      return;
+    }
     setEditingUser(user);
     setEditOldUsername(user.username);
     setEditName(user.name);
@@ -719,16 +723,29 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                   {filteredUsers.map((u) => {
                     const isSelf = u.username.toLowerCase() === currentUser?.username.toLowerCase();
                     const isRevealed = revealedPasswords[u.username];
-                    const isPranjil = u.username.toLowerCase() === 'pranjils0ni';
+                    const isTargetSuperAdmin = u.role === 'superadmin' || u.username.toLowerCase() === 'pranjils0ni';
+
+                    // Strict Security Rules:
+                    // 1. If target is SuperAdmin and current viewer is NOT SuperAdmin (e.g. Suresh Chavan is viewing), they CANNOT edit, delete, disable, or view password of SuperAdmin!
+                    // 2. SuperAdmin can edit, delete, disable, and reset password of Suresh Chavan and everyone else!
+                    const canEditThisUser = isSuperAdmin ? true : !isTargetSuperAdmin;
+                    const canDeleteThisUser = isSuperAdmin ? !isSelf && !isTargetSuperAdmin : !isSelf && !isTargetSuperAdmin && u.role !== 'manager';
+                    const canToggleThisUser = isSuperAdmin ? !isSelf : !isSelf && !isTargetSuperAdmin;
+                    const canViewThisPassword = isSuperAdmin ? true : !isTargetSuperAdmin;
 
                     return (
-                      <tr key={u.username} className="hover:bg-slate-50/80 transition">
+                      <tr key={u.username} className={`hover:bg-slate-50/80 transition ${isTargetSuperAdmin ? 'bg-purple-50/30' : ''}`}>
                         <td className="p-3">
                           <div className="font-extrabold text-slate-900 flex items-center gap-1.5">
                             <span>{u.name}</span>
                             {isSelf && (
                               <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[9px] font-bold">
                                 You
+                              </span>
+                            )}
+                            {isTargetSuperAdmin && (
+                              <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 text-[9px] font-bold flex items-center gap-0.5 border border-purple-200">
+                                <Shield className="w-2.5 h-2.5" /> Supreme Admin
                               </span>
                             )}
                           </div>
@@ -739,7 +756,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                             className={
                               'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ' +
                               (u.role === 'superadmin'
-                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200 font-extrabold'
                                 : u.role === 'manager'
                                 ? 'bg-blue-100 text-blue-800 border border-blue-200'
                                 : u.role === 'supervisor'
@@ -762,7 +779,12 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                           </button>
                         </td>
                         <td className="p-3">
-                          {u.password ? (
+                          {!canViewThisPassword ? (
+                            <span className="font-mono-code text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-1 rounded border border-purple-200 flex items-center gap-1 w-fit">
+                              <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Protected SuperAdmin</span>
+                            </span>
+                          ) : u.password ? (
                             <div className="flex items-center gap-1.5">
                               <span className="font-mono-code font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                                 {isRevealed ? u.password : '••••••••'}
@@ -807,46 +829,56 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({ isOpen
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Edit Button */}
-                            {canManage && (
-                              <button
-                                type="button"
-                                onClick={() => startEditUser(u)}
-                                className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-200 transition cursor-pointer flex items-center gap-1"
-                                title="Edit Username, Password, Role & Permissions"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline font-bold text-[11px]">Edit</span>
-                              </button>
-                            )}
+                            {/* Non-SuperAdmin viewing SuperAdmin: Display Protected Badge */}
+                            {!isSuperAdmin && isTargetSuperAdmin ? (
+                              <span className="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-lg font-bold border border-purple-200 text-[10px] flex items-center gap-1">
+                                <ShieldCheck className="w-3 h-3 text-purple-600" />
+                                <span>SuperAdmin (Read-Only)</span>
+                              </span>
+                            ) : (
+                              <>
+                                {/* Edit Button */}
+                                {canEditThisUser && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditUser(u)}
+                                    className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-200 transition cursor-pointer flex items-center gap-1"
+                                    title="Edit Username, Password, Role & Permissions"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                    <span className="hidden sm:inline font-bold text-[11px]">Edit</span>
+                                  </button>
+                                )}
 
-                            {/* Disable / Enable Toggle */}
-                            {canManage && !isSelf && (
-                              <button
-                                type="button"
-                                onClick={() => toggleUserActive(u.username)}
-                                className={
-                                  'px-2 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ' +
-                                  (u.active
-                                    ? 'text-rose-600 hover:bg-rose-50 border-rose-200'
-                                    : 'text-emerald-600 hover:bg-emerald-50 border-emerald-200')
-                                }
-                                title={u.active ? 'Disable Account' : 'Enable Account'}
-                              >
-                                {u.active ? 'Disable' : 'Enable'}
-                              </button>
-                            )}
+                                {/* Disable / Enable Toggle */}
+                                {canToggleThisUser && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleUserActive(u.username)}
+                                    className={
+                                      'px-2 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ' +
+                                      (u.active
+                                        ? 'text-rose-600 hover:bg-rose-50 border-rose-200'
+                                        : 'text-emerald-600 hover:bg-emerald-50 border-emerald-200')
+                                    }
+                                    title={u.active ? 'Disable Account' : 'Enable Account'}
+                                  >
+                                    {u.active ? 'Disable' : 'Enable'}
+                                  </button>
+                                )}
 
-                            {/* Delete Button */}
-                            {canManage && !isSelf && !isPranjil && (
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(u)}
-                                className="p-1.5 text-rose-600 hover:bg-rose-100 rounded-lg border border-rose-200 transition cursor-pointer"
-                                title="Delete User Account"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                                {/* Delete Button */}
+                                {canDeleteThisUser && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(u)}
+                                    className="p-1.5 text-rose-600 hover:bg-rose-100 rounded-lg border border-rose-200 transition cursor-pointer"
+                                    title="Delete User Account"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
