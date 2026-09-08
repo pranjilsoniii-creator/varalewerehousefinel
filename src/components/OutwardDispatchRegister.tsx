@@ -204,17 +204,22 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
     const rows = filteredDispatches.map((p, index) => {
       const lot = p.dispatchLotId ? lotMap.get(p.dispatchLotId) : undefined;
       const { productName, productType } = getProductNameAndType(p.packType);
+      const destination = p.dispatchToCustomer || lot?.consigneeName || 'TATA AUTOCOMP SYSTEMS LTD';
+      const destAddress = p.dispatchToAddress || lot?.consigneeAddress || 'Pune, Maharashtra';
+
       return {
         'Sr. No': index + 1,
         'Pack Number': p.packNumber,
         'Product Name': productName,
         'Product Type': productType,
+        'Remark': p.remark || '—',
         'Dispatch Date': formatIndianDate(p.dispatchedAt || lot?.timestamp),
         'Document Number': p.dispatchDocNo || lot?.transportDocNo || lot?.lotNumber || 'DCVRL/26-27-0001',
         'LR Number': p.dispatchLrNo || lot?.lrNumber || '32997',
         'Transporter Name': p.dispatchTransporter || lot?.transportName || 'Sahyadri Enterprises',
         'Vehicle Number': p.dispatchVehicleNo || lot?.vehicleNumber || 'MH14MH3845',
-        'Destination (Company - City/State)': p.dispatchToCustomer || lot?.consigneeName || 'TATA AUTOCOMP SYSTEMS LTD - Chakan',
+        'Destination Consignee': destination,
+        'Destination City/State/Address': destAddress,
       };
     });
 
@@ -228,12 +233,14 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
       { wch: 14 },
       { wch: 16 },
       { wch: 14 },
+      { wch: 16 },
       { wch: 14 },
       { wch: 20 },
       { wch: 14 },
       { wch: 24 },
       { wch: 16 },
-      { wch: 38 },
+      { wch: 28 },
+      { wch: 40 },
     ];
     worksheet['!cols'] = colWidths;
 
@@ -426,6 +433,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                 <th className="p-2.5 border-r border-amber-300/70">Pack Number</th>
                 <th className="p-2.5 border-r border-amber-300/70">Product Name</th>
                 <th className="p-2.5 border-r border-amber-300/70">Product Type</th>
+                <th className="p-2.5 border-r border-amber-300/70">Remark</th>
                 <th className="p-2.5 border-r border-amber-300/70">Dispatch Date</th>
                 <th className="p-2.5 border-r border-amber-300/70">Document Number</th>
                 <th className="p-2.5 border-r border-amber-300/70">LR Number</th>
@@ -443,7 +451,8 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                 const lrNo = pack.dispatchLrNo || lot?.lrNumber || '32997';
                 const transportName = pack.dispatchTransporter || lot?.transportName || 'Sahyadri Enterprises';
                 const vehicleNo = pack.dispatchVehicleNo || lot?.vehicleNumber || 'MH14MH3845';
-                const destination = pack.dispatchToCustomer || lot?.consigneeName || 'TATA AUTOCOMP SYSTEMS LTD - Chakan';
+                const destination = pack.dispatchToCustomer || lot?.consigneeName || 'TATA AUTOCOMP SYSTEMS LTD';
+                const destAddress = pack.dispatchToAddress || lot?.consigneeAddress;
                 const dispDateStr = formatIndianDate(pack.dispatchedAt || lot?.timestamp);
 
                 return (
@@ -467,6 +476,15 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                         {productType}
                       </span>
                     </td>
+                    <td className="p-2.5 border-r border-slate-100 text-slate-800">
+                      {pack.remark ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 max-w-[130px] truncate" title={pack.remark}>
+                          {pack.remark}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
+                    </td>
                     <td className="p-2.5 border-r border-slate-100 font-mono-code text-slate-700">
                       {dispDateStr}
                     </td>
@@ -482,8 +500,13 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                     <td className="p-2.5 border-r border-slate-100 font-mono-code font-bold text-slate-900">
                       {vehicleNo}
                     </td>
-                    <td className="p-2.5 border-r border-slate-100 text-slate-800 font-medium">
-                      {destination}
+                    <td className="p-2.5 border-r border-slate-100 text-slate-800 font-medium max-w-xs">
+                      <div className="font-bold text-slate-900">{destination}</div>
+                      {destAddress && (
+                        <div className="text-[10px] text-slate-500 truncate" title={destAddress}>
+                          📍 {destAddress}
+                        </div>
+                      )}
                     </td>
                     <td className="p-2.5 text-right">
                       {onEditPack && (
@@ -503,7 +526,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
 
               {filteredDispatches.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-400 text-xs">
+                  <td colSpan={12} className="p-8 text-center text-slate-400 text-xs">
                     No dispatched packs matching this filter. Once a lot is approved in Dispatch Staging, all packs will appear here automatically.
                   </td>
                 </tr>

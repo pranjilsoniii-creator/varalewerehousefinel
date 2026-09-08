@@ -312,52 +312,58 @@ export function getProductNameAndType(packType: string | BatteryPackType): {
   const raw = String(packType || 'Kanger1.0_AIO').trim().toUpperCase();
 
   if (raw.includes('CKD')) {
-    return { productName: 'Kanger 1.0', productType: 'CKD', fullBadgeName: 'Kanger 1.0 CKD' };
+    return { productName: 'Kanger 1.0 CKD', productType: 'Kanger 1.0', fullBadgeName: 'Kanger 1.0 CKD' };
   }
   if (raw.includes('FBU')) {
-    return { productName: 'Kanger 1.0', productType: 'FBU', fullBadgeName: 'Kanger 1.0 FBU' };
+    return { productName: 'Kanger 1.0 FBU', productType: 'Kanger 1.0', fullBadgeName: 'Kanger 1.0 FBU' };
   }
   if (raw.includes('GEN3') || raw.includes('GEN 3') || raw.includes('G3')) {
-    return { productName: 'Kanger 1.0', productType: 'Gen3', fullBadgeName: 'Kanger 1.0 Gen3' };
+    return { productName: 'Kanger 1.0 Gen3', productType: 'Kanger 1.0', fullBadgeName: 'Kanger 1.0 Gen3' };
   }
   if (raw.includes('KANGER2') || raw.includes('K2') || raw.includes('2.0')) {
-    return { productName: 'Kanger 2.0', productType: 'K2', fullBadgeName: 'Kanger 2.0' };
+    return { productName: 'Kanger 2.0', productType: 'Kanger 2.0', fullBadgeName: 'Kanger 2.0' };
   }
   if (raw.includes('KANGER3') || raw.includes('K3') || raw.includes('3.0')) {
-    return { productName: 'Kanger 3.0', productType: 'K3', fullBadgeName: 'Kanger 3.0' };
+    return { productName: 'Kanger 3.0', productType: 'Kanger 3.0', fullBadgeName: 'Kanger 3.0' };
   }
   if (raw.includes('LIMBER') || raw.includes('LIM')) {
-    return { productName: 'Limber', productType: 'Limber_Ais', fullBadgeName: 'Limber AIS' };
+    return { productName: 'Limber AIS', productType: 'Limber', fullBadgeName: 'Limber AIS' };
   }
   if (raw.includes('TAMOR') || raw.includes('ELR')) {
-    return { productName: 'Tamor', productType: 'Tamor_ELR', fullBadgeName: 'Tamor ELR' };
+    return { productName: 'Tamor ELR', productType: 'Tamor', fullBadgeName: 'Tamor ELR' };
   }
   if (raw.includes('NOVA') || raw.includes('LRP')) {
-    return { productName: 'Nova', productType: 'Nova_LRP', fullBadgeName: 'Nova LRP' };
+    return { productName: 'Nova LRP', productType: 'Nova', fullBadgeName: 'Nova LRP' };
   }
   if (raw.includes('CHALLENGER MR') || raw.includes('CHALLENGER_MR')) {
-    return { productName: 'Challenger', productType: 'Challenger_MR', fullBadgeName: 'Challenger MR' };
+    return { productName: 'Challenger MR', productType: 'Challenger', fullBadgeName: 'Challenger MR' };
   }
   if (raw.includes('CHALLENGER') || raw.includes('CHAL')) {
-    return { productName: 'Challenger', productType: 'Challenger_LR', fullBadgeName: 'Challenger LR' };
+    return { productName: 'Challenger LR', productType: 'Challenger', fullBadgeName: 'Challenger LR' };
+  }
+  if (raw.includes('BURNT')) {
+    return { productName: 'Burnt Pack', productType: 'Burnt Pack', fullBadgeName: 'Burnt Pack' };
+  }
+  if (raw.includes('DOST')) {
+    return { productName: 'E-Dost', productType: 'E-Dost', fullBadgeName: 'E-Dost' };
+  }
+  if (raw.includes('MODULE')) {
+    return { productName: 'Module', productType: 'Module', fullBadgeName: 'Module' };
   }
 
   // Default AIO (always uppercase AIO)
-  return { productName: 'Kanger 1.0', productType: 'AIO', fullBadgeName: 'Kanger 1.0 AIO' };
+  return { productName: 'Kanger 1.0 AIO', productType: 'Kanger 1.0', fullBadgeName: 'Kanger 1.0 AIO' };
 }
 
 export const COMMON_TRANSPORTERS = [
   'Sahyadri Enterprises',
   'Aai Saheb Freight Line',
-  'TCI Express (Transport Corporation of India)',
-  'Atlantic Road Line',
-  'OM Logistics Limited',
-  'Safe Express Private Limited',
+  'TCI Express',
+  'OM Logistics',
+  'Safe Express',
   'Maitri Transport',
-  'VRL Logistics Limited',
-  'Tata Motors Dedicated Fleet',
-  'Delhivery Supply Chain',
-  'Blue Dart Express',
+  'Shree Jopadevi',
+  'PRATIKSHA FREIGHT CARRIER',
   'Other',
 ];
 

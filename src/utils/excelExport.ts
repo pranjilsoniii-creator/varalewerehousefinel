@@ -7,9 +7,10 @@ export function exportInventoryToExcel(packs: BatteryPack[], filename = 'Tata_Ba
     const model = BATTERY_MODELS[p.packType];
     return {
       'Sr No': index + 1,
-      'Pack Number / Serial': p.packNumber,
+      'Pack Number': p.packNumber,
       'Model / Pack Type': model?.name || p.packType,
       'Category': model?.category || 'Tata Lithium',
+      'Remark': p.remark || '—',
       'Location Line': p.status === 'IN_STORAGE' ? p.lineId : (p.status === 'IN_DISPATCH_AREA' ? 'Dispatch Bay' : p.locationArea || 'Inward Area'),
       'Rack No': p.status === 'IN_STORAGE' ? 'R-' + (p.rackNumber || 1) : '-',
       'Slot (Level 1-4)': p.status === 'IN_STORAGE' ? 'Level ' + (p.rackSlot || 1) : '-',
@@ -44,7 +45,7 @@ export function exportInwardShipmentsToExcel(shipments: InwardShipmentRecord[], 
     'Received State': s.receivedState,
     'Transport Name': s.transportName,
     'Packs Received': s.packCount,
-    'Pack Serial Numbers': Array.isArray(s.packNumbers) ? s.packNumbers.join(', ') : '',
+    'Pack Numbers': Array.isArray(s.packNumbers) ? s.packNumbers.join(', ') : '',
     'Received / Inwarded By': s.inwardBy,
     'Approved By': s.approvedBy || '-',
     'Tata Stamp Verified': s.hasInwardStamp ? 'YES' : 'NO',
@@ -74,6 +75,7 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
       'Sr No': index + 1,
       'Pack Number': p.packNumber,
       'Model': modelName,
+      'Remark': p.remark || '—',
       'Document / Challan No': p.documentNo || '—',
       'Dealership / Source Supplier': p.dealershipName || '—',
       'Received State & City': p.receivedState || 'Maharashtra',
@@ -86,7 +88,6 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
         : (p.locationArea || 'Inward Area'),
       'Inwarded By': p.inwardBy || '—',
       'Approved By': p.inwardApprovedBy || '—',
-      'Remark / Notes': p.remark || '',
     };
   });
 
@@ -112,8 +113,9 @@ export function exportDispatchLotsToExcel(lots: DispatchLot[], filename = 'Tata_
         'Transport Carrier': lot.transportName,
         'LR / Bilty No': lot.lrNumber,
         'Document Number': lot.transportDocNo,
-        'Pack Serial': pack.packNumber,
+        'Pack Number': pack.packNumber,
         'Model Type': model?.name || pack.packType,
+        'Remark': pack.remark || '-',
         'Dispatched By': lot.dispatchedBy || '-',
         'Approved By': lot.approvedBy || '-',
       });

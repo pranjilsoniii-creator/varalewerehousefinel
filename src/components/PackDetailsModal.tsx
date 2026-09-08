@@ -197,6 +197,14 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
                   )}
                 </span>
               </div>
+              {pack.remark && (
+                <div className="flex justify-between py-1.5 border-b border-slate-200 bg-amber-50/60 px-2 rounded-md">
+                  <span className="text-amber-800 font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Physical Condition / Remark:
+                  </span>
+                  <span className="font-bold text-amber-950 font-mono-code">{pack.remark}</span>
+                </div>
+              )}
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <span className="text-slate-500">Inwarded By:</span>
                 <span className="font-medium text-slate-900">{pack.inwardBy || 'Inward Operator'}</span>

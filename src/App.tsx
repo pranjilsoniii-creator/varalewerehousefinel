@@ -941,6 +941,7 @@ export function App() {
           <DispatchCart
             stagedPacks={stagedCartPacks}
             availableStoragePacks={activeStoragePacks}
+            dispatchLots={dispatchLots}
             onRemoveFromCart={handleRemoveFromCart}
             onAddMultipleToCart={handleAddMultipleToCart}
             onApproveDispatchLot={handleApproveDispatchLot}

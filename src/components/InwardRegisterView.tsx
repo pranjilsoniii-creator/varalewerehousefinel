@@ -495,6 +495,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                 <th className="p-3">Pack Number</th>
                 <th className="p-3">Product Name</th>
                 <th className="p-3">Product Type</th>
+                <th className="p-3">Remark</th>
                 <th className="p-3">Doc / Challan No</th>
                 <th className="p-3">Dealership / Source</th>
                 <th className="p-3">State / City</th>
@@ -526,7 +527,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                           {pack.isDifferentSerial && (
                             <span
                               className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[9px] font-bold flex items-center gap-0.5"
-                              title={`Challan Doc Serial: #${pack.challanPackNumber || '—'}${pack.mismatchReason ? ` (${pack.mismatchReason})` : ''}`}
+                              title={`Challan Doc Pack Number: #${pack.challanPackNumber || '—'}${pack.mismatchReason ? ` (${pack.mismatchReason})` : ''}`}
                             >
                               ⚠️ DIFF-NO
                             </span>
@@ -546,6 +547,15 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                       <span className={`px-2 py-0.5 rounded font-bold text-[11px] border ${model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
                         {productType}
                       </span>
+                    </td>
+                    <td className="p-3">
+                      {pack.remark ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 max-w-[150px] truncate" title={pack.remark}>
+                          {pack.remark}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
                     </td>
                     <td className="p-3 font-mono-code text-slate-900 font-bold">{pack.documentNo || '—'}</td>
                     <td className="p-3 font-medium text-slate-800 max-w-[180px] truncate">{pack.dealershipName || '—'}</td>
@@ -630,7 +640,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
             <form onSubmit={handleSaveEdit} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Physical Pack Number (Serial)</label>
+                <label className="block font-bold text-slate-700 mb-1">Physical Pack Number</label>
                 <input
                   type="text"
                   value={editPackNumber}
@@ -649,18 +659,18 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                     onChange={(e) => setEditIsDifferentSerial(e.target.checked)}
                     className="w-4 h-4 text-purple-600 rounded"
                   />
-                  <span>Challan Mismatch / Different Serial Number?</span>
+                  <span>Challan Mismatch / Different Pack Number?</span>
                 </label>
 
                 {editIsDifferentSerial && (
                   <div className="space-y-2 pt-1 animate-fadeIn">
                     <div>
-                      <label className="block font-bold text-purple-900 mb-1">Challan / Invoice Serial #</label>
+                      <label className="block font-bold text-purple-900 mb-1">Challan / Invoice Pack Number #</label>
                       <input
                         type="text"
                         value={editChallanPackNumber}
                         onChange={(e) => setEditChallanPackNumber(e.target.value)}
-                        placeholder="Challan document serial (e.g. 2190)..."
+                        placeholder="Challan document pack number (e.g. 2190)..."
                         className="w-full bg-white border border-purple-300 rounded-lg p-2 font-mono-code font-bold text-purple-900 focus:outline-none focus:border-purple-600"
                         required={editIsDifferentSerial}
                       />
@@ -671,7 +681,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                         type="text"
                         value={editMismatchReason}
                         onChange={(e) => setEditMismatchReason(e.target.value)}
-                        placeholder="Reason for serial difference..."
+                        placeholder="Reason for pack number difference..."
                         className="w-full bg-white border border-purple-200 rounded-lg p-2 text-slate-700"
                       />
                     </div>

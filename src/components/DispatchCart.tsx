@@ -40,6 +40,7 @@ import { useAuth } from '../context/AuthContext';
 interface DispatchCartProps {
   stagedPacks: BatteryPack[];
   availableStoragePacks: BatteryPack[];
+  dispatchLots?: DispatchLot[];
   onRemoveFromCart: (packId: string) => void;
   onAddMultipleToCart: (packIds: string[]) => void;
   onApproveDispatchLot: (lot: DispatchLot, dispatchedPackIds: string[]) => void;
@@ -49,6 +50,7 @@ interface DispatchCartProps {
 export const DispatchCart: React.FC<DispatchCartProps> = ({
   stagedPacks,
   availableStoragePacks,
+  dispatchLots = [],
   onRemoveFromCart,
   onAddMultipleToCart,
   onApproveDispatchLot,
@@ -137,17 +139,69 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
   const [driverMobile, setDriverMobile] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Dynamic suggestions derived strictly from saved addresses and historical dispatches
-  const dynamicCustomerSuggestions = useMemo(() => {
-    const list = new Set<string>();
+  // Structured previous consignees list for suggestions and auto-complete
+  const historicalConsignees = useMemo(() => {
+    const map = new Map<string, { name: string; address: string; gstin?: string; state?: string }>();
+
+    // 1. From saved addresses
     savedAddresses.forEach((a) => {
-      if (a.title) list.add(a.title);
+      if (a.title && !map.has(a.title.toLowerCase().trim())) {
+        map.set(a.title.toLowerCase().trim(), {
+          name: a.title,
+          address: a.address,
+          gstin: a.gstin,
+          state: a.state,
+        });
+      }
     });
+
+    // 2. From previously completed dispatch lots
+    dispatchLots.forEach((lot) => {
+      if (lot.consigneeName && !map.has(lot.consigneeName.toLowerCase().trim())) {
+        map.set(lot.consigneeName.toLowerCase().trim(), {
+          name: lot.consigneeName,
+          address: lot.consigneeAddress || '',
+          gstin: lot.consigneeGstin,
+          state: '',
+        });
+      }
+    });
+
+    // 3. From storage packs with dispatch history
     availableStoragePacks.forEach((p) => {
-      if (p.dispatchToCustomer) list.add(p.dispatchToCustomer);
+      if (p.dispatchToCustomer && !map.has(p.dispatchToCustomer.toLowerCase().trim())) {
+        map.set(p.dispatchToCustomer.toLowerCase().trim(), {
+          name: p.dispatchToCustomer,
+          address: p.dispatchToAddress || '',
+        });
+      }
     });
-    return Array.from(list);
-  }, [savedAddresses, availableStoragePacks]);
+
+    return Array.from(map.values());
+  }, [savedAddresses, dispatchLots, availableStoragePacks]);
+
+  // Dynamic names list for datalist
+  const dynamicCustomerSuggestions = useMemo(() => {
+    return historicalConsignees.map((h) => h.name);
+  }, [historicalConsignees]);
+
+  // Quick autofill when selecting a suggestion
+  const handleSelectConsigneeSuggestion = (item: { name: string; address: string; gstin?: string; state?: string }) => {
+    setConsigneeName(item.name);
+    if (item.address) setConsigneeAddress(item.address);
+    if (item.gstin) setConsigneeGstin(item.gstin);
+    if (item.state) setConsigneeState(item.state);
+  };
+
+  const handleConsigneeNameChange = (val: string) => {
+    setConsigneeName(val);
+    const match = historicalConsignees.find((h) => h.name.toLowerCase().trim() === val.toLowerCase().trim());
+    if (match) {
+      if (match.address && !consigneeAddress) setConsigneeAddress(match.address);
+      if (match.gstin && !consigneeGstin) setConsigneeGstin(match.gstin);
+      if (match.state && !consigneeState) setConsigneeState(match.state);
+    }
+  };
 
   // UI Modals & Inspection
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -768,6 +822,28 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   />
                 </div>
 
+                {/* Quick Consignee Suggestions */}
+                {historicalConsignees.length > 0 && (
+                  <div className="space-y-1.5 p-2.5 bg-amber-50/50 border border-amber-200 rounded-xl">
+                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block">
+                      Previous Dispatched Companies (Click to Auto-fill):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {historicalConsignees.map((item, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectConsigneeSuggestion(item)}
+                          className="px-2 py-1 bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 rounded-md text-[11px] font-bold transition cursor-pointer text-left truncate max-w-xs shadow-2xs"
+                          title={`${item.name} - ${item.address}`}
+                        >
+                          🏢 {item.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Customer / Plant Facility Name <span className="text-rose-500">*</span>
@@ -776,7 +852,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                     type="text"
                     list="dispatch-saved-customers"
                     value={consigneeName}
-                    onChange={(e) => setConsigneeName(e.target.value)}
+                    onChange={(e) => handleConsigneeNameChange(e.target.value)}
                     placeholder="Enter Customer / Destination Facility Name..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
                     required
@@ -1152,6 +1228,28 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                   />
                 </div>
 
+                {/* Quick Consignee Suggestions */}
+                {historicalConsignees.length > 0 && (
+                  <div className="space-y-1.5 p-2.5 bg-blue-50/50 border border-blue-200 rounded-xl">
+                    <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider block">
+                      Previous Dispatched Companies (Click to Auto-fill):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {historicalConsignees.map((item, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectConsigneeSuggestion(item)}
+                          className="px-2 py-1 bg-white hover:bg-blue-100 text-blue-950 border border-blue-300 rounded-md text-[11px] font-bold transition cursor-pointer text-left truncate max-w-xs shadow-2xs"
+                          title={`${item.name} - ${item.address}`}
+                        >
+                          🏢 {item.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Customer / Destination Facility Name <span className="text-rose-500">*</span>
@@ -1160,7 +1258,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                     type="text"
                     list="dispatch-saved-customers"
                     value={consigneeName}
-                    onChange={(e) => setConsigneeName(e.target.value)}
+                    onChange={(e) => handleConsigneeNameChange(e.target.value)}
                     placeholder="Enter Customer / Destination Facility Name..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                     required

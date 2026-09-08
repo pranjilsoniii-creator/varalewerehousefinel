@@ -18,7 +18,7 @@ import {
   Table,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, DispatchLot } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 import { OutwardDispatchRegister } from './OutwardDispatchRegister';
 
@@ -433,7 +433,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Mode 1 (Search by Serial)
+              Mode 1 (Search by Pack No.)
             </button>
             <button
               type="button"
@@ -444,7 +444,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Mode 2 (Serial + Product)
+              Mode 2 (Pack No. + Product)
             </button>
             <button
               type="button"
@@ -471,7 +471,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   type="text"
                   value={search1PackNumber}
                   onChange={(e) => setSearch1PackNumber(e.target.value)}
-                  placeholder="Enter pack serial number (e.g. 7428, 2191)..."
+                  placeholder="Enter pack number (e.g. 7428, 2191)..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-10 pr-4 py-2.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -516,7 +516,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   type="text"
                   value={search2PackNumber}
                   onChange={(e) => setSearch2PackNumber(e.target.value)}
-                  placeholder="Enter pack serial (optional)..."
+                  placeholder="Enter pack number (optional)..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -582,7 +582,9 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                   <th className="p-3">#</th>
                   <th className="p-3">Pack Number</th>
-                  <th className="p-3">Product Model</th>
+                  <th className="p-3">Product Name</th>
+                  <th className="p-3">Product Type</th>
+                  <th className="p-3">Remark</th>
                   <th className="p-3">Current Location</th>
                   <th className="p-3">Document No</th>
                   <th className="p-3">Inward Date</th>
@@ -591,8 +593,9 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {((hasExecutedSearch1 ? search1Results : hasExecutedSearch2 ? search2Results : availableStockPacks).slice(0, 100)).map((pack, index) => {
+                {(hasExecutedSearch1 ? search1Results : hasExecutedSearch2 ? search2Results : availableStockPacks).map((pack, index) => {
                   const model = BATTERY_MODELS[pack.packType];
+                  const { productName, productType } = getProductNameAndType(pack.packType);
                   const isDispatched = pack.status === 'DISPATCHED';
 
                   return (
@@ -612,7 +615,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                             {pack.isDifferentSerial && (
                               <span
                                 className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[9px] font-bold"
-                                title={`Challan Doc Serial: #${pack.challanPackNumber || '—'}${pack.mismatchReason ? ` (${pack.mismatchReason})` : ''}`}
+                                title={`Challan Doc Pack Number: #${pack.challanPackNumber || '—'}${pack.mismatchReason ? ` (${pack.mismatchReason})` : ''}`}
                               >
                                 ⚠️ DIFF-NO
                               </span>
@@ -625,10 +628,22 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className="p-3">
+                      <td className="p-3 font-bold text-slate-900 whitespace-nowrap">
+                        {productName}
+                      </td>
+                      <td className="p-3 whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded font-bold text-[11px] border ${model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                          {pack.packType}
+                          {productType}
                         </span>
+                      </td>
+                      <td className="p-3">
+                        {pack.remark ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 max-w-[160px] truncate" title={pack.remark}>
+                            {pack.remark}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
                       </td>
                       <td className="p-3 font-mono-code font-bold text-blue-700">
                         {pack.currentLocation || pack.locationArea || 'Inward Area'}

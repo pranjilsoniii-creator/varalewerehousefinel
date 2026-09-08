@@ -189,15 +189,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       }
     >();
 
-    // Initialize all canonical types
+    // Initialize all canonical types (Challenger LR + Challenger MR grouped into Challenger on dashboard)
     ALL_PACK_TYPES.forEach((type) => {
       const info = getProductNameAndType(type);
-      const key = `${info.productName}__${info.productType}`;
+      const isChallenger = info.productType === 'Challenger';
+      const key = isChallenger ? 'Challenger__Challenger' : `${info.productName}__${info.productType}`;
       if (!matrixMap.has(key)) {
         matrixMap.set(key, {
-          productName: info.productName,
+          productName: isChallenger ? 'Challenger' : info.productName,
           productType: info.productType,
-          fullBadgeName: info.fullBadgeName,
+          fullBadgeName: isChallenger ? 'Challenger' : info.fullBadgeName,
           inwardCount: 0,
           dispatchCount: 0,
           liveStockCount: 0,
@@ -209,12 +210,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     // Tally Inwards in period
     inwardPacksInPeriod.forEach((p) => {
       const info = getProductNameAndType(p.packType);
-      const key = `${info.productName}__${info.productType}`;
+      const isChallenger = info.productType === 'Challenger';
+      const key = isChallenger ? 'Challenger__Challenger' : `${info.productName}__${info.productType}`;
       if (!matrixMap.has(key)) {
         matrixMap.set(key, {
-          productName: info.productName,
+          productName: isChallenger ? 'Challenger' : info.productName,
           productType: info.productType,
-          fullBadgeName: info.fullBadgeName,
+          fullBadgeName: isChallenger ? 'Challenger' : info.fullBadgeName,
           inwardCount: 0,
           dispatchCount: 0,
           liveStockCount: 0,
@@ -228,12 +230,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     // Tally Dispatches in period
     dispatchedPacksInPeriod.forEach((p) => {
       const info = getProductNameAndType(p.packType);
-      const key = `${info.productName}__${info.productType}`;
+      const isChallenger = info.productType === 'Challenger';
+      const key = isChallenger ? 'Challenger__Challenger' : `${info.productName}__${info.productType}`;
       if (!matrixMap.has(key)) {
         matrixMap.set(key, {
-          productName: info.productName,
+          productName: isChallenger ? 'Challenger' : info.productName,
           productType: info.productType,
-          fullBadgeName: info.fullBadgeName,
+          fullBadgeName: isChallenger ? 'Challenger' : info.fullBadgeName,
           inwardCount: 0,
           dispatchCount: 0,
           liveStockCount: 0,
@@ -247,12 +250,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     // Tally Live Warehouse Stock
     availableStockPacks.forEach((p) => {
       const info = getProductNameAndType(p.packType);
-      const key = `${info.productName}__${info.productType}`;
+      const isChallenger = info.productType === 'Challenger';
+      const key = isChallenger ? 'Challenger__Challenger' : `${info.productName}__${info.productType}`;
       if (!matrixMap.has(key)) {
         matrixMap.set(key, {
-          productName: info.productName,
+          productName: isChallenger ? 'Challenger' : info.productName,
           productType: info.productType,
-          fullBadgeName: info.fullBadgeName,
+          fullBadgeName: isChallenger ? 'Challenger' : info.fullBadgeName,
           inwardCount: 0,
           dispatchCount: 0,
           liveStockCount: 0,
@@ -324,7 +328,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return {
         'Sr No': idx + 1,
         'Inward Date & Time': formatIndianDate(p.inwardDate || p.scannedAt),
-        'Pack Serial Number': p.packNumber,
+        'Pack Number': p.packNumber,
         'Product Name': info.productName,
         'Product Type': info.productType,
         'DC Challan No': p.documentNo || '—',
@@ -350,7 +354,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return {
         'Sr No': idx + 1,
         'Dispatch Date & Time': formatIndianDate(p.dispatchedAt),
-        'Pack Serial Number': p.packNumber,
+        'Pack Number': p.packNumber,
         'Product Name': info.productName,
         'Product Type': info.productType,
         'Document Number': p.dispatchDocNo || '—',
@@ -802,7 +806,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Filter serial, doc no, model..."
+                  placeholder="Filter pack no, doc no, model..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 w-48 sm:w-60"
@@ -950,7 +954,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-700 font-mono-code">
                     <th className="py-3 px-4">Sr No</th>
                     <th className="py-3 px-4">Inward Date & Time</th>
-                    <th className="py-3 px-4">Pack Serial Number</th>
+                    <th className="py-3 px-4">Pack Number</th>
                     <th className="py-3 px-4">Product Name</th>
                     <th className="py-3 px-4">Product Type</th>
                     <th className="py-3 px-4">DC Challan No</th>
@@ -1029,7 +1033,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-700 font-mono-code">
                     <th className="py-3 px-4">Sr No</th>
                     <th className="py-3 px-4">Dispatch Date & Time</th>
-                    <th className="py-3 px-4">Pack Serial Number</th>
+                    <th className="py-3 px-4">Pack Number</th>
                     <th className="py-3 px-4">Product Name</th>
                     <th className="py-3 px-4">Product Type</th>
                     <th className="py-3 px-4">Document Number</th>
