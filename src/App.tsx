@@ -750,6 +750,46 @@ export function App() {
     }
   };
 
+  // Handler: Edit Entire Outward Dispatch Lot (Batch Updates Lot + All associated packs in one click)
+  const handleEditDispatchLot = async (updatedLot: DispatchLot) => {
+    setDispatchLots((prev) =>
+      prev.map((l) => (l.id === updatedLot.id ? updatedLot : l))
+    );
+
+    const affectedPacksToSync: BatteryPack[] = [];
+
+    const updatedPacks = packs.map((p) => {
+      if (p.dispatchLotId === updatedLot.id) {
+        const updatedPack: BatteryPack = {
+          ...p,
+          dispatchedAt: updatedLot.timestamp || p.dispatchedAt,
+          dispatchDocNo: updatedLot.transportDocNo || updatedLot.lotNumber,
+          dispatchLrNo: updatedLot.lrNumber || p.dispatchLrNo,
+          dispatchVehicleNo: updatedLot.vehicleNumber || p.dispatchVehicleNo,
+          dispatchTransporter: updatedLot.transportName || p.dispatchTransporter,
+          dispatchToCustomer: updatedLot.consigneeName || p.dispatchToCustomer,
+          dispatchToAddress: updatedLot.consigneeAddress || p.dispatchToAddress,
+          currentLocation: `Dispatched to ${updatedLot.consigneeName || 'EV Plant'}`,
+          notes: updatedLot.notes || p.notes,
+        };
+        affectedPacksToSync.push(updatedPack);
+        return updatedPack;
+      }
+      return p;
+    });
+
+    setPacks(updatedPacks);
+
+    try {
+      await Promise.all([
+        syncLotToCloud(updatedLot),
+        affectedPacksToSync.length > 0 ? syncPacksToCloud(affectedPacksToSync) : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.warn('Cloud sync on dispatch lot edit:', err);
+    }
+  };
+
   // Handler: Save Daily Stock Maintenance Record
   const handleSaveDailyStockRecord = async (record: DailyStockRecord) => {
     setDailyStockRecords((prev) => {
@@ -891,6 +931,7 @@ export function App() {
             onSendToDispatch={handleSendToDispatch}
             onDeletePack={handleDeletePack}
             onEditPack={handleEditPack}
+            onEditDispatchLot={handleEditDispatchLot}
           />
         )}
 
@@ -955,6 +996,7 @@ export function App() {
             inwardShipments={inwardShipments}
             warehouseLines={warehouseLines}
             onEditPack={handleEditPack}
+            onEditDispatchLot={handleEditDispatchLot}
             onResetToDemoData={() => {
               if (confirm('Reset warehouse inventory and lots to fresh demo state?')) {
                 localStorage.removeItem('tata_wms_packs_v4');

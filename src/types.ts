@@ -122,6 +122,13 @@ export interface BatteryPack {
   notes?: string;
   movementHistory?: MovementLog[];
 
+  // Customer Return / Warranty Repair Lifecycle Tracking
+  isCustomerReturn?: boolean;
+  returnReason?: string;
+  returnPlant?: string;
+  returnChallanNo?: string;
+  lifecycleCount?: number;
+
   // Dispatch Details
   dispatchedAt?: string;
   dispatchedBy?: string;
@@ -149,6 +156,9 @@ export interface InwardShipmentRecord {
   hasInwardStamp: boolean;
   status: 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED';
   remark?: string;
+  isCustomerReturn?: boolean;
+  returnReason?: string;
+  returnPlant?: string;
 }
 
 export interface DispatchLot {

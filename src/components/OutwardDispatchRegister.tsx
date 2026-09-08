@@ -23,6 +23,7 @@ interface OutwardDispatchRegisterProps {
   packs: BatteryPack[];
   dispatchLots: DispatchLot[];
   onEditPack?: (updatedPack: BatteryPack) => void;
+  onEditDispatchLot?: (updatedLot: DispatchLot) => void;
 }
 
 export function formatPackDisplayName(packType: string): string {
@@ -48,6 +49,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
   packs,
   dispatchLots,
   onEditPack,
+  onEditDispatchLot,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'SPECIFIC_DATE' | 'CUSTOM'>('ALL');
@@ -55,7 +57,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  // Edit Pack Modal State
+  // Edit Single Pack Modal State
   const [editingPack, setEditingPack] = useState<BatteryPack | null>(null);
   const [editForm, setEditForm] = useState<{
     packNumber: string;
@@ -78,6 +80,32 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
     dispatchVehicleNo: '',
     dispatchToCustomer: '',
     dispatchToAddress: '',
+    notes: '',
+  });
+
+  // Edit Entire Dispatch Lot Modal State (Batch Updates all packs in that lot)
+  const [editingLot, setEditingLot] = useState<DispatchLot | null>(null);
+  const [lotEditForm, setLotEditForm] = useState<{
+    lotNumber: string;
+    dispatchDate: string;
+    transportDocNo: string;
+    lrNumber: string;
+    transportName: string;
+    vehicleNumber: string;
+    consigneeName: string;
+    consigneeAddress: string;
+    consigneeGstin: string;
+    notes: string;
+  }>({
+    lotNumber: '',
+    dispatchDate: '',
+    transportDocNo: '',
+    lrNumber: '',
+    transportName: '',
+    vehicleNumber: '',
+    consigneeName: '',
+    consigneeAddress: '',
+    consigneeGstin: '',
     notes: '',
   });
 
@@ -197,6 +225,53 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
 
     onEditPack(updated);
     setEditingPack(null);
+  };
+
+  // Open Edit Entire Dispatch Lot Modal
+  const handleOpenEditLotModal = (lot: DispatchLot) => {
+    const rawDispDate = lot.timestamp || new Date().toISOString();
+    const dateFormatted = rawDispDate.slice(0, 10);
+
+    setEditingLot(lot);
+    setLotEditForm({
+      lotNumber: lot.lotNumber,
+      dispatchDate: dateFormatted,
+      transportDocNo: lot.transportDocNo || lot.lotNumber,
+      lrNumber: lot.lrNumber || '',
+      transportName: lot.transportName || COMMON_TRANSPORTERS[0],
+      vehicleNumber: lot.vehicleNumber || '',
+      consigneeName: lot.consigneeName || '',
+      consigneeAddress: lot.consigneeAddress || '',
+      consigneeGstin: lot.consigneeGstin || '',
+      notes: lot.notes || '',
+    });
+  };
+
+  // Save Edit Entire Dispatch Lot (Applies to all packs in the lot)
+  const handleSaveEditLot = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLot || !onEditDispatchLot) return;
+
+    const finalDispIso = lotEditForm.dispatchDate
+      ? new Date(lotEditForm.dispatchDate + 'T12:00:00.000Z').toISOString()
+      : editingLot.timestamp || new Date().toISOString();
+
+    const updatedLot: DispatchLot = {
+      ...editingLot,
+      lotNumber: lotEditForm.lotNumber.trim() || editingLot.lotNumber,
+      timestamp: finalDispIso,
+      transportDocNo: lotEditForm.transportDocNo.trim(),
+      lrNumber: lotEditForm.lrNumber.trim(),
+      transportName: lotEditForm.transportName.trim(),
+      vehicleNumber: lotEditForm.vehicleNumber.trim(),
+      consigneeName: lotEditForm.consigneeName.trim(),
+      consigneeAddress: lotEditForm.consigneeAddress.trim(),
+      consigneeGstin: lotEditForm.consigneeGstin.trim(),
+      notes: lotEditForm.notes.trim(),
+    };
+
+    onEditDispatchLot(updatedLot);
+    setEditingLot(null);
   };
 
   // Export to Excel matching exact column layout
@@ -508,17 +583,29 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                         </div>
                       )}
                     </td>
-                    <td className="p-2.5 text-right">
-                      {onEditPack && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(pack)}
-                          className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded transition cursor-pointer"
-                          title="Edit Dispatch Details"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                    <td className="p-2.5 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        {onEditDispatchLot && lot && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditLotModal(lot)}
+                            className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded transition cursor-pointer"
+                            title={`Edit Entire Dispatch Lot (${lot.packCount} Packs)`}
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {onEditPack && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(pack)}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded transition cursor-pointer"
+                            title="Edit Individual Pack Dispatch Details"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -692,6 +779,184 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Save Changes & Sync</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Entire Dispatch Lot Modal (Batch updates all packs in this lot) */}
+      {editingLot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden text-xs">
+            <div className="p-4 border-b border-purple-100 flex items-center justify-between bg-purple-50">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-purple-700" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    Edit Entire Dispatch Lot (#{editingLot.lotNumber})
+                  </h3>
+                  <p className="text-[11px] text-purple-700 font-medium">
+                    Updates Document No, Transporter, Vehicle, and Destination for all <strong>{editingLot.packCount} packs</strong> in this lot in 1-click.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingLot(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditLot} className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Lot Internal ID / Code
+                  </label>
+                  <input
+                    type="text"
+                    value={lotEditForm.lotNumber}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, lotNumber: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Dispatch Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={lotEditForm.dispatchDate}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, dispatchDate: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Lot Document / DC Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={lotEditForm.transportDocNo}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, transportDocNo: e.target.value })}
+                    placeholder="e.g. DCVRL/26-27-0001"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-blue-700 focus:bg-white focus:border-purple-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">LR / Bilty Number</label>
+                  <input
+                    type="text"
+                    value={lotEditForm.lrNumber}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, lrNumber: e.target.value })}
+                    placeholder="e.g. 32997"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Transporter Name <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={lotEditForm.transportName}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, transportName: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  >
+                    {COMMON_TRANSPORTERS.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Vehicle Truck Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={lotEditForm.vehicleNumber}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, vehicleNumber: e.target.value })}
+                    placeholder="e.g. MH14MH3845"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Destination Consignee Company / Plant <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={lotEditForm.consigneeName}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, consigneeName: e.target.value })}
+                    placeholder="e.g. TATA AUTOCOMP SYSTEMS LTD - Chakan"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Full Destination Address (City, State, Gate)</label>
+                  <textarea
+                    value={lotEditForm.consigneeAddress}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, consigneeAddress: e.target.value })}
+                    rows={2}
+                    placeholder="Full postal address..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Consignee GSTIN</label>
+                  <input
+                    type="text"
+                    value={lotEditForm.consigneeGstin}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, consigneeGstin: e.target.value })}
+                    placeholder="27AAACT2727Q1ZR"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Driver Notes / Remarks</label>
+                  <input
+                    type="text"
+                    value={lotEditForm.notes}
+                    onChange={(e) => setLotEditForm({ ...lotEditForm, notes: e.target.value })}
+                    placeholder="e.g. Dispatched for Morning Shift..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:bg-white focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-purple-50/50 border-t border-purple-100 flex items-center justify-between -mx-5 -mb-5 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingLot(null)}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Update Entire Lot ({editingLot.packCount} Packs)</span>
                 </button>
               </div>
             </form>

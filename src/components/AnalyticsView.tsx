@@ -37,6 +37,7 @@ interface AnalyticsViewProps {
   inwardShipments?: InwardShipmentRecord[];
   warehouseLines?: string[];
   onEditPack?: (updatedPack: BatteryPack) => void;
+  onEditDispatchLot?: (updatedLot: DispatchLot) => void;
   onResetToDemoData?: () => void;
 }
 
@@ -48,6 +49,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   inwardShipments = [],
   warehouseLines = [],
   onEditPack,
+  onEditDispatchLot,
 }) => {
   // Main view mode: Analytics Dashboard vs Outward Dispatch Register
   const [activeMainTab, setActiveMainTab] = useState<'ANALYTICS_DASHBOARD' | 'DISPATCH_LEDGER'>('ANALYTICS_DASHBOARD');
@@ -1062,7 +1064,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
       {/* VIEW 2: OUTWARD DISPATCH REGISTER */}
       {activeMainTab === 'DISPATCH_LEDGER' && (
-        <OutwardDispatchRegister packs={packs} dispatchLots={dispatchLots} onEditPack={onEditPack} />
+        <OutwardDispatchRegister packs={packs} dispatchLots={dispatchLots} onEditPack={onEditPack} onEditDispatchLot={onEditDispatchLot} />
       )}
 
       {/* Edit Dispatched Pack Modal (Accessible across Analytics) */}
