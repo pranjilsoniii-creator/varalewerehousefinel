@@ -16,6 +16,7 @@ import { UserManagementModal } from './components/UserManagementModal';
 import { AdminLineDataPopulator } from './components/AdminLineDataPopulator';
 import { WelcomeHeader } from './components/WelcomeHeader';
 import { SuperSearchModal } from './components/SuperSearchModal';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import {
   BatteryPack,
   DispatchLot,
@@ -1069,6 +1070,9 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* PWA Mobile & Desktop Install Prompt */}
+      <PWAInstallPrompt />
     </div>
   );
 }
