@@ -1,0 +1,8 @@
+{
+  "appId": "com.tataautocomp.wms",
+  "appName": "Tata AutoComp WMS",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
