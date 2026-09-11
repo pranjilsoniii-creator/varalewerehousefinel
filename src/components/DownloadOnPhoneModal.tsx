@@ -28,6 +28,7 @@ export const DownloadOnPhoneModal: React.FC<DownloadOnPhoneModalProps> = ({ isOp
 
   const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://tata-wms.local';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(currentUrl)}`;
+  const directApkUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases/download/v1.0.0-apk/Tata-AutoComp-WMS-v1.0.apk';
   const githubReleasesUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases';
   const githubActionsUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/actions';
 
@@ -121,24 +122,22 @@ export const DownloadOnPhoneModal: React.FC<DownloadOnPhoneModalProps> = ({ isOp
 
               <div className="space-y-2.5">
                 <a
-                  href={githubReleasesUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                  href={directApkUrl}
+                  download="Tata-AutoComp-WMS-v1.0.apk"
+                  className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-md transition cursor-pointer text-sm"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download Tata-AutoComp-WMS.apk from GitHub</span>
-                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  <span>Download Direct APK (Tata-AutoComp-WMS-v1.0.apk)</span>
                 </a>
 
                 <a
-                  href={githubActionsUrl}
+                  href={githubReleasesUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-2xl flex items-center justify-center gap-2 border border-slate-200 transition cursor-pointer text-[11px]"
+                  className="w-full py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-2xl flex items-center justify-center gap-2 border border-blue-200 transition cursor-pointer text-[11px]"
                 >
-                  <Layers className="w-3.5 h-3.5 text-slate-600" />
-                  <span>View GitHub Actions Cloud APK Builds</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Open GitHub Releases Page</span>
                 </a>
               </div>
 
