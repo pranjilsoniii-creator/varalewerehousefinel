@@ -9,6 +9,8 @@ jobs:
   build-apk:
     name: Build Native Android APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Source Code
@@ -17,7 +19,7 @@ jobs:
       - name: Set up Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Set up JDK 17
@@ -59,7 +61,7 @@ jobs:
 
       - name: Create Release with Downloadable APK
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/heads/main')
+        if: github.ref == 'refs/heads/main'
         with:
           tag_name: v1.0.0-apk
           name: 'Tata AutoComp WMS Mobile App v1.0'
@@ -70,5 +72,6 @@ jobs:
             - **Target:** Android Phones, Tablets & Handheld Barcode Scanners (Zebra / Honeywell PDA)
             - **Features:** Direct Barcode Scanning, Live Supabase Cloud Sync, Offline Access
           files: ./Tata-AutoComp-WMS-v1.0.apk
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
