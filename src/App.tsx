@@ -17,6 +17,7 @@ import { AdminLineDataPopulator } from './components/AdminLineDataPopulator';
 import { WelcomeHeader } from './components/WelcomeHeader';
 import { SuperSearchModal } from './components/SuperSearchModal';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { DownloadOnPhoneModal } from './components/DownloadOnPhoneModal';
 import {
   BatteryPack,
   DispatchLot,
@@ -104,6 +105,7 @@ export function App() {
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState<boolean>(false);
   const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
   const [isSuperSearchOpen, setIsSuperSearchOpen] = useState<boolean>(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
 
   // Core Warehouse State initialized with clean local cache
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
@@ -882,6 +884,7 @@ export function App() {
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
         onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
+        onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
       />
 
       {/* Dynamic Personalized Greeting & Live Realtime Cloud Sync Banner */}
@@ -1073,6 +1076,12 @@ export function App() {
 
       {/* PWA Mobile & Desktop Install Prompt */}
       <PWAInstallPrompt />
+
+      {/* MODAL 6: Download APK / Install App on Phone */}
+      <DownloadOnPhoneModal
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+      />
     </div>
   );
 }

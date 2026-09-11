@@ -17,6 +17,7 @@ import {
   Table,
   Wrench,
   AlertTriangle,
+  Smartphone,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -32,6 +33,7 @@ interface NavbarProps {
   onOpenLoginModal: () => void;
   onOpenUserManagementModal: () => void;
   onOpenLinePopulatorModal?: () => void;
+  onOpenDownloadModal?: () => void;
   onQuickSearch?: (query: string) => void;
 }
 
@@ -47,6 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenLoginModal,
   onOpenUserManagementModal,
   onOpenLinePopulatorModal,
+  onOpenDownloadModal,
   onQuickSearch,
 }) => {
   const { currentUser, isSuperAdmin, isManager, hasPermission, isMaintenanceMode, setMaintenanceMode, logout } = useAuth();
@@ -232,6 +235,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Manage Staff Users & Permissions"
               >
                 <Users className="w-4 h-4 text-purple-600" />
+              </button>
+            )}
+
+            {/* Mobile App & APK Download / QR Scan */}
+            {onOpenDownloadModal && (
+              <button
+                onClick={onOpenDownloadModal}
+                className="p-2 text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200 transition cursor-pointer flex items-center gap-1.5"
+                title="Download Android APK / Scan Phone QR"
+              >
+                <Smartphone className="w-4 h-4 text-blue-600" />
+                <span className="hidden lg:inline text-[11px] font-bold text-slate-700">App / APK</span>
               </button>
             )}
 
