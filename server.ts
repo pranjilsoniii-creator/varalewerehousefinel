@@ -54,6 +54,52 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Microsoft OneDrive Live Excel Feed Endpoint
+  app.get('/api/onedrive/live-feed', async (req, res) => {
+    try {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'application/json');
+      return res.json({
+        success: true,
+        source: 'Tata AutoComp Lithium Battery WMS - Realtime Cloud',
+        timestamp: new Date().toISOString(),
+        info: 'Live endpoint for Microsoft Excel Power Query and OneDrive Auto-Refresh',
+        date: new Date().toISOString().slice(0, 10),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Microsoft OneDrive / Power Automate Webhook Dispatcher Proxy
+  app.post('/api/onedrive/push-webhook', async (req, res) => {
+    try {
+      const { webhookUrl, payload } = req.body;
+      if (!webhookUrl) {
+        return res.status(400).json({ success: false, error: 'Webhook URL is required.' });
+      }
+
+      const fetchRes = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!fetchRes.ok) {
+        const errText = await fetchRes.text().catch(() => 'Unknown error');
+        return res.status(fetchRes.status).json({
+          success: false,
+          error: `Webhook returned status ${fetchRes.status}: ${errText}`,
+        });
+      }
+
+      const data = await fetchRes.json().catch(() => ({ status: 'success' }));
+      return res.json({ success: true, data });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // AI OCR Battery Inward Document & Plate Scanner Endpoint
   app.post('/api/scan-plate', async (req, res) => {
     try {

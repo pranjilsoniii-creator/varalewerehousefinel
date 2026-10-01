@@ -18,6 +18,7 @@ import {
   Wrench,
   AlertTriangle,
   Smartphone,
+  Cloud,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -34,6 +35,7 @@ interface NavbarProps {
   onOpenUserManagementModal: () => void;
   onOpenLinePopulatorModal?: () => void;
   onOpenDownloadModal?: () => void;
+  onOpenOneDriveModal?: () => void;
   onQuickSearch?: (query: string) => void;
 }
 
@@ -50,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenUserManagementModal,
   onOpenLinePopulatorModal,
   onOpenDownloadModal,
+  onOpenOneDriveModal,
   onQuickSearch,
 }) => {
   const { currentUser, isSuperAdmin, isManager, hasPermission, isMaintenanceMode, setMaintenanceMode, logout } = useAuth();
@@ -235,6 +238,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Manage Staff Users & Permissions"
               >
                 <Users className="w-4 h-4 text-purple-600" />
+              </button>
+            )}
+
+            {/* Super Admin & Manager: Microsoft OneDrive Realtime Excel Sync */}
+            {(isSuperAdmin || isManager) && onOpenOneDriveModal && (
+              <button
+                onClick={onOpenOneDriveModal}
+                className="p-2 text-slate-600 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-lg border border-slate-200 transition cursor-pointer flex items-center gap-1.5"
+                title="Sync with Microsoft OneDrive Live Excel Sheet"
+              >
+                <Cloud className="w-4 h-4 text-sky-600" />
+                <span className="hidden xl:inline text-[11px] font-bold text-slate-700">OneDrive Excel</span>
               </button>
             )}
 
