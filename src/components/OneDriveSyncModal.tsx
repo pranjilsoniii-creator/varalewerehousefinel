@@ -502,66 +502,101 @@ export const OneDriveSyncModal: React.FC<OneDriveSyncModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: LIVE REALTIME WEB FEED */}
+          {/* TAB 3: LIVE REALTIME WEB & SUPABASE DATABASE FEED */}
           {activeTab === 'livefeed' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
-                <Link className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-extrabold text-emerald-950 text-sm">
-                    Zero-Click Live Excel Web Connection (Power Query)
-                  </h4>
-                  <p className="text-[11px] text-emerald-800 mt-1">
-                    Kisi push button ki bhi zaroorat nahi! Niche diye gaye URL ko OneDrive Excel me ek baar connect kar dein. Jab bhi koi officer Excel sheet kholega, latest 16, 17, 18 tarikh ka live data apne aap screen par aa jayega.
+              {/* Card 1: Direct PostgreSQL Database Connection in Excel */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-900 to-slate-900 text-white border border-emerald-700 shadow-md space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
+                    🐘
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-white text-sm">
+                      Direct Supabase Database (PostgreSQL) in Excel
+                    </h4>
+                    <p className="text-[10px] text-emerald-300">
+                      Excel ke andar direct database table connect karne ke verified parameters
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/70 p-3 rounded-xl border border-emerald-800/60 font-mono-code text-[11px]">
+                  <div>
+                    <p className="text-[9px] text-slate-400 uppercase font-sans">Host / Server</p>
+                    <p className="text-emerald-300 font-bold truncate">db.eovoqayzvspkpzwpxxic.supabase.co</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-slate-400 uppercase font-sans">Port</p>
+                    <p className="text-emerald-300 font-bold">5432</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-slate-400 uppercase font-sans">Database</p>
+                    <p className="text-emerald-300 font-bold">postgres</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-slate-400 uppercase font-sans">User</p>
+                    <p className="text-emerald-300 font-bold">postgres</p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-emerald-950/60 rounded-xl border border-emerald-800/40 text-[10px] text-emerald-200">
+                  <p>
+                    <strong>Password:</strong> <code className="bg-slate-900 px-1.5 py-0.5 rounded text-white font-bold font-mono-code">Jitendra#321</code>
                   </p>
                 </div>
               </div>
 
-              {/* Feed URL Copy Box */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Live Supabase Data Web Feed Endpoint URL:
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={liveFeedUrl}
-                    className="flex-1 px-3 py-2 bg-slate-100 border border-slate-300 rounded-xl font-mono-code text-[11px] text-slate-800 select-all"
-                  />
-                  <button
-                    onClick={handleCopyFeedUrl}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                  >
-                    {copiedFeedUrl ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedFeedUrl ? 'Copied!' : 'Copy Link'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* 3 Step Visual Guide */}
+              {/* 3 Step Visual Guide for Excel */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                <p className="font-extrabold text-slate-800">
-                  ⚡ Excel me isse kaise connect karein (1 Minute Guide):
+                <p className="font-extrabold text-slate-800 text-xs">
+                  ⚡ Excel Me Direct Database Connect Kaise Karein (30 Seconds):
                 </p>
-                <div className="space-y-2 text-slate-600">
+                <div className="space-y-2 text-slate-700">
                   <div className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
                       1
                     </span>
-                    <p>Excel kholein aur top menu me <strong>Data</strong> tab par click karein.</p>
+                    <p>Excel kholein ➔ <strong>Data</strong> tab ➔ <strong>Get Data</strong> ➔ <strong>From Database</strong> ➔ <strong>From PostgreSQL Database</strong>.</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
                       2
                     </span>
-                    <p><strong>"From Web"</strong> (ya Get Data ➔ From Other Sources ➔ From Web) select karein aur upar wala <strong>Live URL</strong> paste karein.</p>
+                    <p>Server me <code className="bg-slate-200 px-1 rounded font-bold font-mono-code">db.eovoqayzvspkpzwpxxic.supabase.co:5432</code> aur Database me <code className="bg-slate-200 px-1 rounded font-bold font-mono-code">postgres</code> dalein.</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
                       3
                     </span>
-                    <p><strong>Load</strong> par click karein. Ab jab bhi koi file kholega ya <em>"Refresh All"</em> dabayega, 100% realtime live data load ho jayega!</p>
+                    <p>User me <code className="bg-slate-200 px-1 rounded font-bold font-mono-code">postgres</code> aur Password me <code className="bg-slate-200 px-1 rounded font-bold font-mono-code">Jitendra#321</code> dalein ➔ <strong>Connect</strong> dabayein.</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
+                      4
+                    </span>
+                    <p>Table select karein (<code className="font-mono-code text-blue-600">battery_packs</code>, <code className="font-mono-code text-blue-600">inward_shipments</code>, <code className="font-mono-code text-blue-600">dispatch_lots</code>, <code className="font-mono-code text-blue-600">daily_stock_records</code>) ➔ <strong>Load</strong> dabayein!</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Live CSV Web Feed Links */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl space-y-2">
+                <p className="font-bold text-blue-900 text-xs">
+                  🌐 Alternate: Live Direct Web Feed URLs (Excel Data ➔ From Web):
+                </p>
+                <div className="space-y-1.5 font-mono-code text-[10px]">
+                  <div className="p-2 bg-white rounded-lg border border-blue-200 flex items-center justify-between">
+                    <span className="text-slate-700 truncate">{currentHost}/api/excel/inward-live.csv</span>
+                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Inward CSV</span>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-blue-200 flex items-center justify-between">
+                    <span className="text-slate-700 truncate">{currentHost}/api/excel/dispatch-live.csv</span>
+                    <span className="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Dispatch CSV</span>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-blue-200 flex items-center justify-between">
+                    <span className="text-slate-700 truncate">{currentHost}/api/excel/daily-stock-live.csv</span>
+                    <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Daily Stock CSV</span>
                   </div>
                 </div>
               </div>
