@@ -18,9 +18,17 @@ import {
   RefreshCw,
   Users,
   ShieldCheck,
+  Truck,
+  Inbox,
+  ArrowDownToLine,
 } from 'lucide-react';
 import { BatteryPack, InwardShipmentRecord, DispatchLot, DailyStockRecord } from '../types';
-import { generateOneDriveMasterExcel } from '../utils/oneDriveExcelGenerator';
+import {
+  generateOneDriveMasterExcel,
+  generateOneDriveInwardExcel,
+  generateOneDriveDispatchExcel,
+  generateOneDriveDailyStockExcel,
+} from '../utils/oneDriveExcelGenerator';
 import { useAuth } from '../context/AuthContext';
 
 interface OneDriveSyncModalProps {
@@ -72,6 +80,18 @@ export const OneDriveSyncModal: React.FC<OneDriveSyncModalProps> = ({
 
   const handleDownloadMasterExcel = () => {
     generateOneDriveMasterExcel(packs, inwardShipments, dispatchLots, dailyStockRecords);
+  };
+
+  const handleDownloadInwardExcel = () => {
+    generateOneDriveInwardExcel(packs, inwardShipments);
+  };
+
+  const handleDownloadDispatchExcel = () => {
+    generateOneDriveDispatchExcel(dispatchLots, packs);
+  };
+
+  const handleDownloadDailyStockExcel = () => {
+    generateOneDriveDailyStockExcel(dailyStockRecords);
   };
 
   const handlePushToOneDrive = async () => {
@@ -269,14 +289,83 @@ export const OneDriveSyncModal: React.FC<OneDriveSyncModalProps> = ({
                 </div>
               </div>
 
-              {/* Download Action Button */}
-              <button
-                onClick={handleDownloadMasterExcel}
-                className="w-full py-3.5 px-4 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 transition cursor-pointer text-sm"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Master Excel File (Tata_AutoComp_WMS_Master.xlsx)</span>
-              </button>
+              {/* Section-Wise Dedicated Excel Downloads */}
+              <div className="space-y-2">
+                <p className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                  <ArrowDownToLine className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Alag-Alag Section Wise Excel Files Download Karein:</span>
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* 1. Inward Register Download */}
+                  <button
+                    onClick={handleDownloadInwardExcel}
+                    className="p-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-2xl flex items-center justify-between transition cursor-pointer group shadow-xs"
+                  >
+                    <div className="flex items-center gap-2.5 text-left">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                        <Inbox className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-xs leading-tight">1. Inward Register Excel</p>
+                        <p className="text-[10px] text-emerald-700 font-medium">Inward DC, Vendor, Vehicles & QC</p>
+                      </div>
+                    </div>
+                    <Download className="w-4 h-4 text-emerald-600 group-hover:translate-y-0.5 transition" />
+                  </button>
+
+                  {/* 2. Outward Dispatch Register Download */}
+                  <button
+                    onClick={handleDownloadDispatchExcel}
+                    className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 rounded-2xl flex items-center justify-between transition cursor-pointer group shadow-xs"
+                  >
+                    <div className="flex items-center gap-2.5 text-left">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-xs leading-tight">2. Outward Dispatch Excel</p>
+                        <p className="text-[10px] text-blue-700 font-medium">Dispatch Lots, DC, LR & Transporter</p>
+                      </div>
+                    </div>
+                    <Download className="w-4 h-4 text-blue-600 group-hover:translate-y-0.5 transition" />
+                  </button>
+
+                  {/* 3. Daily Stock Maintenance Download */}
+                  <button
+                    onClick={handleDownloadDailyStockExcel}
+                    className="p-3 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 rounded-2xl flex items-center justify-between transition cursor-pointer group shadow-xs"
+                  >
+                    <div className="flex items-center gap-2.5 text-left">
+                      <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                        <Calendar className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-xs leading-tight">3. Daily Stock Maintenance</p>
+                        <p className="text-[10px] text-purple-700 font-medium">Opening, Inward, Outward & Closing</p>
+                      </div>
+                    </div>
+                    <Download className="w-4 h-4 text-purple-600 group-hover:translate-y-0.5 transition" />
+                  </button>
+
+                  {/* 4. Complete All-In-One Master Workbook */}
+                  <button
+                    onClick={handleDownloadMasterExcel}
+                    className="p-3 bg-gradient-to-r from-slate-900 to-slate-800 hover:from-black hover:to-slate-900 text-white border border-slate-700 rounded-2xl flex items-center justify-between transition cursor-pointer group shadow-md"
+                  >
+                    <div className="flex items-center gap-2.5 text-left">
+                      <div className="w-8 h-8 rounded-xl bg-sky-500 text-white flex items-center justify-center shadow-xs">
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="font-extrabold text-xs leading-tight">4. All-In-One Master (.xlsx)</p>
+                        <p className="text-[10px] text-slate-300 font-medium">All 4 Sheets in 1 Workbook</p>
+                      </div>
+                    </div>
+                    <Download className="w-4 h-4 text-sky-400 group-hover:translate-y-0.5 transition" />
+                  </button>
+                </div>
+              </div>
 
               {/* Step by step guide */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">

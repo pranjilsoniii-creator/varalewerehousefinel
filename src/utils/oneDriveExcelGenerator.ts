@@ -1,6 +1,196 @@
 import * as XLSX from 'xlsx';
 import { BatteryPack, InwardShipmentRecord, DispatchLot, DailyStockRecord } from '../types';
+import { BATTERY_MODELS } from '../data/batteryCatalog';
 
+// 1. DEDICATED INWARD REGISTER EXCEL FILE
+export function generateOneDriveInwardExcel(packs: BatteryPack[], inwardShipments?: InwardShipmentRecord[]): void {
+  const wb = XLSX.utils.book_new();
+
+  // Filter packs to Inward Received only
+  const inwardPacks = (packs || []).filter(
+    (p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH'
+  );
+
+  const inwardRows = inwardPacks.map((p, index) => {
+    const model = BATTERY_MODELS[p.packType];
+    const modelName = model?.name || p.packType;
+    const locationStr = p.status === 'IN_STORAGE' 
+      ? `Line ${p.lineId || '01'} (R-${p.rackNumber || 1}, Slot ${p.rackSlot || 1})`
+      : (p.currentLocation || p.locationArea || 'Inward Receiving Area');
+
+    const statusStr = p.status === 'PENDING_APPROVAL' 
+      ? 'Pending Approval' 
+      : p.status === 'IN_STORAGE' 
+      ? 'Allocated in Rack' 
+      : p.status === 'DISPATCHED'
+      ? 'Dispatched'
+      : 'Inward Area';
+
+    return {
+      'Sr. No': index + 1,
+      'Inward Date': p.inwardDate || '-',
+      'Pack Number': p.packNumber,
+      'Battery Model': modelName,
+      'Document / DC No': p.documentNo || '-',
+      'Dealership / Source Supplier': p.dealershipName || '-',
+      'Received State': p.receivedState || 'Maharashtra',
+      'Transporter Carrier': p.transportName || '-',
+      'Vehicle Number': p.vehicleNumber || '-',
+      'Location / Physical Rack': locationStr,
+      'Status': statusStr,
+      'Tata Stamp Verified': p.hasInwardStamp ? 'YES (Verified)' : 'NO',
+      'Pack Remark / Quality Note': p.remark || 'OK',
+      'Recorded By': p.inwardBy || 'Vikas Kumar Bharti',
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(inwardRows);
+  ws['!cols'] = [
+    { wch: 8 },  // Sr
+    { wch: 14 }, // Date
+    { wch: 16 }, // Pack No
+    { wch: 22 }, // Model
+    { wch: 22 }, // DC No
+    { wch: 26 }, // Dealership
+    { wch: 16 }, // State
+    { wch: 22 }, // Transporter
+    { wch: 16 }, // Vehicle
+    { wch: 26 }, // Location
+    { wch: 18 }, // Status
+    { wch: 18 }, // Stamp
+    { wch: 26 }, // Remark
+    { wch: 22 }, // Recorded By
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Inward_Register_Log');
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Tata_AutoComp_Inward_Register_${dateStr}.xlsx`);
+}
+
+// 2. DEDICATED OUTWARD DISPATCH REGISTER EXCEL FILE
+export function generateOneDriveDispatchExcel(dispatchLots: DispatchLot[], packs?: BatteryPack[]): void {
+  const wb = XLSX.utils.book_new();
+
+  const dispatchRows = (dispatchLots || []).map((lot, index) => {
+    const packNumbersList = lot.packs && lot.packs.length > 0 
+      ? lot.packs.map(p => p.packNumber).join(', ')
+      : (lot.notes || '-');
+
+    return {
+      'Sr. No': index + 1,
+      'Dispatch Date': lot.timestamp ? lot.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      'Delivery Challan (DC No)': lot.transportDocNo || '-',
+      'LR Number': lot.lrNumber || '-',
+      'Lot Number': lot.lotNumber || '-',
+      'Consignee / Destination': lot.consigneeName || '-',
+      'Transporter Company': lot.transportName || '-',
+      'Vehicle Number': lot.vehicleNumber || '-',
+      'Total Packs Count': lot.packCount || (lot.packs ? lot.packs.length : 0),
+      'Dispatched Battery Pack Numbers': packNumbersList,
+      'Dispatch Status': lot.status || 'DISPATCHED',
+      'Supervisor / Dispatched By': lot.dispatchedBy || 'Vikas',
+      'Dispatch Remarks': lot.notes || '-',
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(dispatchRows.length > 0 ? dispatchRows : [
+    {
+      'Sr. No': 1,
+      'Dispatch Date': new Date().toISOString().slice(0, 10),
+      'Delivery Challan (DC No)': 'DCVRL/26-27-0001',
+      'LR Number': 'LR-89410',
+      'Lot Number': 'LOT-2026-001',
+      'Consignee / Destination': 'Tata Motors Plant - Sanand / Pune',
+      'Transporter Company': 'OM Logistics supply chain',
+      'Vehicle Number': 'MH-14-GH-4821',
+      'Total Packs Count': 0,
+      'Dispatched Battery Pack Numbers': 'No lots dispatched today',
+      'Dispatch Status': 'DISPATCHED',
+      'Supervisor / Dispatched By': 'Vikas',
+      'Dispatch Remarks': 'Standard Dispatch',
+    }
+  ]);
+
+  ws['!cols'] = [
+    { wch: 8 },  // Sr
+    { wch: 14 }, // Date
+    { wch: 24 }, // DC No
+    { wch: 18 }, // LR No
+    { wch: 18 }, // Lot No
+    { wch: 28 }, // Consignee
+    { wch: 24 }, // Transporter
+    { wch: 18 }, // Vehicle
+    { wch: 16 }, // Count
+    { wch: 40 }, // Pack Numbers
+    { wch: 16 }, // Status
+    { wch: 22 }, // Supervisor
+    { wch: 26 }, // Remarks
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Outward_Dispatch_Register');
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Tata_AutoComp_Dispatch_Register_${dateStr}.xlsx`);
+}
+
+// 3. DEDICATED DAILY STOCK MAINTENANCE EXCEL FILE
+export function generateOneDriveDailyStockExcel(dailyStockRecords: DailyStockRecord[]): void {
+  const wb = XLSX.utils.book_new();
+
+  const stockRows: any[] = [];
+  (dailyStockRecords || []).forEach((rec) => {
+    (rec.rows || []).forEach((row, rowIdx) => {
+      stockRows.push({
+        'Date': rec.date,
+        'Sr': row.sr || rowIdx + 1,
+        'Pack Name': row.packName,
+        'Opening Stock': row.openingStock ?? 0,
+        'Receive Qty (Inward)': row.receiveQty ?? 0,
+        'Total Available': row.totalAvailable ?? (Number(row.openingStock || 0) + Number(row.receiveQty || 0)),
+        'Dispatch Qty (Outward)': row.dispatchQty ?? 0,
+        'Closing Stock': row.closingStock ?? 0,
+        'Maintained By': row.maintainedBy || rec.createdByName || 'Vikas',
+        'Record Status': rec.isLocked ? 'LOCKED (Manager Verified)' : 'ACTIVE',
+      });
+    });
+  });
+
+  const ws = XLSX.utils.json_to_sheet(stockRows.length > 0 ? stockRows : [
+    {
+      'Date': new Date().toISOString().slice(0, 10),
+      'Sr': 1,
+      'Pack Name': 'Kanger 1.0 AIO',
+      'Opening Stock': 0,
+      'Receive Qty (Inward)': 0,
+      'Total Available': 0,
+      'Dispatch Qty (Outward)': 0,
+      'Closing Stock': 0,
+      'Maintained By': 'Vikas',
+      'Record Status': 'ACTIVE',
+    }
+  ]);
+
+  ws['!cols'] = [
+    { wch: 14 },
+    { wch: 6 },
+    { wch: 22 },
+    { wch: 16 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 22 },
+    { wch: 16 },
+    { wch: 22 },
+    { wch: 24 },
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Daily_Stock_Maintenance');
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Tata_AutoComp_Daily_Stock_${dateStr}.xlsx`);
+}
+
+// 4. CONSOLIDATED ALL-IN-ONE MASTER EXCEL WORKBOOK (For OneDrive)
 export function generateOneDriveMasterExcel(
   packs: BatteryPack[],
   inwardShipments: InwardShipmentRecord[],
@@ -9,212 +199,87 @@ export function generateOneDriveMasterExcel(
 ): void {
   const wb = XLSX.utils.book_new();
 
-  // 1. Sheet 1: Master Battery Inventory & Movement Ledger (Live Warehouse Data)
-  const masterRows = (packs || []).map((pack, index) => {
-    const recordDate = pack.inwardDate || pack.dispatchedAt?.slice(0, 10) || new Date().toISOString().slice(0, 10);
-    const lineStr = pack.lineId ? `${pack.lineId}` : 'Unassigned';
-    const rackStr = pack.rackNumber ? `R-${pack.rackNumber} (L-${pack.rackSlot || 1})` : (pack.currentLocation || 'Staging Area');
-
-    return {
-      'S.No': index + 1,
-      'Date (Tarikh)': recordDate,
-      'Pack Number': pack.packNumber,
-      'Battery Model': pack.packType,
-      'Storage Line': lineStr,
-      'Rack / Position': rackStr,
-      'Status': pack.status,
-      'Source Type': pack.sourceType || 'INWARD',
-      'Inward Document / DC': pack.documentNo || '-',
-      'Inward Date': pack.inwardDate || '-',
-      'Inward Transporter': pack.transportName || '-',
-      'Inward Vehicle': pack.vehicleNumber || '-',
-      'Dispatch Lot ID': pack.dispatchLotId || '-',
-      'Dispatch DC No': pack.dispatchDocNo || '-',
-      'Dispatch LR No': pack.dispatchLrNo || '-',
-      'Dispatch Date': pack.dispatchedAt || '-',
-      'Consignee Customer': pack.dispatchToCustomer || '-',
-      'Dispatch Vehicle': pack.dispatchVehicleNo || '-',
-      'Pack Remark / QC Note': pack.remark || 'OK',
-      'Inward Recorded By': pack.inwardBy || 'Vikas Kumar Bharti',
-      'Dispatched By': pack.dispatchedBy || '-',
-    };
-  });
-
-  const wsMaster = XLSX.utils.json_to_sheet(masterRows);
-
-  wsMaster['!cols'] = [
-    { wch: 6 },
-    { wch: 14 },
-    { wch: 16 },
-    { wch: 20 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 16 },
-    { wch: 16 },
-    { wch: 22 },
-    { wch: 14 },
-    { wch: 22 },
-    { wch: 16 },
-    { wch: 18 },
-    { wch: 20 },
-    { wch: 16 },
-    { wch: 20 },
-    { wch: 24 },
-    { wch: 18 },
-    { wch: 26 },
-    { wch: 20 },
-    { wch: 18 },
-  ];
-
-  XLSX.utils.book_append_sheet(wb, wsMaster, 'Live_Warehouse_Inventory');
-
-  // 2. Sheet 2: Daily Stock Maintenance Register
-  const stockRows = (dailyStockRecords || []).map((rec, i) => ({
-    'S.No': i + 1,
-    'Date (Tarikh)': rec.date,
-    'Total Opening Stock': rec.totalOpeningStock ?? 0,
-    'Total Received Today': rec.totalReceivedToday ?? 0,
-    'Total Dispatch Today': rec.totalDispatchToday ?? 0,
-    'Total Closing Stock': rec.totalClosingStock ?? 0,
-    'Maintained By': rec.createdByName || 'Vikas',
-    'Record Status': rec.isLocked ? 'LOCKED (Manager Verified)' : 'ACTIVE',
-    'Created At': rec.createdAt || '-',
-    'Last Updated At': rec.updatedAt || '-',
-  }));
-
-  const wsStock = XLSX.utils.json_to_sheet(
-    stockRows.length > 0
-      ? stockRows
-      : [
-          {
-            'S.No': 1,
-            'Date (Tarikh)': new Date().toISOString().slice(0, 10),
-            'Total Opening Stock': packs.filter((p) => p.status !== 'DISPATCHED').length,
-            'Total Received Today': 0,
-            'Total Dispatch Today': 0,
-            'Total Closing Stock': packs.filter((p) => p.status !== 'DISPATCHED').length,
-            'Maintained By': 'Vikas Kumar Bharti',
-            'Record Status': 'ACTIVE',
-            'Created At': new Date().toISOString(),
-            'Last Updated At': new Date().toISOString(),
-          },
-        ]
+  // Sheet 1: Inward Register
+  const inwardPacks = (packs || []).filter(
+    (p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH'
   );
-
-  wsStock['!cols'] = [
-    { wch: 6 },
-    { wch: 14 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 22 },
-    { wch: 26 },
-    { wch: 24 },
-    { wch: 24 },
-  ];
-
-  XLSX.utils.book_append_sheet(wb, wsStock, 'Daily_Stock_Register');
-
-  // 3. Sheet 3: Inward Shipments Log
-  const inwardRows = (inwardShipments || []).map((inw, i) => ({
-    'S.No': i + 1,
-    'Inward Timestamp': inw.timestamp || '-',
-    'Document / DC No': inw.documentNo || '-',
-    'Source / Dealership': inw.dealershipName || '-',
-    'Transporter': inw.transportName || '-',
-    'Total Packs Received': inw.packCount || (inw.packNumbers ? inw.packNumbers.length : 0),
-    'Pack Numbers': (inw.packNumbers || []).join(', '),
-    'Status': inw.status || 'APPROVED',
-    'Inward Category': inw.isCustomerReturn ? 'CUSTOMER_RETURN' : 'STANDARD_SUPPLY',
-    'Return Reason': inw.returnReason || '-',
-    'Inward By': inw.inwardBy || 'Vikas',
-    'General Remark': inw.remark || '-',
+  const inwardRows = inwardPacks.map((p, index) => ({
+    'Sr. No': index + 1,
+    'Inward Date': p.inwardDate || '-',
+    'Pack Number': p.packNumber,
+    'Battery Model': BATTERY_MODELS[p.packType]?.name || p.packType,
+    'Document / DC No': p.documentNo || '-',
+    'Dealership / Source Supplier': p.dealershipName || '-',
+    'Received State': p.receivedState || 'Maharashtra',
+    'Transporter Carrier': p.transportName || '-',
+    'Vehicle Number': p.vehicleNumber || '-',
+    'Rack / Position': p.currentLocation || 'Inward Area',
+    'Status': p.status,
+    'Pack Remark / Quality Note': p.remark || 'OK',
+    'Recorded By': p.inwardBy || 'Vikas',
   }));
+  const wsInward = XLSX.utils.json_to_sheet(inwardRows);
+  wsInward['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 24 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 24 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, wsInward, 'Inward_Register');
 
-  if (inwardRows.length > 0) {
-    const wsInward = XLSX.utils.json_to_sheet(inwardRows);
-    wsInward['!cols'] = [
-      { wch: 6 },
-      { wch: 20 },
-      { wch: 22 },
-      { wch: 24 },
-      { wch: 22 },
-      { wch: 20 },
-      { wch: 36 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 22 },
-      { wch: 20 },
-      { wch: 26 },
-    ];
-    XLSX.utils.book_append_sheet(wb, wsInward, 'Inward_Shipments_Log');
-  }
-
-  // 4. Sheet 4: Outward Dispatch Lots Log
-  const dispatchRows = (dispatchLots || []).map((lot, i) => ({
-    'S.No': i + 1,
-    'Dispatch Timestamp': lot.timestamp || '-',
+  // Sheet 2: Outward Dispatch Register
+  const dispatchRows = (dispatchLots || []).map((lot, index) => ({
+    'Sr. No': index + 1,
+    'Dispatch Date': lot.timestamp ? lot.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    'Delivery Challan (DC No)': lot.transportDocNo || '-',
+    'LR Number': lot.lrNumber || '-',
     'Lot Number': lot.lotNumber || '-',
-    'Consignee / Customer': lot.consigneeName || '-',
+    'Consignee Customer': lot.consigneeName || '-',
     'Transporter': lot.transportName || '-',
     'Vehicle Number': lot.vehicleNumber || '-',
-    'LR Number': lot.lrNumber || '-',
-    'Transport Doc / DC': lot.transportDocNo || '-',
-    'Total Packs Dispatched': lot.packCount || (lot.packs ? lot.packs.length : 0),
-    'Status': lot.status || 'DISPATCHED',
+    'Packs Count': lot.packCount || (lot.packs ? lot.packs.length : 0),
+    'Dispatched Pack Serials': lot.packs ? lot.packs.map(p => p.packNumber).join(', ') : '-',
     'Dispatched By': lot.dispatchedBy || 'Vikas',
     'Remarks': lot.notes || '-',
   }));
+  const wsDispatch = XLSX.utils.json_to_sheet(dispatchRows);
+  wsDispatch['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 36 }, { wch: 20 }, { wch: 24 }];
+  XLSX.utils.book_append_sheet(wb, wsDispatch, 'Outward_Dispatch_Register');
 
-  if (dispatchRows.length > 0) {
-    const wsDispatch = XLSX.utils.json_to_sheet(dispatchRows);
-    wsDispatch['!cols'] = [
-      { wch: 6 },
-      { wch: 20 },
-      { wch: 18 },
-      { wch: 26 },
-      { wch: 22 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 20 },
-      { wch: 22 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 26 },
-    ];
-    XLSX.utils.book_append_sheet(wb, wsDispatch, 'Outward_Dispatch_Log');
-  }
+  // Sheet 3: Daily Stock Register
+  const stockRows: any[] = [];
+  (dailyStockRecords || []).forEach((rec) => {
+    (rec.rows || []).forEach((row, rowIdx) => {
+      stockRows.push({
+        'Date': rec.date,
+        'Sr': row.sr || rowIdx + 1,
+        'Pack Name': row.packName,
+        'Opening Stock': row.openingStock ?? 0,
+        'Receive Qty': row.receiveQty ?? 0,
+        'Total Available': row.totalAvailable ?? 0,
+        'Dispatch Qty': row.dispatchQty ?? 0,
+        'Closing Stock': row.closingStock ?? 0,
+        'Maintained By': row.maintainedBy || rec.createdByName || 'Vikas',
+      });
+    });
+  });
+  const wsStock = XLSX.utils.json_to_sheet(stockRows);
+  wsStock['!cols'] = [{ wch: 14 }, { wch: 6 }, { wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, wsStock, 'Daily_Stock_Register');
 
-  // 5. Sheet 5: OneDrive Realtime Sync Instructions
-  const guideRows = [
-    {
-      'Step': 'STEP 1',
-      'Action': 'Upload File to OneDrive',
-      'Instructions': 'Drag & Drop this "Tata_AutoComp_WMS_Master_Live_Sync.xlsx" file into your Microsoft OneDrive or SharePoint folder.',
-    },
-    {
-      'Step': 'STEP 2',
-      'Action': 'Share View-Only Link with Team',
-      'Instructions': 'Right-click file in OneDrive -> Share -> Choose "People in your org" or "Anyone with link" -> Select "Can view" -> Copy Link and send to Suresh Sir and Management.',
-    },
-    {
-      'Step': 'STEP 3',
-      'Action': 'Realtime Web Refresh (Zero Click)',
-      'Instructions': 'In Excel, click "Data" tab -> "From Web" -> Paste the Live Feed URL from WMS App -> Data updates automatically every time sheet opens.',
-    },
-    {
-      'Step': 'STEP 4',
-      'Action': 'One-Click Push Button in App',
-      'Instructions': 'Whenever Suresh Sir or Admin clicks "Push to OneDrive" in the WMS App, today\'s new records are automatically transmitted and appended.',
-    },
-  ];
+  // Sheet 4: Complete Warehouse Master Inventory
+  const masterRows = (packs || []).map((p, index) => ({
+    'Sr. No': index + 1,
+    'Pack Number': p.packNumber,
+    'Model': BATTERY_MODELS[p.packType]?.name || p.packType,
+    'Location': p.currentLocation || 'Inward Area',
+    'Status': p.status,
+    'Inward Date': p.inwardDate || '-',
+    'Inward DC': p.documentNo || '-',
+    'Dispatch Date': p.dispatchedAt || '-',
+    'Dispatch DC': p.dispatchDocNo || '-',
+    'Consignee': p.dispatchToCustomer || '-',
+    'Remark': p.remark || 'OK',
+  }));
+  const wsMaster = XLSX.utils.json_to_sheet(masterRows);
+  wsMaster['!cols'] = [{ wch: 6 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 20 }, { wch: 24 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, wsMaster, 'All_Warehouse_Packs');
 
-  const wsGuide = XLSX.utils.json_to_sheet(guideRows);
-  wsGuide['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 80 }];
-  XLSX.utils.book_append_sheet(wb, wsGuide, 'OneDrive_Sync_Instructions');
-
-  // Trigger download
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `Tata_AutoComp_WMS_Master_Live_Sync_${dateStr}.xlsx`);
+  XLSX.writeFile(wb, `Tata_AutoComp_WMS_All_In_One_Master_${dateStr}.xlsx`);
 }
