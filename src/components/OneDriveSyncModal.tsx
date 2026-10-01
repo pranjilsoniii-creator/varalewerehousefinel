@@ -197,6 +197,28 @@ export const OneDriveSyncModal: React.FC<OneDriveSyncModalProps> = ({
           </button>
         </div>
 
+        {/* Connected File Banner: Varale B300.xlsx */}
+        <div className="px-4 py-2.5 bg-gradient-to-r from-sky-900 via-blue-900 to-slate-900 text-white flex flex-wrap items-center justify-between gap-2 border-b border-sky-800 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="text-slate-300">Connected Target File:</span>
+            <span className="font-extrabold text-white font-mono-code bg-sky-800/80 px-2 py-0.5 rounded-lg border border-sky-600">
+              Varale B300.xlsx
+            </span>
+            <span className="text-[10px] text-sky-300 hidden sm:inline">(Plant: Varale B300)</span>
+          </div>
+
+          <a
+            href="https://1drv.ms/x/c/85a2cda20cb7e1ba/IQBVSHdzUcnlQpIk23qRiHXdAT0UsRn5E-gRwErAL2VFVHU?e=Mvgub7"
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold rounded-lg flex items-center gap-1.5 transition cursor-pointer text-[10px] shadow-xs"
+          >
+            <ExternalLink className="w-3 h-3" />
+            <span>Open Varale B300.xlsx on OneDrive</span>
+          </a>
+        </div>
+
         {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 bg-slate-100/70 p-1.5 gap-1 font-bold">
           <button
