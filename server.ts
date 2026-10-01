@@ -3,9 +3,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://eovoqayzvspkpzwpxxic.supabase.co';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvdm9xYXl6dnNwa3B6d3B4eGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNDg3NDEsImV4cCI6MjEwMzkyNDc0MX0.WNVR3U12BN4aFQDb8E3nyoWlS_Vuo3NqLr_Wyg0SDek';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,17 +60,148 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Microsoft OneDrive Live Excel Feed Endpoint
+  // 1. Live Inward Register CSV Stream for Microsoft Excel
+  app.get('/api/excel/inward-live.csv', async (req, res) => {
+    try {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="Tata_Live_Inward_Register.csv"');
+
+      const { data: packs, error } = await supabase
+        .from('battery_packs')
+        .select('*')
+        .order('inward_date', { ascending: false });
+
+      const header = 'Sr. No,Inward Date,Pack Number,Model,Document No,Dealership / Supplier,Received State,Transporter,Vehicle No,Status,Remark,Inward By\n';
+      let csvContent = '\uFEFF' + header;
+
+      if (packs && packs.length > 0) {
+        packs.forEach((p: any, idx: number) => {
+          const row = [
+            idx + 1,
+            `"${p.inward_date || ''}"`,
+            `"${p.pack_number || ''}"`,
+            `"${p.pack_type || ''}"`,
+            `"${p.document_no || ''}"`,
+            `"${p.dealership_name || ''}"`,
+            `"${p.received_state || 'Maharashtra'}"`,
+            `"${p.transport_name || ''}"`,
+            `"${p.vehicle_number || ''}"`,
+            `"${p.status || ''}"`,
+            `"${(p.remark || 'OK').replace(/"/g, '""')}"`,
+            `"${p.inward_by || 'Vikas'}"`,
+          ];
+          csvContent += row.join(',') + '\n';
+        });
+      }
+
+      return res.send(csvContent);
+    } catch (err: any) {
+      return res.status(500).send(`Error: ${err.message}`);
+    }
+  });
+
+  // 2. Live Outward Dispatch Register CSV Stream for Microsoft Excel
+  app.get('/api/excel/dispatch-live.csv', async (req, res) => {
+    try {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="Tata_Live_Dispatch_Register.csv"');
+
+      const { data: lots, error } = await supabase
+        .from('dispatch_lots')
+        .select('*')
+        .order('timestamp', { ascending: false });
+
+      const header = 'Sr. No,Dispatch Date,Delivery Challan (DC No),LR Number,Lot Number,Consignee / Customer,Transporter,Vehicle Number,Packs Count,Supervisor,Remarks\n';
+      let csvContent = '\uFEFF' + header;
+
+      if (lots && lots.length > 0) {
+        lots.forEach((lot: any, idx: number) => {
+          const row = [
+            idx + 1,
+            `"${lot.timestamp ? lot.timestamp.slice(0, 10) : ''}"`,
+            `"${lot.transport_doc_no || lot.document_no || ''}"`,
+            `"${lot.lr_number || ''}"`,
+            `"${lot.lot_number || ''}"`,
+            `"${lot.consignee_name || ''}"`,
+            `"${lot.transport_name || ''}"`,
+            `"${lot.vehicle_number || ''}"`,
+            lot.pack_count || 0,
+            `"${lot.dispatched_by || 'Vikas'}"`,
+            `"${(lot.notes || '').replace(/"/g, '""')}"`,
+          ];
+          csvContent += row.join(',') + '\n';
+        });
+      }
+
+      return res.send(csvContent);
+    } catch (err: any) {
+      return res.status(500).send(`Error: ${err.message}`);
+    }
+  });
+
+  // 3. Live Daily Stock Maintenance CSV Stream for Microsoft Excel
+  app.get('/api/excel/daily-stock-live.csv', async (req, res) => {
+    try {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="Tata_Live_Daily_Stock.csv"');
+
+      const { data: records, error } = await supabase
+        .from('daily_stock_records')
+        .select('*')
+        .order('date', { ascending: false });
+
+      const header = 'Date,Sr,Pack Name,Opening Stock,Receive Qty,Total Available,Dispatch Qty,Closing Stock,Maintained By\n';
+      let csvContent = '\uFEFF' + header;
+
+      if (records && records.length > 0) {
+        records.forEach((rec: any) => {
+          const rows = rec.rows || [];
+          rows.forEach((r: any, rIdx: number) => {
+            const row = [
+              `"${rec.date || ''}"`,
+              r.sr || rIdx + 1,
+              `"${r.packName || ''}"`,
+              r.openingStock || 0,
+              r.receiveQty || 0,
+              r.totalAvailable || 0,
+              r.dispatchQty || 0,
+              r.closingStock || 0,
+              `"${r.maintainedBy || rec.created_by_name || 'Vikas'}"`,
+            ];
+            csvContent += row.join(',') + '\n';
+          });
+        });
+      }
+
+      return res.send(csvContent);
+    } catch (err: any) {
+      return res.status(500).send(`Error: ${err.message}`);
+    }
+  });
+
+  // Microsoft OneDrive Live JSON Feed Endpoint
   app.get('/api/onedrive/live-feed', async (req, res) => {
     try {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Content-Type', 'application/json');
+
+      const { data: packs } = await supabase.from('battery_packs').select('*').limit(500);
+      const { data: lots } = await supabase.from('dispatch_lots').select('*').limit(200);
+      const { data: stock } = await supabase.from('daily_stock_records').select('*').limit(100);
+
       return res.json({
         success: true,
         source: 'Tata AutoComp Lithium Battery WMS - Realtime Cloud',
         timestamp: new Date().toISOString(),
-        info: 'Live endpoint for Microsoft Excel Power Query and OneDrive Auto-Refresh',
         date: new Date().toISOString().slice(0, 10),
+        data: {
+          packs: packs || [],
+          dispatchLots: lots || [],
+          dailyStock: stock || [],
+        },
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
