@@ -18,7 +18,6 @@ import { WelcomeHeader } from './components/WelcomeHeader';
 import { SuperSearchModal } from './components/SuperSearchModal';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { DownloadOnPhoneModal } from './components/DownloadOnPhoneModal';
-import { OneDriveSyncModal } from './components/OneDriveSyncModal';
 import {
   BatteryPack,
   DispatchLot,
@@ -107,7 +106,6 @@ export function App() {
   const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
   const [isSuperSearchOpen, setIsSuperSearchOpen] = useState<boolean>(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
-  const [isOneDriveModalOpen, setIsOneDriveModalOpen] = useState<boolean>(false);
 
   // Core Warehouse State initialized with clean local cache
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
@@ -887,7 +885,6 @@ export function App() {
         onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
         onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
         onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
-        onOpenOneDriveModal={() => setIsOneDriveModalOpen(true)}
       />
 
       {/* Dynamic Personalized Greeting & Live Realtime Cloud Sync Banner */}
@@ -1084,16 +1081,6 @@ export function App() {
       <DownloadOnPhoneModal
         isOpen={isDownloadModalOpen}
         onClose={() => setIsDownloadModalOpen(false)}
-      />
-
-      {/* MODAL 7: Microsoft OneDrive Live Excel Synchronizer */}
-      <OneDriveSyncModal
-        isOpen={isOneDriveModalOpen}
-        onClose={() => setIsOneDriveModalOpen(false)}
-        packs={packs}
-        inwardShipments={inwardShipments}
-        dispatchLots={dispatchLots}
-        dailyStockRecords={dailyStockRecords}
       />
     </div>
   );

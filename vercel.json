@@ -1,18 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/api/excel/inward-live.csv",
-      "destination": "/api/excel-inward"
-    },
-    {
-      "source": "/api/excel/dispatch-live.csv",
-      "destination": "/api/excel-dispatch"
-    },
-    {
-      "source": "/api/excel/daily-stock-live.csv",
-      "destination": "/api/excel-daily-stock"
-    },
-    {
       "source": "/(.*)",
       "destination": "/"
     }
