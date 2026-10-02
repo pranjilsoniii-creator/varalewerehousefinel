@@ -34,6 +34,7 @@ interface NavbarProps {
   onOpenUserManagementModal: () => void;
   onOpenLinePopulatorModal?: () => void;
   onOpenDownloadModal?: () => void;
+  onOpenMobileDrawer?: () => void;
   onQuickSearch?: (query: string) => void;
 }
 
@@ -50,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenUserManagementModal,
   onOpenLinePopulatorModal,
   onOpenDownloadModal,
+  onOpenMobileDrawer,
   onQuickSearch,
 }) => {
   const { currentUser, isSuperAdmin, isManager, hasPermission, isMaintenanceMode, setMaintenanceMode, logout } = useAuth();
@@ -281,7 +283,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Mobile Menu Toggle */}
             <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              onClick={() => {
+                if (onOpenMobileDrawer) {
+                  onOpenMobileDrawer();
+                } else {
+                  setIsMobileMenuOpen(!isMobileMenuOpen);
+                }
+              }}
               className="lg:hidden p-2 text-slate-700 hover:text-slate-900 bg-slate-50 rounded-lg border border-slate-200"
             >
               {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

@@ -19,6 +19,11 @@ import { SuperSearchModal } from './components/SuperSearchModal';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { DownloadOnPhoneModal } from './components/DownloadOnPhoneModal';
 import { PublicLineSheetView } from './components/PublicLineSheetView';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { MobileAppDrawer } from './components/MobileAppDrawer';
+import { OfflineSyncToast } from './components/OfflineSyncToast';
+import { MobileScannerFAB } from './components/MobileScannerFAB';
+import { enqueueOfflineAction, initOfflineSyncEngine } from './utils/offlineSyncEngine';
 import {
   BatteryPack,
   DispatchLot,
@@ -107,6 +112,7 @@ export function App() {
   const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
   const [isSuperSearchOpen, setIsSuperSearchOpen] = useState<boolean>(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
 
   // Core Warehouse State initialized with clean local cache
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
@@ -165,6 +171,38 @@ export function App() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Edge swipe gesture to open Mobile App Drawer from left screen edge (touch slide)
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.changedTouches.length === 1) {
+        const deltaX = e.changedTouches[0].clientX - startX;
+        const deltaY = Math.abs(e.changedTouches[0].clientY - startY);
+        // Only trigger if starting near left edge (< 45px), moved right > 50px, and mostly horizontal swipe
+        if (startX < 45 && deltaX > 50 && deltaY < 80) {
+          setIsMobileDrawerOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
   }, []);
 
   const handleTabChange = (newTab: string) => {
@@ -232,6 +270,15 @@ export function App() {
   // Initial Cloud Load on Component Mount
   useEffect(() => {
     refreshFromCloud();
+  }, [refreshFromCloud]);
+
+  // Initialize Enterprise Offline Sync Engine with automatic reconnection polling
+  useEffect(() => {
+    const cleanup = initOfflineSyncEngine((count) => {
+      console.log(`Offline engine auto-synced ${count} item(s) to cloud.`);
+      refreshFromCloud();
+    });
+    return cleanup;
   }, [refreshFromCloud]);
 
   // Supabase Real-time Cloud Subscriptions across all three core tables
@@ -427,6 +474,10 @@ export function App() {
     setPacks(finalPacks);
     setInwardShipments((prev) => [shipmentRecord, ...prev]);
 
+    // Enqueue offline action immediately for guaranteed zero-loss persistence
+    enqueueOfflineAction('SYNC_PACKS', packsToSync);
+    enqueueOfflineAction('SYNC_INWARD', shipmentRecord);
+
     try {
       await Promise.all([
         syncPacksToCloud(packsToSync),
@@ -472,6 +523,7 @@ export function App() {
     setPacks(updatedPacks);
     const approvedPack = updatedPacks.find((p) => p.id === packId);
     if (approvedPack) {
+      enqueueOfflineAction('SYNC_PACKS', [approvedPack]);
       try {
         await syncPacksToCloud([approvedPack]);
       } catch (err) {
@@ -516,6 +568,7 @@ export function App() {
     const finalPacks = Array.from(packsMap.values());
     setPacks(finalPacks);
 
+    enqueueOfflineAction('SYNC_PACKS', packsToSync);
     try {
       await syncPacksToCloud(packsToSync);
     } catch (err) {
@@ -529,6 +582,10 @@ export function App() {
     const remainingPacks = packs.filter((p) => !(p.lineId === lineId && p.status !== 'DISPATCHED'));
     setPacks(remainingPacks);
 
+    for (const pack of packsToRemove) {
+      enqueueOfflineAction('DELETE_PACK', pack.id);
+    }
+
     try {
       for (const pack of packsToRemove) {
         await deletePackFromCloud(pack.id);
@@ -541,6 +598,7 @@ export function App() {
   // Handler: Permanent Delete Pack
   const handleDeletePack = async (packId: string) => {
     setPacks((prev) => prev.filter((p) => p.id !== packId));
+    enqueueOfflineAction('DELETE_PACK', packId);
     try {
       await deletePackFromCloud(packId);
     } catch (err) {
@@ -553,6 +611,7 @@ export function App() {
     setPacks((prev) =>
       prev.map((p) => (p.id === updatedPack.id ? updatedPack : p))
     );
+    enqueueOfflineAction('SYNC_PACKS', [updatedPack]);
     try {
       await syncPacksToCloud([updatedPack]);
     } catch (err) {
@@ -598,6 +657,7 @@ export function App() {
     setPacks(updatedPacks);
     const updated = updatedPacks.find((p) => p.id === pack.id);
     if (updated) {
+      enqueueOfflineAction('SYNC_PACKS', [updated]);
       try {
         await syncPacksToCloud([updated]);
       } catch (err) {
@@ -637,6 +697,7 @@ export function App() {
     setPacks(updatedPacks);
     const updated = updatedPacks.find((p) => p.id === packId);
     if (updated) {
+      enqueueOfflineAction('SYNC_PACKS', [updated]);
       try {
         await syncPacksToCloud([updated]);
       } catch (err) {
@@ -676,6 +737,7 @@ export function App() {
 
     setPacks(updatedPacks);
     const updatedList = updatedPacks.filter((p) => idsToAdd.has(p.id));
+    enqueueOfflineAction('SYNC_PACKS', updatedList);
     try {
       await syncPacksToCloud(updatedList);
     } catch (err) {
@@ -761,6 +823,9 @@ export function App() {
     const finalPacks = Array.from(existingPackMap.values());
     setPacks(finalPacks);
 
+    enqueueOfflineAction('SYNC_LOT', lot);
+    enqueueOfflineAction('SYNC_PACKS', dispatchedPacksToSync);
+
     try {
       await syncLotToCloud(lot);
       await syncPacksToCloud(dispatchedPacksToSync);
@@ -799,6 +864,11 @@ export function App() {
 
     setPacks(updatedPacks);
 
+    enqueueOfflineAction('SYNC_LOT', updatedLot);
+    if (affectedPacksToSync.length > 0) {
+      enqueueOfflineAction('SYNC_PACKS', affectedPacksToSync);
+    }
+
     try {
       await Promise.all([
         syncLotToCloud(updatedLot),
@@ -821,6 +891,8 @@ export function App() {
       return [record, ...prev];
     });
 
+    enqueueOfflineAction('SYNC_DAILY_STOCK', record);
+
     try {
       await syncDailyStockToCloud(record);
     } catch (err) {
@@ -831,6 +903,7 @@ export function App() {
   // Handler: Delete Daily Stock Maintenance Record
   const handleDeleteDailyStockRecord = async (recordId: string) => {
     setDailyStockRecords((prev) => prev.filter((r) => r.id !== recordId));
+    enqueueOfflineAction('DELETE_DAILY_STOCK', recordId);
     try {
       await deleteDailyStockFromCloud(recordId);
     } catch (err) {
@@ -905,6 +978,9 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      {/* Real-time Network Reconnection & Offline Sync Toast */}
+      <OfflineSyncToast />
+
       {/* Executive White Header Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -918,6 +994,7 @@ export function App() {
         onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
         onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
         onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
+        onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
       />
 
       {/* Dynamic Personalized Greeting & Live Realtime Cloud Sync Banner */}
@@ -929,8 +1006,8 @@ export function App() {
         onRefreshCloud={refreshFromCloud}
       />
 
-      {/* Main Body View Rendering */}
-      <main className="flex-1 pb-16">
+      {/* Main Body View Rendering with mobile bottom safe padding */}
+      <main className="flex-1 pb-24 sm:pb-16">
         {activeTab === 'DASHBOARD' && (
           <DashboardView
             packs={packs}
@@ -1025,6 +1102,40 @@ export function App() {
           />
         )}
       </main>
+
+      {/* 1-Thumb Native Mobile Bottom Navigation Bar */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onOpenDrawer={() => setIsMobileDrawerOpen(true)}
+        inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
+        totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
+        cartPacksCount={stagedCartPacks.length}
+      />
+
+      {/* Swipeable / Gesture-Driven Mobile Drawer Menu */}
+      <MobileAppDrawer
+        isOpen={isMobileDrawerOpen}
+        onClose={() => setIsMobileDrawerOpen(false)}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        isCloudConnected={isCloudConnected}
+        isCloudSyncing={isCloudSyncing}
+        onRefreshCloud={refreshFromCloud}
+        onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+        onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
+        onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
+        totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
+        cartPacksCount={stagedCartPacks.length}
+      />
+
+      {/* Mobile Floating Action Button (1-tap Camera Scanner & Quick Super Search) */}
+      <MobileScannerFAB
+        onOpenScanner={() => handleTabChange('INWARD')}
+        onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+      />
 
       {/* MODAL 1: Individual Pack Pedigree & History */}
       {inspectingPack && (
