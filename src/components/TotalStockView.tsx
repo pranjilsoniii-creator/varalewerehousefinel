@@ -58,34 +58,48 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
   // Today Date String
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
+  // Filtered packs based on user hierarchy
+  const activeStockPacks = useMemo(() => {
+    return packs.filter((p) => {
+      if (isSuperAdmin) return true;
+      if (isManager) {
+        // Exclude unapproved employee drafts for manager until supervisor signs off
+        if (p.status === 'PENDING_APPROVAL' && !p.inwardApprovedBy && !p.inwardBy?.toLowerCase().includes('suresh')) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [packs, isSuperAdmin, isManager]);
+
   // 1. Total Battery (Total active battery packs in plant)
   const totalBatteryCount = useMemo(() => {
-    return packs.filter((p) => p.status !== 'DISPATCHED').length;
-  }, [packs]);
+    return activeStockPacks.filter((p) => p.status !== 'DISPATCHED').length;
+  }, [activeStockPacks]);
 
   // 2. Today's Inward (Batteries inwarded today via dock receiving)
   const todayInwardCount = useMemo(() => {
-    return packs.filter(
+    return activeStockPacks.filter(
       (p) => p.sourceType !== 'LINE_POPULATE' && p.inwardDate && p.inwardDate.slice(0, 10) === todayStr
     ).length;
-  }, [packs, todayStr]);
+  }, [activeStockPacks, todayStr]);
 
   // 3. Today's Outward (Batteries dispatched today)
   const todayOutwardCount = useMemo(() => {
-    return packs.filter(
+    return activeStockPacks.filter(
       (p) => p.status === 'DISPATCHED' && p.dispatchedAt && p.dispatchedAt.slice(0, 10) === todayStr
     ).length;
-  }, [packs, todayStr]);
+  }, [activeStockPacks, todayStr]);
 
   // 4. Ready for Dispatch (Batteries staged in dispatch area)
   const readyForDispatchCount = useMemo(() => {
-    return packs.filter((p) => p.status === 'IN_DISPATCH_AREA').length;
-  }, [packs]);
+    return activeStockPacks.filter((p) => p.status === 'IN_DISPATCH_AREA').length;
+  }, [activeStockPacks]);
 
   // Available in storage (excluding dispatched)
   const availableStockPacks = useMemo(() => {
-    return packs.filter((p) => p.status !== 'DISPATCHED');
-  }, [packs]);
+    return activeStockPacks.filter((p) => p.status !== 'DISPATCHED');
+  }, [activeStockPacks]);
 
   // Model-wise count breakdown
   const modelCounts = useMemo(() => {

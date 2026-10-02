@@ -18,6 +18,7 @@ import { WelcomeHeader } from './components/WelcomeHeader';
 import { SuperSearchModal } from './components/SuperSearchModal';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { DownloadOnPhoneModal } from './components/DownloadOnPhoneModal';
+import { PublicLineSheetView } from './components/PublicLineSheetView';
 import {
   BatteryPack,
   DispatchLot,
@@ -522,6 +523,21 @@ export function App() {
     }
   };
 
+  // Handler: Clear / Delete Entire Line (For Manager Suresh Chavan & SuperAdmin Pranjil)
+  const handleClearEntireLine = async (lineId: string) => {
+    const packsToRemove = packs.filter((p) => p.lineId === lineId && p.status !== 'DISPATCHED');
+    const remainingPacks = packs.filter((p) => !(p.lineId === lineId && p.status !== 'DISPATCHED'));
+    setPacks(remainingPacks);
+
+    try {
+      for (const pack of packsToRemove) {
+        await deletePackFromCloud(pack.id);
+      }
+    } catch (err) {
+      console.warn('Cloud sync on clear entire line:', err);
+    }
+  };
+
   // Handler: Permanent Delete Pack
   const handleDeletePack = async (packId: string) => {
     setPacks((prev) => prev.filter((p) => p.id !== packId));
@@ -827,6 +843,23 @@ export function App() {
   const stagedCartPacks = packs.filter((p) => p.status === 'IN_DISPATCH_AREA');
   const activeStoragePacks = packs.filter((p) => p.status === 'IN_STORAGE' || p.status === 'INWARD_AREA');
 
+  // Public Line QR View (allows warehouse workers/supervisors/drivers to view line sheet without login)
+  const urlParams = new URLSearchParams(window.location.search);
+  const publicLineQuery = urlParams.get('line') || urlParams.get('public_line') || urlParams.get('lineId');
+  const [publicLineOverride, setPublicLineOverride] = useState<string | null>(publicLineQuery);
+
+  if (!currentUser && publicLineOverride) {
+    return (
+      <PublicLineSheetView
+        lineId={publicLineOverride}
+        packs={packs}
+        warehouseLines={warehouseLines}
+        onSelectLine={(l) => setPublicLineOverride(l)}
+        onGoToLogin={() => setPublicLineOverride(null)}
+      />
+    );
+  }
+
   // STRICT LOGIN WALL: If not logged in, show Login Screen
   if (!currentUser) {
     return <LoginScreen />;
@@ -946,39 +979,11 @@ export function App() {
             onAddNewLine={handleAddNewWarehouseLine}
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onSendToDispatch={handleSendToDispatch}
-            onAllocatePackSlot={async (updatedPack) => {
-              setPacks((prev) =>
-                prev.map((p) => (p.id === updatedPack.id ? updatedPack : p))
-              );
-              try {
-                await syncPacksToCloud([updatedPack]);
-              } catch (err) {
-                console.warn('Cloud sync on rack slot allocation:', err);
-              }
+            onDeletePack={handleDeletePack}
+            onClearEntireLine={handleClearEntireLine}
+            onOpenRackLoader={(line, rack) => {
+              setIsAdminPopulatorOpen(true);
             }}
-            onClearSlot={async (packId) => {
-              const packToClear = packs.find((p) => p.id === packId);
-              if (!packToClear) return;
-              const clearedPack: BatteryPack = {
-                ...packToClear,
-                status: 'INWARD_AREA',
-                locationArea: 'Inward Area',
-                currentLocation: 'Inward Area',
-                lineId: undefined,
-                rackNumber: undefined,
-                level: undefined,
-                slotPosition: undefined,
-              };
-              setPacks((prev) =>
-                prev.map((p) => (p.id === packId ? clearedPack : p))
-              );
-              try {
-                await syncPacksToCloud([clearedPack]);
-              } catch (err) {
-                console.warn('Cloud sync on clear slot:', err);
-              }
-            }}
-            onOpenPopulatorModal={() => setIsAdminPopulatorOpen(true)}
           />
         )}
 
@@ -1068,6 +1073,7 @@ export function App() {
               warehouseLines={warehouseLines}
               onAddNewLine={handleAddNewWarehouseLine}
               onSaveLinePacks={handleSaveAdminLinePacks}
+              onClearEntireLine={handleClearEntireLine}
               onClose={() => setIsAdminPopulatorOpen(false)}
             />
           </div>

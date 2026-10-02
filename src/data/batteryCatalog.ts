@@ -299,6 +299,137 @@ export function parseBoxCodeAndModel(rawInput: string, fallbackModel: string = '
   };
 }
 
+export interface ParsedLineEntry {
+  cleanPackNumber: string;
+  secondaryStickerNumber?: string;
+  derivedModel: BatteryPackType;
+  remark?: string;
+  isWithoutPlate: boolean;
+  isDifferentSerial: boolean;
+  isEmptySlot: boolean;
+}
+
+/**
+ * Advanced Line Populator & Bulk Entry Parser
+ * Parses lines like:
+ * - "1245 ckd rejected pack"
+ * - "1245 ckd - 4545 ckd rejected pack"
+ * - "1245 - 4545 ckd transit damage"
+ * - "1245 AIO"
+ * - "0" (empty slot)
+ */
+export function parseBulkLineEntry(lineText: string, fallbackModel: string = 'AIO'): ParsedLineEntry {
+  const trimmed = (lineText || '').trim();
+  if (!trimmed || trimmed === '0') {
+    return {
+      cleanPackNumber: '',
+      derivedModel: 'Kanger1.0_AIO',
+      isWithoutPlate: false,
+      isDifferentSerial: false,
+      isEmptySlot: true,
+    };
+  }
+
+  // Handle Tab or comma separated columns from Excel
+  if (trimmed.includes('\t') || trimmed.includes(',')) {
+    const parts = trimmed.split(/[\t,]+/).map((s) => s.trim()).filter(Boolean);
+    const rawSerial = parts[0] || '';
+    const rawModel = parts[1] || fallbackModel;
+    const rawRemark = parts.slice(2).join(' ').trim();
+
+    if (!rawSerial || rawSerial === '0') {
+      return {
+        cleanPackNumber: '',
+        derivedModel: 'Kanger1.0_AIO',
+        isWithoutPlate: false,
+        isDifferentSerial: false,
+        isEmptySlot: true,
+      };
+    }
+
+    const baseParsed = parseBoxCodeAndModel(rawSerial, rawModel);
+    return {
+      cleanPackNumber: baseParsed.cleanPackNumber,
+      derivedModel: baseParsed.derivedModel,
+      remark: rawRemark || undefined,
+      isWithoutPlate: baseParsed.isWithoutPlate,
+      isDifferentSerial: false,
+      isEmptySlot: false,
+    };
+  }
+
+  // Check for dual sticker separator (hyphen / dash between 2 serial numbers)
+  // e.g. "1245 ckd - 4545 ckd rejected pack" or "1245 - 4545 ckd rejected pack"
+  if (trimmed.includes('-') && !trimmed.toUpperCase().startsWith('NP-')) {
+    const hyphenIdx = trimmed.indexOf('-');
+    const beforeHyphen = trimmed.slice(0, hyphenIdx).trim();
+    const afterHyphen = trimmed.slice(hyphenIdx + 1).trim();
+
+    // Check if beforeHyphen has digits and afterHyphen starts with digits (meaning 2 stickers)
+    const beforeDigitsMatch = beforeHyphen.match(/\d+/);
+    const afterDigitsMatch = afterHyphen.match(/\d+/);
+
+    if (beforeDigitsMatch && afterDigitsMatch) {
+      const primaryParsed = parseBoxCodeAndModel(beforeHyphen, fallbackModel);
+      
+      // For afterHyphen: extract secondary digits, model (if present), and any remaining text as remark
+      const secondaryDigits = afterDigitsMatch[0];
+      const modelCandidate = deriveModelFromShorthand(trimmed, primaryParsed.derivedModel);
+      
+      // Everything after the secondary serial digits that isn't a model keyword is a remark
+      let remainingText = afterHyphen.replace(secondaryDigits, '').trim();
+      for (const kw of MODEL_KEYWORDS) {
+        const regex = new RegExp(kw, 'gi');
+        remainingText = remainingText.replace(regex, '').trim();
+      }
+      // Strip leftover punctuation/symbols from remark
+      const cleanRemark = remainingText.replace(/^[-_\s:,]+|[-_\s:,]+$/g, '').trim();
+
+      return {
+        cleanPackNumber: primaryParsed.cleanPackNumber,
+        secondaryStickerNumber: secondaryDigits,
+        derivedModel: modelCandidate,
+        remark: cleanRemark || undefined,
+        isWithoutPlate: primaryParsed.isWithoutPlate,
+        isDifferentSerial: true,
+        isEmptySlot: false,
+      };
+    }
+  }
+
+  // Standard Space-separated Format: "<packNumber> <model/type> <remark>"
+  // e.g. "1245 ckd rejected pack" or "1245 rejected pack" or "NP-102 AIO Transit damage"
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  const firstToken = tokens[0] || '';
+  
+  // Extract base model from entire string
+  const derivedModel = deriveModelFromShorthand(trimmed, fallbackModel);
+  const baseParsed = parseBoxCodeAndModel(firstToken, derivedModel);
+
+  // Remaining tokens constitute model and remarks
+  const remainingTokens = tokens.slice(1);
+  let remarkTokens: string[] = [];
+
+  remainingTokens.forEach((tok) => {
+    const tokUpper = tok.toUpperCase();
+    const isModelToken = MODEL_KEYWORDS.some((kw) => kw === tokUpper || kw.includes(tokUpper) || tokUpper.includes(kw));
+    if (!isModelToken) {
+      remarkTokens.push(tok);
+    }
+  });
+
+  const finalRemark = remarkTokens.join(' ').trim();
+
+  return {
+    cleanPackNumber: baseParsed.cleanPackNumber,
+    derivedModel,
+    remark: finalRemark || undefined,
+    isWithoutPlate: baseParsed.isWithoutPlate,
+    isDifferentSerial: false,
+    isEmptySlot: false,
+  };
+}
+
 /**
  * Standard Product Name and Product Type breakdown helper
  * Product Name: Family name e.g. "Kanger 1.0", "Kanger 2.0", "Limber", "Tamor", "Nova", "Challenger"

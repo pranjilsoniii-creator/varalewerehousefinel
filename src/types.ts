@@ -91,6 +91,7 @@ export interface BatteryPack {
   isWithoutPlate?: boolean;           // True if pack arrived without serial plate/sticker
   isDifferentSerial?: boolean;        // True if physical pack number differs from Challan/Invoice pack number
   challanPackNumber?: string;         // Serial number stated on delivery challan / invoice
+  secondaryStickerNumber?: string;    // Second barcode sticker number (for packs with 2 serial numbers)
   mismatchReason?: string;            // Notes on serial discrepancy
   sourceType?: 'INWARD' | 'LINE_POPULATE' | 'DIRECT_DISPATCH'; // Source: Inward Dock vs Direct Line Matrix vs Fast Direct Dispatch
 

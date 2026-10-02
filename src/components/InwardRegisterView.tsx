@@ -62,14 +62,43 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [editChallanPackNumber, setEditChallanPackNumber] = useState('');
   const [editMismatchReason, setEditMismatchReason] = useState('');
 
-  // STRICT ISOLATION: Show all packs received via Inward Receiving Dock / Delivery Challan
+  // STRICT ISOLATION & HIERARCHICAL WORKFLOW:
+  // 1. SuperAdmin (Pranjil): Sees 100% of all inward records (Pending, Approved, In Storage)
+  // 2. Supervisor (Vikas, Nitin): Sees all inward records to inspect, approve, or reject
+  // 3. Manager (Suresh Chavan): Sees records ONLY AFTER Supervisor approval (plus manager/admin created records)
+  // 4. Employee (Deepak, Jitendra): Sees their own submitted drafts + approved warehouse inventory
   const inwardOnlyPacks = useMemo(() => {
     return packs.filter((p) => {
       if (p.sourceType === 'LINE_POPULATE' || p.sourceType === 'DIRECT_DISPATCH') return false;
       if (p.documentNo === 'DIRECT-DISPATCH') return false;
       if (p.dealershipName === 'Direct Plant Dispatch') return false;
+
+      if (isSuperAdmin) return true;
+      if (isSupervisor) return true;
+
+      if (isManager) {
+        // Manager only sees packs that are APPROVED by supervisor or created by Manager/SuperAdmin
+        const isApproved = p.status !== 'PENDING_APPROVAL' || Boolean(p.inwardApprovedBy);
+        const isCreatedByManager = p.inwardBy?.toLowerCase().includes('suresh') || p.inwardBy?.toLowerCase().includes('pranjil');
+        return isApproved || isCreatedByManager;
+      }
+
+      if (isEmployee) {
+        const myName = (currentUser?.name || '').toLowerCase();
+        const myUsername = (currentUser?.username || '').toLowerCase();
+        const packOwner = (p.inwardBy || '').toLowerCase();
+        const isMyEntry = packOwner.includes(myName) || packOwner.includes(myUsername);
+        const isApproved = p.status !== 'PENDING_APPROVAL';
+        return isMyEntry || isApproved;
+      }
+
       return true;
     });
+  }, [packs, isSuperAdmin, isSupervisor, isManager, isEmployee, currentUser]);
+
+  // Count of total pending packs in warehouse waiting for supervisor approval
+  const totalPendingInwardsCount = useMemo(() => {
+    return packs.filter((p) => p.status === 'PENDING_APPROVAL' && p.sourceType !== 'LINE_POPULATE').length;
   }, [packs]);
 
   // Today Date String
@@ -303,6 +332,54 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Supervisor Approval Action Hub Banner */}
+      {(isSupervisor || isSuperAdmin) && inwardSeriesSummary.pending > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-xs flex-shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-amber-950 uppercase tracking-wide">
+                Supervisor Inward Verification & Approval Queue
+              </h3>
+              <p className="text-xs text-amber-800 font-medium">
+                <strong>{inwardSeriesSummary.pending}</strong> battery pack(s) submitted by dock operators awaiting supervisor verification. Once approved, these packs will be visible in Suresh Chavan's manager dashboard and inventory.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const pendingPacks = filteredPacks.filter((p) => p.status === 'PENDING_APPROVAL');
+                pendingPacks.forEach((p) => onApproveInwardPack(p.id));
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Approve All Visible ({inwardSeriesSummary.pending})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Manager Information Card */}
+      {isManager && totalPendingInwardsCount > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-2xs flex items-center gap-3 text-xs text-blue-900 animate-fadeIn">
+          <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0 font-bold">
+            ℹ️
+          </div>
+          <div>
+            <p className="font-bold text-blue-950">Manager Quality Guard Active:</p>
+            <p className="text-blue-800">
+              There are currently <strong>{totalPendingInwardsCount}</strong> inward pack(s) in the verification queue undergoing supervisor check by Vikas Kumar Bharti / Nitin Pawar. Once verified by the supervisor, they will reflect immediately in your live inventory.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Inward Series KPI Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">

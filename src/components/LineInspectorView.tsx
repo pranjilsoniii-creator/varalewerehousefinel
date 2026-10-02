@@ -16,9 +16,12 @@ import {
   Lock,
   Trash2,
   Tag,
+  Printer,
+  QrCode,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { BATTERY_MODELS } from '../data/batteryCatalog';
+import { BATTERY_MODELS, getProductNameAndType } from '../data/batteryCatalog';
 import {
   getStoredWarehouseLines,
   saveStoredWarehouseLines,
@@ -26,6 +29,7 @@ import {
   RACKS_PER_LINE,
 } from '../data/seedWarehouse';
 import { useAuth } from '../context/AuthContext';
+import { LinePrintAndQRModal } from './LinePrintAndQRModal';
 
 interface LineInspectorViewProps {
   packs: BatteryPack[];
@@ -35,6 +39,7 @@ interface LineInspectorViewProps {
   onSendToDispatch: (pack: BatteryPack) => void;
   onOpenRackLoader?: (line: string, rack: number) => void;
   onDeletePack?: (packId: string) => void;
+  onClearEntireLine?: (lineId: string) => void;
 }
 
 export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
@@ -45,11 +50,13 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
   onSendToDispatch,
   onOpenRackLoader,
   onDeletePack,
+  onClearEntireLine,
 }) => {
   const { isSuperAdmin, isManager } = useAuth();
   const [selectedLine, setSelectedLine] = useState<string>(warehouseLines[0] || 'A-01');
   const [lineSearchQuery, setLineSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'RACK_GRID' | 'TABLE_SHEET'>('TABLE_SHEET');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // Dynamic Line Creator
   const [isCreatingLine, setIsCreatingLine] = useState(false);
@@ -66,6 +73,26 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
     });
     return stats;
   }, [warehouseLines, packs]);
+
+  // Primary model summary for selected line
+  const primaryModelName = useMemo(() => {
+    const linePacks = packs.filter((p) => p.status !== 'DISPATCHED' && p.lineId === selectedLine);
+    if (linePacks.length === 0) return 'Kanger 1.0 (AIO)';
+    const modelCounts: Record<string, number> = {};
+    linePacks.forEach((p) => {
+      const { productName } = getProductNameAndType(p.packType);
+      modelCounts[productName] = (modelCounts[productName] || 0) + 1;
+    });
+    let topModel = 'Kanger 1.0 (AIO)';
+    let maxCount = 0;
+    Object.entries(modelCounts).forEach(([name, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        topModel = name;
+      }
+    });
+    return topModel;
+  }, [packs, selectedLine]);
 
   // Map of active packs by Rack Number in selected line
   const rackMap = useMemo(() => {
@@ -108,9 +135,11 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
     return items.filter((item) => {
       if (!item.pack) return false;
       const matchesPack = item.pack.packNumber.toLowerCase().includes(q);
+      const matches2nd = item.pack.secondaryStickerNumber?.toLowerCase().includes(q);
       const matchesType = item.pack.packType.toLowerCase().includes(q);
+      const matchesRemark = item.pack.remark?.toLowerCase().includes(q);
       const matchesRack = ('r-' + item.rackNumber).includes(q);
-      return matchesPack || matchesType || matchesRack;
+      return matchesPack || matches2nd || matchesType || matchesRemark || matchesRack;
     });
   }, [rackMap, lineSearchQuery]);
 
@@ -137,8 +166,36 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
       alert('Permission Denied: Only Super Admin and Manager can remove packs from rack slots.');
       return;
     }
-    if (confirm('Remove Pack #' + pack.packNumber + ' from Line ' + pack.lineId + ' (Rack ' + pack.rackNumber + ', Level ' + pack.rackSlot + ') to make this rack slot empty?')) {
+    if (
+      confirm(
+        'Remove Pack #' +
+          pack.packNumber +
+          ' from Line ' +
+          pack.lineId +
+          ' (Rack ' +
+          pack.rackNumber +
+          ', Level ' +
+          pack.rackSlot +
+          ') to make this rack slot empty?'
+      )
+    ) {
       if (onDeletePack) onDeletePack(pack.id);
+    }
+  };
+
+  const handleClearLinePrompt = () => {
+    if (!isSuperAdmin && !isManager) {
+      alert('Permission Denied: Only Super Admin (Pranjil) and Manager (Suresh Chavan) can clear entire line data.');
+      return;
+    }
+
+    const count = lineStats[selectedLine] || 0;
+    if (
+      confirm(
+        `⚠️ CLEAR ENTIRE LINE:\n\nAre you sure you want to remove all ${count} battery packs from Line ${selectedLine}?\n\nThis will clear the line from the warehouse and Supabase cloud so you can re-stock / re-audit the line cleanly.`
+      )
+    ) {
+      if (onClearEntireLine) onClearEntireLine(selectedLine);
     }
   };
 
@@ -147,26 +204,51 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
   const utilizationPercent = Math.round((totalLinePacks / lineCapacity) * 100);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 animate-fadeIn">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 animate-fadeIn text-xs">
       {/* Top Banner */}
-      <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider">
-              <Layers className="w-3.5 h-3.5 text-indigo-600" /> Physical Line Inspector
+              <Layers className="w-3.5 h-3.5 text-indigo-600" /> Physical Line Inspector & Storage Sheet
             </span>
-            <span className="text-xs text-slate-500 font-mono-code font-medium">Tata AutoComp Systems (Varale B300 Plant)</span>
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-bold font-mono">
+              Line {selectedLine}
+            </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight font-display">
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight font-display">
             Warehouse Line & Rack Storage Matrix
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Real-time visual map of all warehouse lines, 160 racks, and 4 physical slot levels per rack.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real-time visual map of warehouse lines, 160 racks, and 4 physical slot levels per rack with instant print & QR code export
           </p>
         </div>
 
         {/* View Switcher & Actions */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Print Sheet & QR Button */}
+          <button
+            type="button"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Print Sheet & QR</span>
+          </button>
+
+          {/* Clear Entire Line Button */}
+          {(isSuperAdmin || isManager) && (
+            <button
+              type="button"
+              onClick={handleClearLinePrompt}
+              className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              title="Clear all packs in this line for re-stocking or audits"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Clear Line ({totalLinePacks})</span>
+            </button>
+          )}
+
           {onOpenRackLoader && (isSuperAdmin || isManager) && (
             <button
               onClick={() => onOpenRackLoader(selectedLine, 1)}
@@ -181,20 +263,24 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('TABLE_SHEET')}
-              className={'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ' +
+              className={
+                'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ' +
                 (viewMode === 'TABLE_SHEET'
                   ? 'bg-white text-indigo-700 shadow-2xs border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900')}
+                  : 'text-slate-600 hover:text-slate-900')
+              }
             >
               Sheet Layout
             </button>
             <button
               type="button"
               onClick={() => setViewMode('RACK_GRID')}
-              className={'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ' +
+              className={
+                'px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ' +
                 (viewMode === 'RACK_GRID'
                   ? 'bg-white text-indigo-700 shadow-2xs border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900')}
+                  : 'text-slate-600 hover:text-slate-900')
+              }
             >
               Rack Boxes Grid
             </button>
@@ -203,7 +289,7 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
       </div>
 
       {/* Warehouse Lines Navigation Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Line:</span>
           <button
@@ -216,7 +302,10 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
         </div>
 
         {isCreatingLine && (
-          <form onSubmit={handleCreateNewLine} className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex gap-2 animate-fadeIn">
+          <form
+            onSubmit={handleCreateNewLine}
+            className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex gap-2 animate-fadeIn"
+          >
             <input
               type="text"
               value={newLineName}
@@ -247,13 +336,20 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
               <button
                 key={lineKey}
                 onClick={() => setSelectedLine(lineKey)}
-                className={'px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer flex-shrink-0 ' +
+                className={
+                  'px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer flex-shrink-0 ' +
                   (isSelected
                     ? 'bg-indigo-600 text-white shadow-md'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200')}
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200')
+                }
               >
                 <span>Line {lineKey}</span>
-                <span className={'px-1.5 py-0.5 rounded-full text-[10px] ' + (isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700')}>
+                <span
+                  className={
+                    'px-1.5 py-0.5 rounded-full text-[10px] ' +
+                    (isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700')
+                  }
+                >
                   {count}
                 </span>
               </button>
@@ -263,27 +359,27 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
       </div>
 
       {/* Selected Line KPI Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <p className="text-slate-500 font-bold">Current Line</p>
-          <p className="text-xl font-extrabold text-slate-900 font-mono-code mt-0.5">Line {selectedLine}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <p className="text-slate-500 font-bold uppercase text-[10px]">Current Line</p>
+          <p className="text-xl font-black text-slate-900 font-mono mt-0.5">Line {selectedLine}</p>
         </div>
 
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <p className="text-slate-500 font-bold">Stored Packs</p>
-          <p className="text-xl font-extrabold text-indigo-600 font-mono-code mt-0.5">
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <p className="text-slate-500 font-bold uppercase text-[10px]">Stored Battery Packs</p>
+          <p className="text-xl font-black text-indigo-600 font-mono mt-0.5">
             {totalLinePacks} <span className="text-xs text-slate-400 font-normal">/ {lineCapacity} Max</span>
           </p>
         </div>
 
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <p className="text-slate-500 font-bold">Capacity Utilization</p>
-          <p className="text-xl font-extrabold text-emerald-600 font-mono-code mt-0.5">{utilizationPercent}%</p>
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <p className="text-slate-500 font-bold uppercase text-[10px]">Primary Model</p>
+          <p className="text-sm font-black text-purple-700 truncate mt-1">{primaryModelName}</p>
         </div>
 
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <p className="text-slate-500 font-bold">Total Racks</p>
-          <p className="text-xl font-extrabold text-slate-900 font-mono-code mt-0.5">{RACKS_PER_LINE} Racks (4 Slots/Rack)</p>
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <p className="text-slate-500 font-bold uppercase text-[10px]">Capacity Utilization</p>
+          <p className="text-xl font-black text-emerald-600 font-mono mt-0.5">{utilizationPercent}%</p>
         </div>
       </div>
 
@@ -294,14 +390,14 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
           type="text"
           value={lineSearchQuery}
           onChange={(e) => setLineSearchQuery(e.target.value)}
-          placeholder={'Filter Line ' + selectedLine + ' by Pack Number, Model, or Rack (e.g. 7428, AIO, R-12)...'}
-          className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-indigo-500 shadow-xs"
+          placeholder={'Filter Line ' + selectedLine + ' by Pack Number, Dual Sticker, Model, Remark, or Rack (e.g. 7428, AIO, R-12)...'}
+          className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-500 shadow-xs"
         />
       </div>
 
       {/* VIEW 1: TABLE SHEET VIEW (Matching User Photo Layout) */}
       {viewMode === 'TABLE_SHEET' && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
@@ -310,6 +406,7 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                   <th className="p-3 w-16">Slot / Level</th>
                   <th className="p-3">Box Code / Serial</th>
                   <th className="p-3">Item Name / Model</th>
+                  <th className="p-3">Remarks / Notes</th>
                   <th className="p-3">Physical Location</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Actions</th>
@@ -325,16 +422,21 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                       key={'sheet-' + item.rackNumber + '-' + item.slot + '-' + idx}
                       className={'hover:bg-slate-50/80 transition ' + (p ? 'bg-white' : 'bg-slate-50/30')}
                     >
-                      <td className="p-3 font-mono-code font-bold text-slate-900">
+                      <td className="p-3 font-mono font-black text-slate-900">
                         R-{String(item.rackNumber).padStart(2, '0')}
                       </td>
-                      <td className="p-3 font-mono-code text-slate-600 font-bold">
+                      <td className="p-3 font-mono text-slate-600 font-bold">
                         Level L-0{item.slot}
                       </td>
-                      <td className="p-3 font-mono-code">
+                      <td className="p-3 font-mono">
                         {p ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-extrabold text-slate-900 text-sm">#{p.packNumber}</span>
+                            {p.secondaryStickerNumber && (
+                              <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-200 text-[9.5px] font-mono font-bold">
+                                2nd: #{p.secondaryStickerNumber}
+                              </span>
+                            )}
                             {p.isWithoutPlate && (
                               <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
                                 NO-PLATE
@@ -347,14 +449,28 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                       </td>
                       <td className="p-3">
                         {p ? (
-                          <span className={'px-2 py-0.5 rounded font-bold text-[11px] border ' + (model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200')}>
-                            {p.packType}
+                          <span
+                            className={
+                              'px-2 py-0.5 rounded font-bold text-[11px] border ' +
+                              (model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200')
+                            }
+                          >
+                            {getProductNameAndType(p.packType).fullBadgeName}
                           </span>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
                       </td>
-                      <td className="p-3 font-mono-code font-bold text-indigo-700">
+                      <td className="p-3">
+                        {p && p.remark ? (
+                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-semibold border border-rose-200 text-[10.5px]">
+                            {p.remark}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="p-3 font-mono font-bold text-indigo-700">
                         {selectedLine}, R-{String(item.rackNumber).padStart(2, '0')}, L-0{item.slot}
                       </td>
                       <td className="p-3">
@@ -398,7 +514,8 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                             </button>
                           </div>
                         ) : (
-                          onOpenRackLoader && (isSuperAdmin || isManager) && (
+                          onOpenRackLoader &&
+                          (isSuperAdmin || isManager) && (
                             <button
                               type="button"
                               onClick={() => onOpenRackLoader(selectedLine, item.rackNumber)}
@@ -429,19 +546,29 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
             return (
               <div
                 key={rackNum}
-                className={'bg-white border rounded-xl p-4 space-y-3 shadow-2xs hover:shadow-xs transition ' +
-                  (isFull ? 'border-rose-200' : stored.length > 0 ? 'border-blue-200' : 'border-slate-200')}
+                className={
+                  'bg-white border rounded-2xl p-4 space-y-3 shadow-2xs hover:shadow-xs transition ' +
+                  (isFull ? 'border-rose-200' : stored.length > 0 ? 'border-blue-200' : 'border-slate-200')
+                }
               >
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 font-extrabold font-mono-code flex items-center justify-center text-xs">
+                    <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 font-extrabold font-mono flex items-center justify-center text-xs">
                       {rackNum}
                     </span>
                     <span className="font-bold text-slate-900 text-xs">Rack R-{String(rackNum).padStart(2, '0')}</span>
                   </div>
 
-                  <span className={'px-2 py-0.5 rounded-full text-[10px] font-bold ' +
-                    (isFull ? 'bg-rose-100 text-rose-800' : stored.length > 0 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600')}>
+                  <span
+                    className={
+                      'px-2 py-0.5 rounded-full text-[10px] font-bold ' +
+                      (isFull
+                        ? 'bg-rose-100 text-rose-800'
+                        : stored.length > 0
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-slate-100 text-slate-600')
+                    }
+                  >
                     {stored.length} / 4 Packs
                   </span>
                 </div>
@@ -452,13 +579,15 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                     return (
                       <div
                         key={slotNum}
-                        className={'p-2 rounded-lg border flex items-center justify-between ' +
-                          (pack ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50 border-dashed border-slate-200')}
+                        className={
+                          'p-2 rounded-lg border flex items-center justify-between ' +
+                          (pack ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50 border-dashed border-slate-200')
+                        }
                       >
-                        <span className="font-mono-code font-bold text-slate-500">L-0{slotNum}</span>
+                        <span className="font-mono font-bold text-slate-500">L-0{slotNum}</span>
                         {pack ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono-code font-bold text-slate-900">#{pack.packNumber}</span>
+                            <span className="font-mono font-black text-slate-900">#{pack.packNumber}</span>
                             <span className="text-[10px] text-indigo-700 font-semibold">{pack.packType}</span>
                           </div>
                         ) : (
@@ -483,6 +612,16 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
           })}
         </div>
       )}
+
+      {/* Print & QR Sheet Modal */}
+      <LinePrintAndQRModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        selectedLine={selectedLine}
+        packs={packs}
+        warehouseLines={warehouseLines}
+        onSelectLine={(line) => setSelectedLine(line)}
+      />
     </div>
   );
 };
