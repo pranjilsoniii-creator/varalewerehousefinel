@@ -502,6 +502,29 @@ export function getProductNameAndType(packType: string | BatteryPackType): {
   return { productName: 'Kanger 1.0 AIO', productType: 'Kanger 1.0', fullBadgeName: 'Kanger 1.0 AIO' };
 }
 
+/**
+ * Short Pack Type Name helper for print sheets & warehouse matrix
+ * Returns short codes like: CKD, FBU, AIO, GEN3, K2, K3, LIMBER, TAMOR, NOVA, CHAL-LR, CHAL-MR
+ */
+export function getShortPackTypeName(packType: string | BatteryPackType): string {
+  const raw = String(packType || 'AIO').toUpperCase();
+  if (raw.includes('CKD')) return 'CKD';
+  if (raw.includes('FBU')) return 'FBU';
+  if (raw.includes('GEN3') || raw.includes('GEN 3') || raw.includes('G3')) return 'GEN3';
+  if (raw.includes('KANGER2') || raw.includes('K2') || raw.includes('2.0')) return 'K2';
+  if (raw.includes('KANGER3') || raw.includes('K3') || raw.includes('3.0')) return 'K3';
+  if (raw.includes('LIMBER') || raw.includes('LIM')) return 'LIMBER';
+  if (raw.includes('TAMOR') || raw.includes('ELR')) return 'TAMOR';
+  if (raw.includes('NOVA') || raw.includes('LRP')) return 'NOVA';
+  if (raw.includes('CHALLENGER MR') || raw.includes('CHALLENGER_MR')) return 'CHAL-MR';
+  if (raw.includes('CHALLENGER') || raw.includes('CHAL')) return 'CHAL-LR';
+  if (raw.includes('BURNT')) return 'BURNT';
+  if (raw.includes('DOST')) return 'E-DOST';
+  if (raw.includes('MODULE')) return 'MODULE';
+  if (raw.includes('AIO')) return 'AIO';
+  return 'AIO';
+}
+
 export const COMMON_TRANSPORTERS = [
   'Sahyadri Enterprises',
   'Aai Saheb Freight Line',

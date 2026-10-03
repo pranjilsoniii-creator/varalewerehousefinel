@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { BatteryPack } from '../types';
 import { generateQrDataUrl, generateQrSvg, generateQrPngDataUrl } from '../utils/qrCodeGenerator';
-import { getProductNameAndType } from '../data/batteryCatalog';
+import { getProductNameAndType, getShortPackTypeName } from '../data/batteryCatalog';
 import { RACKS_PER_LINE } from '../data/seedWarehouse';
 import { exportLineSheetToExcel } from '../utils/excelExport';
 
@@ -677,27 +677,41 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                         </div>
                                       );
                                     }
+                                    const shortType = getShortPackTypeName(pack.packType);
                                     return (
-                                      <div key={pack.id || sIdx} className="flex items-center justify-between gap-0.5 leading-tight">
-                                        <span className={`text-black font-black tracking-tight ${
-                                          density === 'spacious'
-                                            ? 'text-[11px] sm:text-xs'
-                                            : density === 'balanced'
-                                            ? 'text-[9.5px] sm:text-[10.5px]'
-                                            : 'text-[7.5px]'
-                                        }`}>
-                                          {pack.packNumber}
-                                          {pack.secondaryStickerNumber && (
-                                            <span className="text-[6.5px] text-slate-500 font-normal ml-0.5">
-                                              ({pack.secondaryStickerNumber})
+                                      <div key={pack.id || sIdx} className="flex items-center justify-between gap-1 leading-tight">
+                                        <div className="flex items-center gap-1 min-w-0">
+                                          <span className={`text-black font-black tracking-tight ${
+                                            density === 'spacious'
+                                              ? 'text-[11px] sm:text-xs'
+                                              : density === 'balanced'
+                                              ? 'text-[9.5px] sm:text-[10.5px]'
+                                              : 'text-[7.5px]'
+                                          }`}>
+                                            {pack.packNumber}
+                                            {pack.secondaryStickerNumber && (
+                                              <span className="text-[6.5px] text-slate-500 font-normal ml-0.5">
+                                                ({pack.secondaryStickerNumber})
+                                              </span>
+                                            )}
+                                          </span>
+                                          {pack.remark && (
+                                            <span className="text-[5.5px] px-0.5 rounded bg-rose-50 text-rose-700 font-sans border border-rose-200 uppercase font-semibold truncate max-w-[42px]">
+                                              {pack.remark.slice(0, 7)}
                                             </span>
                                           )}
+                                        </div>
+
+                                        {/* Pack Name Badge (CKD, FBU, AIO, GEN3, etc.) */}
+                                        <span className={`font-black uppercase tracking-wider font-mono px-1 py-0 rounded border border-black bg-slate-100 text-black flex-shrink-0 ${
+                                          density === 'spacious'
+                                            ? 'text-[8.5px]'
+                                            : density === 'balanced'
+                                            ? 'text-[7.5px]'
+                                            : 'text-[6.5px]'
+                                        }`}>
+                                          {shortType}
                                         </span>
-                                        {pack.remark && (
-                                          <span className="text-[6px] px-1 py-0 rounded bg-rose-100 text-rose-800 font-sans border border-rose-200 uppercase font-bold leading-none">
-                                            {pack.remark.slice(0, 8)}
-                                          </span>
-                                        )}
                                       </div>
                                     );
                                   })}

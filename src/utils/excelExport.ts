@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { BatteryPack, DispatchLot, InwardShipmentRecord, InvoiceData } from '../types';
-import { BATTERY_MODELS } from '../data/batteryCatalog';
+import { BATTERY_MODELS, getShortPackTypeName } from '../data/batteryCatalog';
 
 export function exportInventoryToExcel(packs: BatteryPack[], filename = 'Tata_Battery_Warehouse_Inventory.xlsx') {
   const data = packs.map((p, index) => {
@@ -250,6 +250,8 @@ export function exportLineSheetToExcel(
         if (packInSlot) {
           let str = packInSlot.packNumber;
           if (packInSlot.secondaryStickerNumber) str += ` (${packInSlot.secondaryStickerNumber})`;
+          const shortType = getShortPackTypeName(packInSlot.packType);
+          str += ` ${shortType}`;
           if (packInSlot.remark) str += ` [${packInSlot.remark}]`;
           rowCells.push(str);
         } else {
