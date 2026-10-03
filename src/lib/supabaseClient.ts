@@ -239,6 +239,41 @@ export async function deletePackFromCloud(packId: string): Promise<boolean> {
   }
 }
 
+export async function deleteMultiplePacksFromCloud(packIds: string[]): Promise<boolean> {
+  try {
+    const sb = getSupabase();
+    if (!sb || packIds.length === 0) return false;
+    // Chunk in batches of 100 for safety
+    for (let i = 0; i < packIds.length; i += 100) {
+      const chunk = packIds.slice(i, i + 100);
+      const { error } = await sb.from('battery_packs').delete().in('id', chunk);
+      if (error) {
+        console.warn('Supabase deleteMultiplePacks error:', error.message);
+      }
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase deleteMultiplePacks exception:', e);
+    return false;
+  }
+}
+
+export async function deleteEntireLineFromCloud(lineId: string): Promise<boolean> {
+  try {
+    const sb = getSupabase();
+    if (!sb || !lineId) return false;
+    const { error } = await sb.from('battery_packs').delete().eq('line_id', lineId).neq('status', 'DISPATCHED');
+    if (error) {
+      console.warn('Supabase deleteEntireLine error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase deleteEntireLine exception:', e);
+    return false;
+  }
+}
+
 // ==========================================
 // 2. INWARD SHIPMENTS MAPPINGS & CRUD
 // ==========================================

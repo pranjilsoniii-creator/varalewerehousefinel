@@ -85,9 +85,9 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     return map;
   }, [linePacks]);
 
-  // Calculate highest occupied rack number or standard 38-40 rows
+  // Calculate highest occupied rack number (e.g. 38 if packs up to 38, or 14 if up to 14)
   const maxOccupiedRack = useMemo(() => {
-    let max = 38; // Default standard from photo
+    let max = 0;
     Object.entries(rackMap).forEach(([rackStr, pList]) => {
       const list = pList as BatteryPack[];
       if (list && list.length > 0) {
@@ -95,14 +95,14 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
         if (rNum > max) max = rNum;
       }
     });
-    return Math.min(max, RACKS_PER_LINE);
+    // If line has packs, show up to highest occupied rack (at least 4 for 1 per col), otherwise default 38
+    return max > 0 ? Math.min(max, RACKS_PER_LINE) : 38;
   }, [rackMap]);
 
-  // Generate 4-column groupings matching the Tata physical photo (38 to 40 rows per column group)
-  // Photo shows 4 main columns: Col 1: Racks 1-10, Col 2: Racks 11-20, Col 3: Racks 21-30, Col 4: Racks 31-38/40
+  // Generate 4-column groupings matching the exact occupied racks
   const columnGroups = useMemo(() => {
-    const totalRacksToShow = Math.max(38, maxOccupiedRack);
-    const racksPerCol = Math.ceil(totalRacksToShow / 4); // ~10 racks per col
+    const totalRacksToShow = maxOccupiedRack;
+    const racksPerCol = Math.ceil(totalRacksToShow / 4);
 
     const cols: Array<Array<{ rackNumber: number; packs: BatteryPack[] }>> = [[], [], [], []];
     for (let i = 1; i <= totalRacksToShow; i++) {
@@ -114,6 +114,11 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     }
     return cols;
   }, [rackMap, maxOccupiedRack]);
+
+  // Calculate dynamic typography scale based on number of racks per column
+  const racksPerCol = Math.ceil(maxOccupiedRack / 4);
+  const isHighDensity = racksPerCol >= 8; // ~32 to 40 racks (compact)
+  const isMediumDensity = racksPerCol >= 5 && racksPerCol < 8; // ~20 to 28 racks
 
   // Public URL for QR Code (Direct public access without login)
   const publicUrl = useMemo(() => {
@@ -162,52 +167,50 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-      {/* Dynamic Print Styles for Exact 1-Page Output */}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 print:static print:inset-auto print:bg-transparent print:p-0 print:m-0 print:overflow-visible">
+      {/* High-Precision Print Styles for Guaranteed 1-Page Output Across Chrome & Mobile */}
       <style>{`
         @media print {
           @page {
             size: ${paperSize === 'A4_PORTRAIT' ? 'portrait' : paperSize === 'A3_LANDSCAPE' ? 'A3 landscape' : 'A4 landscape'};
             margin: 3mm !important;
           }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           html, body {
-            height: 100% !important;
+            height: auto !important;
             max-height: 100vh !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
+            color: #000000 !important;
           }
-          body * {
-            visibility: hidden !important;
-          }
-          #tata-line-printable-sheet, #tata-line-printable-sheet * {
-            visibility: visible !important;
+          .no-print, header, nav, footer {
+            display: none !important;
           }
           #tata-line-printable-sheet {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100vw !important;
-            max-width: 100vw !important;
-            height: 100vh !important;
-            max-height: 100vh !important;
-            margin: 0 !important;
+            display: block !important;
+            position: static !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
             padding: 1.5mm !important;
             box-sizing: border-box !important;
+            border: 2px solid #000 !important;
+            box-shadow: none !important;
             page-break-after: avoid !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            overflow: hidden !important;
-          }
-          .no-print {
-            display: none !important;
+            background: #ffffff !important;
           }
         }
       `}</style>
 
       {/* Modal Card */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[96vh] flex flex-col overflow-hidden animate-fadeIn print:shadow-none print:border-none print:max-h-none print:overflow-visible print:w-full">
         {/* Modal Header Controls (Hidden during print) */}
         <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 no-print">
           <div className="flex items-center gap-3">
@@ -222,7 +225,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-500">
-                Official Plant Rack Sheet • 1-Page Print Fit & High-Res QR Code
+                Official Plant Rack Sheet • 1-Page Fit ({maxOccupiedRack} Racks, {linePacks.length} Packs)
               </p>
             </div>
           </div>
@@ -345,68 +348,68 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
         </div>
 
         {/* Modal Printable Sheet Container */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-slate-100 flex justify-center">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-4 bg-slate-100 flex justify-center print:bg-white print:p-0 print:overflow-visible">
           {/* Paper Sheet Preview (Matches Exact Physical Tata Wooden Crate Sheet Layout & Guarantees 1-Page Fit) */}
           <div
             id="tata-line-printable-sheet"
-            className={`bg-white shadow-lg border border-slate-300 p-3 sm:p-4 text-black font-sans transition-all flex flex-col justify-between ${
+            className={`bg-white shadow-lg border-2 border-black p-2 sm:p-3 text-black font-sans transition-all flex flex-col justify-between print:shadow-none print:p-2 ${
               paperSize === 'A4_LANDSCAPE' || paperSize === 'A3_LANDSCAPE'
                 ? 'w-full max-w-[1050px]'
                 : 'w-full max-w-[750px]'
             }`}
           >
             {/* 1. MASTER HEADER: TATA AUTOCOMP SYSTEM PVT LTD + LINE BADGE */}
-            <div className="border-2 border-black rounded-xs overflow-hidden mb-1.5 flex-shrink-0">
-              <div className="flex items-center justify-between border-b-2 border-black px-3 py-1 bg-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 bg-white p-0.5 rounded border border-black flex items-center justify-center">
-                    <img src="/tata-logo.png" alt="TATA" className="h-6 w-6 object-contain" />
+            <div className="border-2 border-black rounded-xs overflow-hidden mb-1 flex-shrink-0">
+              <div className="flex items-center justify-between border-b-2 border-black px-2.5 py-1 bg-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 bg-white p-0.5 rounded border border-black flex items-center justify-center flex-shrink-0">
+                    <img src="/tata-logo.png" alt="TATA" className="h-5 w-5 object-contain" />
                   </div>
                   <div>
-                    <h1 className="text-base sm:text-lg font-black tracking-wider text-black uppercase font-display leading-tight">
+                    <h1 className="text-sm sm:text-base font-black tracking-wider text-black uppercase font-display leading-tight">
                       TATA AUTOCOMP SYSTEM PVT LTD
                     </h1>
-                    <p className="text-[9px] font-bold text-slate-700 uppercase tracking-wider leading-none">
+                    <p className="text-[8px] font-bold text-slate-700 uppercase tracking-wider leading-none">
                       Varale (B300 Plant) Lithium Battery Warehouse • Storage Matrix
                     </p>
                   </div>
                 </div>
 
                 {/* Line Identification Badge (e.g. A-10) */}
-                <div className="bg-black text-white px-4 py-1 rounded-xs border border-black font-black text-xl tracking-widest uppercase">
+                <div className="bg-black text-white px-3 py-0.5 rounded-xs border border-black font-black text-lg tracking-widest uppercase">
                   {currentLine}
                 </div>
               </div>
 
               {/* 2. SUB-HEADER: TOTAL BATTERY PACKS NO. + TOTAL ROWS + MODEL */}
-              <div className="grid grid-cols-3 divide-x-2 divide-black text-center text-[10px] font-bold bg-white">
-                <div className="py-1 px-2 flex items-center justify-center gap-1.5">
-                  <span className="text-slate-700 uppercase text-[9px]">TOTAL BATTERY PACKS:</span>
-                  <span className="text-sm font-black text-black">{linePacks.length}</span>
+              <div className="grid grid-cols-3 divide-x-2 divide-black text-center text-[9px] font-bold bg-white">
+                <div className="py-0.5 px-1.5 flex items-center justify-center gap-1">
+                  <span className="text-slate-700 uppercase text-[8px]">TOTAL BATTERY PACKS:</span>
+                  <span className="text-xs font-black text-black">{linePacks.length}</span>
                 </div>
-                <div className="py-1 px-2 flex items-center justify-center gap-1.5">
-                  <span className="text-slate-700 uppercase text-[9px]">TOTAL ROWS / RACKS:</span>
-                  <span className="text-sm font-black text-black">{maxOccupiedRack}</span>
+                <div className="py-0.5 px-1.5 flex items-center justify-center gap-1">
+                  <span className="text-slate-700 uppercase text-[8px]">TOTAL ROWS / RACKS:</span>
+                  <span className="text-xs font-black text-black">{maxOccupiedRack}</span>
                 </div>
-                <div className="py-1 px-2 flex items-center justify-center gap-1.5 bg-slate-50">
-                  <span className="text-slate-700 uppercase text-[9px]">PRIMARY MODEL:</span>
-                  <span className="text-[10px] font-black text-blue-900 uppercase">{primaryModelName}</span>
+                <div className="py-0.5 px-1.5 flex items-center justify-center gap-1 bg-slate-50">
+                  <span className="text-slate-700 uppercase text-[8px]">PRIMARY MODEL:</span>
+                  <span className="text-[9px] font-black text-blue-900 uppercase truncate">{primaryModelName}</span>
                 </div>
               </div>
             </div>
 
-            {/* 3. 4-COLUMN TABLE GRID (Forced 4-columns in screen preview & print for 1-page fit) */}
-            <div className="grid grid-cols-4 gap-1 border-2 border-black p-0.5 bg-white flex-1 overflow-hidden">
+            {/* 3. 4-COLUMN TABLE GRID (All racks 1 to maxOccupiedRack without clipping) */}
+            <div className="grid grid-cols-4 gap-1 border-2 border-black p-0.5 bg-white flex-1">
               {columnGroups.map((colGroup, colIdx) => (
-                <div key={colIdx} className="border border-black overflow-hidden flex flex-col">
-                  <table className="w-full text-[8px] text-left border-collapse leading-tight">
+                <div key={colIdx} className="border border-black flex flex-col">
+                  <table className="w-full text-left border-collapse leading-none">
                     <thead>
-                      <tr className="bg-slate-200 text-black border-b border-black font-bold text-[7.5px] uppercase">
-                        <th className="p-0.5 border-r border-black text-center w-7">
+                      <tr className="bg-slate-200 text-black border-b border-black font-bold text-[7px] uppercase">
+                        <th className="p-0.5 border-r border-black text-center w-6">
                           {colIdx === 0 ? 'Rack' : 'Sr.'}
                         </th>
                         <th className="p-0.5 border-r border-black">Battery Pack No.</th>
-                        <th className="p-0.5 text-center w-12">Model</th>
+                        <th className="p-0.5 text-center w-11">Model</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black">
@@ -419,35 +422,35 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                         return (
                           <tr key={item.rackNumber} className="hover:bg-slate-50">
                             {/* Rack Number */}
-                            <td className="p-0.5 border-r border-black text-center font-bold align-middle bg-slate-50 text-[8px]">
+                            <td className={`p-0.5 border-r border-black text-center font-bold align-middle bg-slate-50 ${isHighDensity ? 'text-[7.5px]' : 'text-[8.5px]'}`}>
                               {item.rackNumber}
                             </td>
 
                             {/* 4 Stacked Battery Pack Numbers */}
-                            <td className="p-0.5 border-r border-black font-mono font-bold align-middle">
+                            <td className={`p-0.5 border-r border-black font-mono font-bold align-middle ${isHighDensity ? 'py-[1px]' : isMediumDensity ? 'py-[2px]' : 'py-1'}`}>
                               {hasAnyPack ? (
-                                <div className="space-y-[1px]">
+                                <div className="space-y-[0.5px]">
                                   {sortedPacks.map((pack, sIdx) => {
                                     if (!pack) {
                                       return (
-                                        <div key={sIdx} className="text-slate-300 text-[7px] font-normal leading-tight">
+                                        <div key={sIdx} className="text-slate-300 text-[6.5px] font-normal leading-tight">
                                           —
                                         </div>
                                       );
                                     }
                                     return (
                                       <div key={pack.id || sIdx} className="flex items-center justify-between gap-0.5 leading-tight">
-                                        <span className="text-black text-[8px] font-extrabold tracking-tight">
+                                        <span className={`text-black font-extrabold tracking-tight ${isHighDensity ? 'text-[7.5px]' : 'text-[8.5px]'}`}>
                                           {pack.packNumber}
                                           {pack.secondaryStickerNumber && (
-                                            <span className="text-[6.5px] text-slate-500 font-normal ml-0.5">
+                                            <span className="text-[6px] text-slate-500 font-normal ml-0.5">
                                               ({pack.secondaryStickerNumber})
                                             </span>
                                           )}
                                         </span>
                                         {pack.remark && (
-                                          <span className="text-[6px] px-0.5 py-0 rounded bg-rose-100 text-rose-800 font-sans border border-rose-200 uppercase font-bold leading-none">
-                                            {pack.remark.slice(0, 10)}
+                                          <span className="text-[5.5px] px-0.5 py-0 rounded bg-rose-100 text-rose-800 font-sans border border-rose-200 uppercase font-bold leading-none">
+                                            {pack.remark.slice(0, 9)}
                                           </span>
                                         )}
                                       </div>
@@ -455,12 +458,12 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                   })}
                                 </div>
                               ) : (
-                                <span className="text-slate-300 text-[7.5px] italic leading-tight">Empty</span>
+                                <span className="text-slate-300 text-[7px] italic leading-tight">Empty</span>
                               )}
                             </td>
 
                             {/* Description / Model */}
-                            <td className="p-0.5 text-center font-semibold align-middle text-[7px] text-slate-700 leading-tight">
+                            <td className="p-0.5 text-center font-semibold align-middle text-[6.5px] text-slate-700 leading-tight">
                               {hasAnyPack ? (
                                 <span>{getProductNameAndType(rackPacks[0].packType).productType || 'Kanger1.0'}</span>
                               ) : (
@@ -477,22 +480,22 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             </div>
 
             {/* 4. FOOTER WITH QR CODE FOR DIGITAL SCANNING & VERIFICATION */}
-            <div className="mt-1.5 pt-1 border-t-2 border-black flex items-center justify-between gap-2 text-[8px] text-slate-700 flex-shrink-0">
+            <div className="mt-1 pt-1 border-t-2 border-black flex items-center justify-between gap-2 text-[7.5px] text-slate-700 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <div className="h-10 w-10 p-0.5 bg-white border border-black flex items-center justify-center shadow-2xs flex-shrink-0">
+                <div className="h-9 w-9 p-0.5 bg-white border border-black flex items-center justify-center shadow-2xs flex-shrink-0">
                   <img src={qrDataUrl} alt={`QR Code for Line ${currentLine}`} className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <p className="font-bold text-black uppercase text-[8.5px] leading-tight">Instant Mobile Scan QR Code</p>
-                  <p className="text-[7.5px] text-slate-600 leading-tight">Scan with any phone camera to view real-time live stock of Line {currentLine} without login</p>
-                  <p className="text-[7px] font-mono text-slate-500 mt-0.5 leading-none">{publicUrl}</p>
+                  <p className="font-bold text-black uppercase text-[8px] leading-tight">Instant Mobile Scan QR Code</p>
+                  <p className="text-[7px] text-slate-600 leading-tight">Scan with any phone camera to view real-time live stock of Line {currentLine} without login</p>
+                  <p className="text-[6.5px] font-mono text-slate-500 mt-0.5 leading-none">{publicUrl}</p>
                 </div>
               </div>
 
               <div className="text-right leading-tight">
-                <p className="font-bold text-black text-[8.5px]">Tata AutoComp Systems Limited</p>
-                <p className="text-[7.5px] text-slate-600">Varale B300 Plant • Quality Approved</p>
-                <p className="text-[7px] text-slate-400 mt-0.5">Printed: {new Date().toLocaleString('en-IN')}</p>
+                <p className="font-bold text-black text-[8px]">Tata AutoComp Systems Limited</p>
+                <p className="text-[7px] text-slate-600">Varale B300 Plant • Quality Approved</p>
+                <p className="text-[6.5px] text-slate-400 mt-0.5">Printed: {new Date().toLocaleString('en-IN')}</p>
               </div>
             </div>
           </div>

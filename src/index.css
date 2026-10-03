@@ -76,13 +76,19 @@
     margin: 4mm;
   }
 
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   body {
     background: #ffffff !important;
     color: #000000 !important;
     font-size: 10pt !important;
+    overflow: visible !important;
   }
   
-  .no-print {
+  .no-print, header, nav, footer {
     display: none !important;
   }
   
@@ -101,9 +107,26 @@
     max-width: 100% !important;
   }
 
+  /* Unset fixed modal overlays during print so Chrome renders contents */
+  .fixed.inset-0 {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
   #tata-line-printable-sheet {
+    display: block !important;
+    position: static !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
   }
 
   table {
@@ -115,4 +138,5 @@
     border-color: #000000 !important;
   }
 }
+
 

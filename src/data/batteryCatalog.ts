@@ -261,7 +261,7 @@ export function parseBoxCodeAndModel(rawInput: string, fallbackModel: string = '
   isWithoutPlate: boolean;
 } {
   const raw = (rawInput || '').trim();
-  if (!raw || raw === '0') {
+  if (!raw || raw.toUpperCase() === 'EMPTY' || raw.toUpperCase() === 'CLEAR' || raw === '—') {
     return {
       cleanPackNumber: '',
       derivedModel: 'Kanger1.0_AIO',
@@ -269,9 +269,24 @@ export function parseBoxCodeAndModel(rawInput: string, fallbackModel: string = '
     };
   }
 
-  // Check if plate-less
-  if (raw.toUpperCase().startsWith('NP-') || raw.toUpperCase().startsWith('NP')) {
-    const cleanNoPlate = raw.toUpperCase().startsWith('NP-') ? raw.toUpperCase() : `NP-${raw.slice(2)}`;
+  // Check if plate-less / without sticker / 0 entered for battery present without sticker
+  if (
+    raw === '0' ||
+    raw.toUpperCase().startsWith('NP-') ||
+    raw.toUpperCase() === 'NP' ||
+    raw.toUpperCase().includes('WITHOUT') ||
+    raw.toUpperCase().includes('NO STICKER') ||
+    raw.toUpperCase().includes('NO PLATE') ||
+    raw.toUpperCase().includes('NO-PLATE')
+  ) {
+    let cleanNoPlate = 'NP-PENDING';
+    if (raw.toUpperCase().startsWith('NP-')) {
+      cleanNoPlate = raw.toUpperCase();
+    } else if (raw.toUpperCase().startsWith('NP') && raw.length > 2) {
+      cleanNoPlate = `NP-${raw.slice(2)}`;
+    } else if (raw === '0') {
+      cleanNoPlate = `NP-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
     return {
       cleanPackNumber: cleanNoPlate,
       derivedModel: deriveModelFromShorthand(raw, fallbackModel),
@@ -316,11 +331,12 @@ export interface ParsedLineEntry {
  * - "1245 ckd - 4545 ckd rejected pack"
  * - "1245 - 4545 ckd transit damage"
  * - "1245 AIO"
- * - "0" (empty slot)
+ * - "0" or "np" (Physical pack present without sticker - NO PLATE)
+ * - "EMPTY" or "CLEAR" or "—" (Empty slot)
  */
 export function parseBulkLineEntry(lineText: string, fallbackModel: string = 'AIO'): ParsedLineEntry {
   const trimmed = (lineText || '').trim();
-  if (!trimmed || trimmed === '0') {
+  if (!trimmed || trimmed.toUpperCase() === 'EMPTY' || trimmed.toUpperCase() === 'CLEAR' || trimmed === '—') {
     return {
       cleanPackNumber: '',
       derivedModel: 'Kanger1.0_AIO',
@@ -337,7 +353,7 @@ export function parseBulkLineEntry(lineText: string, fallbackModel: string = 'AI
     const rawModel = parts[1] || fallbackModel;
     const rawRemark = parts.slice(2).join(' ').trim();
 
-    if (!rawSerial || rawSerial === '0') {
+    if (!rawSerial || rawSerial.toUpperCase() === 'EMPTY' || rawSerial.toUpperCase() === 'CLEAR' || rawSerial === '—') {
       return {
         cleanPackNumber: '',
         derivedModel: 'Kanger1.0_AIO',
@@ -351,7 +367,7 @@ export function parseBulkLineEntry(lineText: string, fallbackModel: string = 'AI
     return {
       cleanPackNumber: baseParsed.cleanPackNumber,
       derivedModel: baseParsed.derivedModel,
-      remark: rawRemark || undefined,
+      remark: rawRemark || (baseParsed.isWithoutPlate ? 'Without Sticker (Pending Print)' : undefined),
       isWithoutPlate: baseParsed.isWithoutPlate,
       isDifferentSerial: false,
       isEmptySlot: false,

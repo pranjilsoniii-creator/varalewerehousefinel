@@ -49,6 +49,8 @@ import {
   syncInwardToCloud,
   syncDailyStockToCloud,
   deletePackFromCloud,
+  deleteMultiplePacksFromCloud,
+  deleteEntireLineFromCloud,
   deleteDailyStockFromCloud,
   mapRowToPack,
   mapRowToInward,
@@ -596,17 +598,24 @@ export function App() {
   // Handler: Clear / Delete Entire Line (For Manager Suresh Chavan & SuperAdmin Pranjil)
   const handleClearEntireLine = async (lineId: string) => {
     const packsToRemove = packs.filter((p) => p.lineId === lineId && p.status !== 'DISPATCHED');
+    const packIdsToRemove = packsToRemove.map((p) => p.id);
     const remainingPacks = packs.filter((p) => !(p.lineId === lineId && p.status !== 'DISPATCHED'));
+    
+    // 1. Immediately update React state and LocalStorage
     setPacks(remainingPacks);
+    localStorage.setItem('tata_wms_packs_v4', JSON.stringify(remainingPacks));
 
-    for (const pack of packsToRemove) {
-      enqueueOfflineAction('DELETE_PACK', pack.id);
+    // 2. Enqueue offline actions for guaranteed sync
+    for (const pId of packIdsToRemove) {
+      enqueueOfflineAction('DELETE_PACK', pId);
     }
 
+    // 3. Perform atomic batch deletion on Supabase cloud
     try {
-      for (const pack of packsToRemove) {
-        await deletePackFromCloud(pack.id);
-      }
+      await Promise.all([
+        deleteEntireLineFromCloud(lineId),
+        deleteMultiplePacksFromCloud(packIdsToRemove),
+      ]);
     } catch (err) {
       console.warn('Cloud sync on clear entire line:', err);
     }
