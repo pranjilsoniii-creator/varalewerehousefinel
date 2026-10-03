@@ -147,8 +147,14 @@ export function exportInvoiceToExcel(invoice: InvoiceData, filename?: string) {
 }
 
 /**
- * High-Precision Excel Export for Line Storage Sheet (Exact 4-Column Plant Crate Sheet + Detailed Inventory)
- * 100% matches the physical wooden crate sheet at Tata AutoComp plant
+ * High-Precision Excel Export for Line Storage Sheet (Exact OpenPyXL Plant Form Architecture)
+ * Matches the user's official Python openpyxl template:
+ * - 4 Groups of (Rack No., Battery pack No., Description) = 12 columns
+ * - Each Rack = 4 individual rows for Slots 1-4 with merged Rack No. & Description
+ * - Row 1: TATA AUTOCOMP SYSTEM LIMITED + Crate / Box No.
+ * - Row 2: TOTAL BATTERY PACKS NO. + TOTAL ROWS + LINE NO. + DATE
+ * - Row 3: Table Column Headers
+ * - Rows 4-43: 40 Grid Rows (10 Racks x 4 Slots)
  */
 export function exportLineSheetToExcel(
   lineId: string,
@@ -171,7 +177,7 @@ export function exportLineSheetToExcel(
     }
   });
 
-  // Calculate maximum occupied rack (e.g. 38 if packs up to 38)
+  // Calculate maximum occupied rack (e.g. 38)
   let maxRack = 0;
   Object.entries(rackMap).forEach(([rStr, pList]) => {
     if (pList && pList.length > 0) {
@@ -181,91 +187,114 @@ export function exportLineSheetToExcel(
   });
   if (maxRack === 0) maxRack = 38;
 
-  // 1. Sheet 1: 4-Column Plant Crate Matrix Sheet
+  const GROUPS = 4;
+  const RACKS_PER_GROUP = 10;
+  const todayStr = new Date().toLocaleDateString('en-GB');
+
+  // Build 2D Array (AOA)
   const aoa: any[][] = [];
 
-  // Row 1: Header - TATA AUTOCOMP SYSTEM PVT LTD | Line {lineId}
+  // Row 1 (Excel Row 1): Title Banner
   aoa.push([
-    'TATA AUTOCOMP SYSTEM PVT LTD', '', '',
-    '', '', '',
-    '', '', '',
-    `Line ${lineId}`, '', ''
+    'TATA AUTOCOMP SYSTEM LIMITED', '', '', '', '', '', '', '', '', '',
+    'Crate / Box No.', `Line ${lineId}`
   ]);
 
-  // Row 2: Sub-Header - TOTAL BATTERY PACKS NO. | {count} | TOTAL ROWS - {maxRack}
+  // Row 2 (Excel Row 2): Totals, Line No, Date
   aoa.push([
-    'TOTAL BATTERY PACKS NO.', '', '',
-    '', '', linePacks.length,
-    `TOTAL ROWS - ${maxRack}`, '', '',
-    '', '', ''
+    'TOTAL BATTERY PACKS NO.', '', linePacks.length,
+    'TOTAL ROWS -', '', maxRack,
+    'LINE NO.', lineId, '',
+    'DATE', todayStr, ''
   ]);
 
-  // Row 3: 4 Column Group Headers
-  aoa.push([
-    'Rack No.', 'Battery pack No.', 'Discription',
-    'Sr.No.', 'Battery pack No.', 'Discription',
-    'Sr.No.', 'Battery pack No.', 'Discription',
-    'Sr.No.', 'Battery pack No.', 'Discription'
-  ]);
+  // Row 3 (Excel Row 3): Column Headers (12 columns)
+  const headerRow: string[] = [];
+  for (let g = 0; g < GROUPS; g++) {
+    headerRow.push('Rack No.', 'Battery pack No.', 'Description');
+  }
+  aoa.push(headerRow);
 
-  // Rows 4 to 13: 10 rows (Col 1: Racks 1-10, Col 2: Racks 11-20, Col 3: Racks 21-30, Col 4: Racks 31-40)
-  const rowsPerCol = 10;
-  for (let r = 0; r < rowsPerCol; r++) {
-    const rowCells: any[] = [];
-    for (let col = 0; col < 4; col++) {
-      const rackNum = col * rowsPerCol + r + 1;
-      const rPacks = rackMap[rackNum] || [];
+  // Rows 4 to 43 (Excel Rows 4 to 43): 10 Racks x 4 Slots = 40 rows
+  const merges: any[] = [
+    // Row 1: A1:J1 for Title
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
+    // Row 2: A2:B2 for TOTAL BATTERY PACKS NO.
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
+    // Row 2: D2:E2 for TOTAL ROWS -
+    { s: { r: 1, c: 3 }, e: { r: 1, c: 4 } },
+    // Row 2: H2:I2 for LINE NO.
+    { s: { r: 1, c: 7 }, e: { r: 1, c: 8 } },
+    // Row 2: K2:L2 for DATE
+    { s: { r: 1, c: 10 }, e: { r: 1, c: 11 } },
+  ];
 
-      // Rack / Sr No
-      rowCells.push(rackNum <= maxRack ? rackNum : (rackNum <= 40 ? rackNum : ''));
+  // Populate 40 body rows
+  for (let k = 0; k < RACKS_PER_GROUP; k++) {
+    for (let slot = 0; slot < 4; slot++) {
+      const rowCells: any[] = [];
 
-      // 4 Stacked Pack Numbers separated by newline
-      const packStrings = [1, 2, 3, 4]
-        .map((slot) => {
-          const p = rPacks.find((x) => x.rackSlot === slot);
-          if (!p) return '';
-          let str = p.packNumber;
-          if (p.secondaryStickerNumber) str += ` (${p.secondaryStickerNumber})`;
-          if (p.remark) str += ` [${p.remark}]`;
-          return str;
-        })
-        .filter(Boolean);
+      for (let g = 0; g < GROUPS; g++) {
+        const rackNum = g * RACKS_PER_GROUP + k + 1;
+        const rPacks = rackMap[rackNum] || [];
+        const packInSlot = rPacks.find((p) => p.rackSlot === slot + 1);
 
-      rowCells.push(packStrings.length > 0 ? packStrings.join('\r\n') : (rackNum <= maxRack ? '—' : ''));
+        // Rack No (Only put value in first slot row of the rack)
+        if (slot === 0) {
+          rowCells.push(rackNum <= maxRack ? rackNum : (rackNum <= 40 ? rackNum : ''));
+        } else {
+          rowCells.push('');
+        }
 
-      // Description (Model name, e.g. Kanger1.0)
-      const desc = rPacks.length > 0
-        ? (BATTERY_MODELS[rPacks[0].packType]?.shortCode || BATTERY_MODELS[rPacks[0].packType]?.name || rPacks[0].packType || 'Kanger1.0')
-        : (rackNum <= maxRack ? 'Kanger1.0' : '');
-      rowCells.push(rPacks.length > 0 ? desc : (rackNum <= maxRack ? '—' : ''));
+        // Battery Pack No in this slot
+        if (packInSlot) {
+          let str = packInSlot.packNumber;
+          if (packInSlot.secondaryStickerNumber) str += ` (${packInSlot.secondaryStickerNumber})`;
+          if (packInSlot.remark) str += ` [${packInSlot.remark}]`;
+          rowCells.push(str);
+        } else {
+          rowCells.push(rackNum <= maxRack && rPacks.length > 0 ? '—' : '');
+        }
+
+        // Description (Model)
+        if (slot === 0) {
+          const modelName = rPacks.length > 0
+            ? (BATTERY_MODELS[rPacks[0].packType]?.shortCode || BATTERY_MODELS[rPacks[0].packType]?.name || rPacks[0].packType || 'Kanger1.0')
+            : (rackNum <= maxRack ? 'Kanger1.0' : '');
+          rowCells.push(modelName);
+        } else {
+          rowCells.push('');
+        }
+      }
+
+      aoa.push(rowCells);
     }
-    aoa.push(rowCells);
+
+    // Add 4-row vertical merges for Rack No. and Description for each rack
+    const r0 = 3 + k * 4; // 0-indexed row (Row 4 in Excel is index 3)
+    for (let g = 0; g < GROUPS; g++) {
+      const c0 = g * 3;
+      // Merge Rack No column over 4 rows
+      merges.push({ s: { r: r0, c: c0 }, e: { r: r0 + 3, c: c0 } });
+      // Merge Description column over 4 rows
+      merges.push({ s: { r: r0, c: c0 + 2 }, e: { r: r0 + 3, c: c0 + 2 } });
+    }
   }
 
   const wb = XLSX.utils.book_new();
-
   const wsSheet = XLSX.utils.aoa_to_sheet(aoa);
 
-  // Merges for headers
-  wsSheet['!merges'] = [
-    // Row 1: A1:I1 for TATA title, J1:L1 for Line badge
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
-    { s: { r: 0, c: 9 }, e: { r: 0, c: 11 } },
-    // Row 2: A2:E2 for TOTAL BATTERY PACKS, F2 for count, G2:L2 for TOTAL ROWS
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-    { s: { r: 1, c: 5 }, e: { r: 1, c: 5 } },
-    { s: { r: 1, c: 6 }, e: { r: 1, c: 11 } },
-  ];
+  wsSheet['!merges'] = merges;
 
-  // Column widths
+  // 12 Column dimensions matching Python: [10, 17, 17] x 4
   wsSheet['!cols'] = [
-    { wch: 10 }, { wch: 22 }, { wch: 15 },
-    { wch: 10 }, { wch: 22 }, { wch: 15 },
-    { wch: 10 }, { wch: 22 }, { wch: 15 },
-    { wch: 10 }, { wch: 22 }, { wch: 15 },
+    { wch: 10 }, { wch: 18 }, { wch: 18 },
+    { wch: 10 }, { wch: 18 }, { wch: 18 },
+    { wch: 10 }, { wch: 18 }, { wch: 18 },
+    { wch: 10 }, { wch: 18 }, { wch: 18 },
   ];
 
-  XLSX.utils.book_append_sheet(wb, wsSheet, `Line ${lineId} Sheet`);
+  XLSX.utils.book_append_sheet(wb, wsSheet, 'Battery Pack Form');
 
   // 2. Sheet 2: Detailed Line Inventory (Every individual battery pack)
   const detailRows = linePacks.map((p, index) => {

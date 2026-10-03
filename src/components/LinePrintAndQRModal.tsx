@@ -129,7 +129,105 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
   if (!isOpen) return null;
 
   const handlePrint = () => {
-    window.print();
+    const printableElement = document.getElementById('tata-line-printable-sheet');
+    if (!printableElement) {
+      window.print();
+      return;
+    }
+
+    // Create an isolated hidden iframe so ONLY the sheet is printed and ZERO background website content is included
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    const isPortrait = paperSize === 'A4_PORTRAIT';
+    const isA3 = paperSize === 'A3_LANDSCAPE';
+    const pageCss = isA3 ? 'A3 landscape' : isPortrait ? 'A4 portrait' : 'A4 landscape';
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>TATA AUTOCOMP SYSTEM LIMITED - Line ${currentLine}</title>
+          <style>
+            @page {
+              size: ${pageCss};
+              margin: 3mm !important;
+            }
+            * {
+              box-sizing: border-box !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              font-family: Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+              width: 100% !important;
+              height: 100% !important;
+              overflow: hidden !important;
+            }
+            .sheet-isolated {
+              width: 100% !important;
+              height: 98vh !important;
+              max-height: 98vh !important;
+              display: flex !important;
+              flex-direction: column !important;
+              justify-content: space-between !important;
+              border: 2px solid #000 !important;
+              padding: 1.5mm !important;
+              background: #ffffff !important;
+              margin: 0 auto !important;
+              box-sizing: border-box !important;
+            }
+            table {
+              border-collapse: collapse !important;
+              width: 100% !important;
+            }
+            th, td {
+              border-color: #000000 !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="sheet-isolated">
+            ${printableElement.innerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Wait for images (QR code, logo) to settle in iframe then print
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (e) {
+        console.error('Iframe print error', e);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 1500);
+      }
+    }, 350);
   };
 
   const handleCopyLink = () => {
@@ -161,9 +259,11 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     exportLineSheetToExcel(currentLine, packs);
   };
 
+  const todayStr = new Date().toLocaleDateString('en-GB');
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 print:static print:inset-auto print:bg-transparent print:p-0 print:m-0 print:overflow-visible">
-      {/* High-Precision Print Styles for Guaranteed 1-Page Output Across Chrome & Mobile */}
+      {/* High-Precision Print Styles for Fallback Native Print */}
       <style>{`
         @media print {
           @page {
@@ -183,7 +283,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             background: #ffffff !important;
             color: #000000 !important;
           }
-          .no-print, header, nav, footer, button {
+          .no-print, header, nav, footer, button, #root > :not(.fixed) {
             display: none !important;
           }
           #tata-line-printable-sheet {
@@ -224,7 +324,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-500">
-                Official Plant Rack Sheet • 1-Page Fit ({maxOccupiedRack} Rows, {linePacks.length} Packs)
+                Official Plant Rack Sheet • 1-Page Isolated Print ({maxOccupiedRack} Rows, {linePacks.length} Packs)
               </p>
             </div>
           </div>
@@ -291,7 +391,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               type="button"
               onClick={handleDownloadExcel}
               className="px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Download Line Stock Matrix and Detailed Pack Inventory in Excel (.xlsx)"
+              title="Download Line Stock Matrix with OpenPyXL Formula Layout in Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
               <span>Download Excel (.xlsx)</span>
@@ -333,7 +433,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>Print Sheet (1-Page)</span>
+              <span>Print Sheet (Isolated 1-Page)</span>
             </button>
 
             <button
@@ -357,87 +457,104 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                 : 'w-full max-w-[750px]'
             }`}
           >
-            {/* 1. MASTER HEADER: TATA AUTOCOMP SYSTEM PVT LTD + LINE BADGE */}
+            {/* 1. MASTER HEADER: TATA AUTOCOMP SYSTEM LIMITED + CRATE / BOX NO */}
             <div className="border-2 border-black overflow-hidden mb-1 flex-shrink-0">
-              <div className="flex items-center justify-between border-b-2 border-black px-3 py-1 bg-white">
+              <div className="flex items-center justify-between border-b-2 border-black px-3 py-1 bg-slate-100">
                 <div className="flex items-center gap-2.5">
                   <div className="h-7 w-7 bg-white p-0.5 rounded border border-black flex items-center justify-center flex-shrink-0">
                     <img src="/tata-logo.png" alt="TATA" className="h-5 w-5 object-contain" />
                   </div>
                   <div>
                     <h1 className="text-base sm:text-lg font-black tracking-wider text-black uppercase font-display leading-tight">
-                      TATA AUTOCOMP SYSTEM PVT LTD
+                      TATA AUTOCOMP SYSTEM LIMITED
                     </h1>
                   </div>
                 </div>
 
-                {/* Line Identification Badge (e.g. A-10) */}
-                <div className="bg-black text-white px-3.5 py-0.5 rounded-xs border border-black font-black text-lg sm:text-xl tracking-widest uppercase">
-                  {currentLine}
+                {/* Crate / Box No Badge */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold text-slate-700 uppercase">Crate / Box No.</span>
+                  <div className="bg-black text-white px-3 py-0.5 rounded-xs border border-black font-black text-base sm:text-lg tracking-widest uppercase">
+                    {currentLine}
+                  </div>
                 </div>
               </div>
 
-              {/* 2. SUB-HEADER: TOTAL BATTERY PACKS NO. + TOTAL ROWS */}
-              <div className="grid grid-cols-12 divide-x-2 divide-black text-center text-[9px] sm:text-[10px] font-bold bg-white border-collapse">
-                <div className="col-span-5 py-1 px-2 flex items-center justify-center font-black uppercase text-slate-800">
+              {/* 2. SUB-HEADER: TOTAL BATTERY PACKS NO. + TOTAL ROWS + LINE NO + DATE */}
+              <div className="grid grid-cols-12 divide-x-2 divide-black text-center text-[8.5px] sm:text-[9.5px] font-bold bg-white border-collapse">
+                <div className="col-span-3 py-1 px-1 flex items-center justify-center font-black uppercase text-slate-800">
                   TOTAL BATTERY PACKS NO.
                 </div>
-                <div className="col-span-2 py-1 px-2 flex items-center justify-center font-black text-sm sm:text-base text-black bg-slate-50">
+                <div className="col-span-1 py-1 px-1 flex items-center justify-center font-black text-xs sm:text-sm text-black bg-slate-50 border-r-2 border-black">
                   {linePacks.length}
                 </div>
-                <div className="col-span-5 py-1 px-2 flex items-center justify-center font-black uppercase text-slate-800">
-                  TOTAL ROWS - {maxOccupiedRack}
+                <div className="col-span-2 py-1 px-1 flex items-center justify-center font-black uppercase text-slate-800">
+                  TOTAL ROWS -
+                </div>
+                <div className="col-span-1 py-1 px-1 flex items-center justify-center font-black text-xs sm:text-sm text-black bg-slate-50 border-r-2 border-black">
+                  {maxOccupiedRack}
+                </div>
+                <div className="col-span-1 py-1 px-1 flex items-center justify-center font-black uppercase text-slate-800">
+                  LINE NO.
+                </div>
+                <div className="col-span-2 py-1 px-1 flex items-center justify-center font-black text-xs sm:text-sm text-blue-900 bg-slate-50 border-r-2 border-black">
+                  {currentLine}
+                </div>
+                <div className="col-span-1 py-1 px-1 flex items-center justify-center font-black uppercase text-slate-800">
+                  DATE
+                </div>
+                <div className="col-span-1 py-1 px-1 flex items-center justify-center font-mono font-bold text-[8.5px] text-black bg-slate-50">
+                  {todayStr}
                 </div>
               </div>
             </div>
 
-            {/* 3. 4-COLUMN TABLE GRID (Exact 1:1 match to Physical Plant Crate Sheet) */}
+            {/* 3. 4-COLUMN TABLE GRID (Exact OpenPyXL Structure: 4 Rows per Rack with Hairline Dividers) */}
             <div className="grid grid-cols-4 border-2 border-black bg-white flex-1 overflow-hidden">
               {columnGroups.map((colGroup, colIdx) => (
                 <div key={colIdx} className={`flex flex-col ${colIdx < 3 ? 'border-r-2 border-black' : ''}`}>
                   <table className="w-full text-left border-collapse leading-none">
                     <thead>
-                      <tr className="bg-slate-200 text-black border-b-2 border-black font-bold text-[7.5px] uppercase">
+                      <tr className="bg-slate-900 text-white border-b-2 border-black font-bold text-[7.5px] uppercase">
                         <th className="py-1 px-0.5 border-r border-black text-center w-7">
-                          {colIdx === 0 ? 'Rack No.' : 'Sr.No.'}
+                          Rack No.
                         </th>
                         <th className="py-1 px-0.5 border-r border-black text-center">
                           Battery pack No.
                         </th>
                         <th className="py-1 px-0.5 text-center w-14">
-                          Discription
+                          Description
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black">
+                    <tbody className="divide-y-2 divide-black">
                       {colGroup.map((item) => {
                         const rackPacks = item.packs;
-                        // Sort by slot 1,2,3,4
                         const sortedPacks = [1, 2, 3, 4].map((s) => rackPacks.find((p) => p.rackSlot === s));
                         const hasAnyPack = rackPacks.length > 0;
                         const isWithinOccupied = item.rackNumber <= maxOccupiedRack;
 
                         return (
-                          <tr key={item.rackNumber} className="border-b border-black hover:bg-slate-50">
-                            {/* Rack Number */}
-                            <td className="p-0.5 border-r border-black text-center font-black align-middle bg-slate-50 text-[8px] w-7">
+                          <tr key={item.rackNumber} className="border-b-2 border-black hover:bg-slate-50">
+                            {/* Rack Number (Vertically Centered across the rack) */}
+                            <td className="p-0.5 border-r-2 border-black text-center font-black align-middle bg-slate-50 text-[8.5px] w-7">
                               {isWithinOccupied ? item.rackNumber : ''}
                             </td>
 
-                            {/* 4 Stacked Battery Pack Numbers */}
-                            <td className="p-0.5 border-r border-black font-mono font-bold align-middle py-[1px] text-center">
-                              {hasAnyPack ? (
-                                <div className="space-y-[0.5px]">
+                            {/* 4 Stacked Slot Rows (Separated by hairline dividers) */}
+                            <td className="p-0 border-r border-black font-mono font-bold align-middle text-center">
+                              {isWithinOccupied ? (
+                                <div className="divide-y divide-slate-300">
                                   {sortedPacks.map((pack, sIdx) => {
                                     if (!pack) {
                                       return (
-                                        <div key={sIdx} className="text-slate-300 text-[6.5px] font-normal leading-tight">
+                                        <div key={sIdx} className="text-slate-300 text-[6.5px] font-normal py-[1px] leading-tight">
                                           —
                                         </div>
                                       );
                                     }
                                     return (
-                                      <div key={pack.id || sIdx} className="flex items-center justify-center gap-0.5 leading-tight">
+                                      <div key={pack.id || sIdx} className="flex items-center justify-center gap-0.5 py-[1px] leading-tight">
                                         <span className="text-black font-black text-[8px] tracking-tight">
                                           {pack.packNumber}
                                           {pack.secondaryStickerNumber && (
@@ -448,21 +565,24 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                         </span>
                                         {pack.remark && (
                                           <span className="text-[5.5px] px-0.5 py-0 rounded bg-rose-100 text-rose-800 font-sans border border-rose-200 uppercase font-bold leading-none">
-                                            {pack.remark.slice(0, 9)}
+                                            {pack.remark.slice(0, 8)}
                                           </span>
                                         )}
                                       </div>
                                     );
                                   })}
                                 </div>
-                              ) : isWithinOccupied ? (
-                                <span className="text-slate-300 text-[6.5px] italic leading-tight">Empty</span>
                               ) : (
-                                <span className="inline-block h-3.5">&nbsp;</span>
+                                <div className="divide-y divide-slate-200">
+                                  <div className="h-3">&nbsp;</div>
+                                  <div className="h-3">&nbsp;</div>
+                                  <div className="h-3">&nbsp;</div>
+                                  <div className="h-3">&nbsp;</div>
+                                </div>
                               )}
                             </td>
 
-                            {/* Description / Model */}
+                            {/* Description / Model (Vertically Centered across the rack) */}
                             <td className="p-0.5 text-center font-bold align-middle text-[7px] text-slate-900 leading-tight w-14">
                               {hasAnyPack ? (
                                 <span>{getProductNameAndType(rackPacks[0].packType).productType || 'Kanger1.0'}</span>
