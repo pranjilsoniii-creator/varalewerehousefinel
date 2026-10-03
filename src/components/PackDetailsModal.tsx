@@ -41,6 +41,21 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
   const isDispatched = pack.status === 'DISPATCHED';
   const isPending = pack.status === 'PENDING_APPROVAL';
 
+  const isDockInward = Boolean(
+    pack.sourceType !== 'LINE_POPULATE' &&
+    pack.sourceType !== 'DIRECT_DISPATCH' &&
+    !pack.documentNo?.startsWith('MATRIX-LOAD-') &&
+    !pack.documentNo?.startsWith('LINE-LOAD-') &&
+    !(pack.documentNo?.startsWith('LINE-') && pack.documentNo?.includes('SLOT')) &&
+    pack.documentNo !== 'DIRECT-DISPATCH' &&
+    pack.documentNo !== 'Line Direct Stock' &&
+    pack.documentNo !== 'DIRECT-LINE-STOCK' &&
+    pack.documentNo?.trim() &&
+    pack.dealershipName &&
+    pack.dealershipName !== 'Varale B300 Line Stock' &&
+    pack.dealershipName !== 'Direct Line Setup'
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
@@ -87,7 +102,7 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
                 ) : isPending ? (
                   <span className="text-amber-600 font-bold">PENDING APPROVAL</span>
                 ) : (
-                  <span className="text-blue-700 font-bold">INWARD AREA (IN STOCK)</span>
+                  <span className="text-blue-700 font-bold">IN STORAGE (IN STOCK)</span>
                 )}
               </p>
             </div>
@@ -106,7 +121,7 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
           {/* Status & Location Banner */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-blue-600" /> Current Warehouse / Dispatch State
+              <MapPin className="w-3.5 h-3.5 text-blue-600" /> Current Warehouse / Storage State
             </span>
             {isDispatched ? (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 font-semibold space-y-1">
@@ -125,11 +140,13 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
             ) : (
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 font-semibold flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-bold text-blue-950 block">Current Location: Inward Area</span>
+                  <span className="text-xs font-bold text-blue-950 block">
+                    Current Location: {pack.currentLocation || (pack.lineId ? `Line ${pack.lineId}` : 'Warehouse Storage')}
+                  </span>
                   <span className="text-[11px] text-blue-700 font-normal">Stored at Tata AutoComp Systems Limited - Varale</span>
                 </div>
                 <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-bold text-xs border border-emerald-300">
-                  Ready for Dispatch
+                  Ready in Storage
                 </span>
               </div>
             )}
@@ -163,63 +180,104 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
             </div>
           )}
 
-          {/* Logistics Inward Pedigree */}
+          {/* Logistics Inward Pedigree or Direct Line Origin */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-              <Truck className="w-3.5 h-3.5 text-orange-500" /> Inward Origin & Verification Details
+              {isDockInward ? (
+                <>
+                  <Truck className="w-3.5 h-3.5 text-orange-500" /> Inward Origin & Verification Details
+                </>
+              ) : (
+                <>
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" /> Origin: Direct Line Matrix Inventory
+                </>
+              )}
             </span>
-            <div className="space-y-1 text-slate-700 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-500">Document / Invoice No:</span>
-                <span className="font-mono-code font-bold text-blue-700">{pack.documentNo || '—'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-500">Dealership / Source:</span>
-                <span className="font-semibold text-slate-900">{pack.dealershipName || 'Tata Motors Dealership'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-500">Received State:</span>
-                <span>{pack.receivedState || 'Maharashtra'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-500">Transporter:</span>
-                <span className="font-semibold text-slate-900">{pack.transportName || '—'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-500">Tata Inward Stamp:</span>
-                <span className="font-bold">
-                  {pack.hasInwardStamp ? (
-                    <span className="text-emerald-600 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Official Seal Verified
-                    </span>
-                  ) : (
-                    <span className="text-slate-500">No Stamp</span>
-                  )}
-                </span>
-              </div>
-              {pack.remark && (
-                <div className="flex justify-between py-1.5 border-b border-slate-200 bg-amber-50/60 px-2 rounded-md">
-                  <span className="text-amber-800 font-bold flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Physical Condition / Remark:
-                  </span>
-                  <span className="font-bold text-amber-950 font-mono-code">{pack.remark}</span>
-                </div>
-              )}
-              <div className="flex justify-between py-1 border-b border-slate-200">
-                <span className="text-slate-500">Inwarded By:</span>
-                <span className="font-medium text-slate-900">{pack.inwardBy || 'Inward Operator'}</span>
-              </div>
-              {pack.inwardApprovedBy && (
+            {isDockInward ? (
+              <div className="space-y-1 text-slate-700 text-xs">
                 <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-slate-500">Approved By:</span>
-                  <span className="font-medium text-emerald-700">{pack.inwardApprovedBy}</span>
+                  <span className="text-slate-500">Document / Invoice No:</span>
+                  <span className="font-mono-code font-bold text-blue-700">{pack.documentNo || '—'}</span>
                 </div>
-              )}
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">Inward Date:</span>
-                <span className="font-mono-code">{pack.inwardDate ? new Date(pack.inwardDate).toLocaleDateString('en-IN') : '—'}</span>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Dealership / Source:</span>
+                  <span className="font-semibold text-slate-900">{pack.dealershipName || 'Tata Motors Dealership'}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Received State:</span>
+                  <span>{pack.receivedState || 'Maharashtra'}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Transporter:</span>
+                  <span className="font-semibold text-slate-900">{pack.transportName || '—'}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Tata Inward Stamp:</span>
+                  <span className="font-bold">
+                    {pack.hasInwardStamp ? (
+                      <span className="text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Official Seal Verified
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">No Stamp</span>
+                    )}
+                  </span>
+                </div>
+                {pack.remark && (
+                  <div className="flex justify-between py-1.5 border-b border-slate-200 bg-amber-50/60 px-2 rounded-md">
+                    <span className="text-amber-800 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Physical Condition / Remark:
+                    </span>
+                    <span className="font-bold text-amber-950 font-mono-code">{pack.remark}</span>
+                  </div>
+                )}
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Inwarded By:</span>
+                  <span className="font-medium text-slate-900">{pack.inwardBy || 'Inward Operator'}</span>
+                </div>
+                {pack.inwardApprovedBy && (
+                  <div className="flex justify-between py-1 border-b border-slate-200">
+                    <span className="text-slate-500">Approved By:</span>
+                    <span className="font-medium text-emerald-700">{pack.inwardApprovedBy}</span>
+                  </div>
+                )}
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">Inward Date:</span>
+                  <span className="font-mono-code">{pack.inwardDate ? new Date(pack.inwardDate).toLocaleDateString('en-IN') : '—'}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-1.5 text-slate-700 text-xs">
+                <div className="p-2 bg-amber-50/80 border border-amber-200/80 rounded-lg text-amber-950 text-[10.5px]">
+                  <p className="font-bold flex items-center gap-1 text-amber-900">
+                    ⚡ Pre-existing Warehouse Stock
+                  </p>
+                  <p className="text-slate-600 mt-0.5 leading-snug">
+                    No Inward Dock receipt. This battery was already in warehouse inventory and configured directly in Line Matrix.
+                  </p>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Inward Dock Entry:</span>
+                  <span className="font-semibold text-slate-500 italic">Not Inwarded (Line Direct)</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Storage Location:</span>
+                  <span className="font-mono-code font-bold text-blue-700">{pack.currentLocation || (pack.lineId ? `Line ${pack.lineId}` : '—')}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200">
+                  <span className="text-slate-500">Configured By:</span>
+                  <span className="font-medium text-slate-900">{pack.inwardBy || 'Warehouse Admin'}</span>
+                </div>
+                {pack.remark && (
+                  <div className="flex justify-between py-1.5 border-b border-slate-200 bg-amber-50/60 px-2 rounded-md">
+                    <span className="text-amber-800 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Physical Condition / Remark:
+                    </span>
+                    <span className="font-bold text-amber-950 font-mono-code">{pack.remark}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Movement Audit History Trail */}

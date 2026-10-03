@@ -61,6 +61,17 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
   const model = pack ? BATTERY_MODELS[pack.packType] : null;
   const lot = pack?.dispatchLotId ? lotMap.get(pack.dispatchLotId) : null;
 
+  const isDockInward = useMemo(() => {
+    if (!pack) return false;
+    if (pack.sourceType === 'LINE_POPULATE') return false;
+    if (pack.sourceType === 'DIRECT_DISPATCH') return false;
+    if (pack.documentNo?.startsWith('MATRIX-LOAD-')) return false;
+    if (pack.documentNo?.startsWith('LINE-LOAD-')) return false;
+    if (pack.documentNo?.startsWith('LINE-') && pack.documentNo?.includes('SLOT')) return false;
+    if (pack.documentNo === 'DIRECT-DISPATCH' || pack.documentNo === 'Line Direct Stock' || pack.documentNo === 'DIRECT-LINE-STOCK') return false;
+    return Boolean(pack.documentNo && pack.documentNo.trim() && pack.dealershipName && pack.dealershipName !== 'Varale B300 Line Stock' && pack.dealershipName !== 'Direct Line Setup');
+  }, [pack]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto animate-fadeIn">
       <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 space-y-6 my-8">
@@ -75,7 +86,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                 Universal Super Search & Pack Janamkundli
               </h2>
               <p className="text-xs text-slate-500">
-                Track full lifecycle: Receiving Dock $\rightarrow$ Storage Rack $\rightarrow$ Outward Dispatch Manifest.
+                Track full lifecycle: Receiving Dock → Storage Rack → Outward Dispatch Manifest.
               </p>
             </div>
           </div>
@@ -147,7 +158,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                     )}
                   </div>
                   <p className="text-[11px] text-blue-200 font-mono-code">
-                    Model: {pack.packType} • Source: {pack.sourceType === 'LINE_POPULATE' ? 'Direct Line Matrix' : 'Inward Delivery Challan'}
+                    Model: {pack.packType} • Source: {isDockInward ? 'Dock Inward Delivery Challan' : 'Direct Line Matrix (Existing Warehouse Stock)'}
                   </p>
                 </div>
               </div>
@@ -170,34 +181,81 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
             {/* 3-Column Lifecycle Summary Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Box 1: Origin & Inward Dock Receipt */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div className="flex items-center gap-1.5 font-bold text-slate-900 border-b border-slate-200 pb-2">
-                  <Building className="w-4 h-4 text-blue-600" />
-                  <span>1. Origin & Inward</span>
+              {isDockInward ? (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                      <Building className="w-4 h-4 text-blue-600" />
+                      <span>1. Origin & Inward</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                      Dock Inward
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-[11px]">
+                    <p>
+                      <span className="text-slate-500">Document No:</span>{' '}
+                      <span className="font-mono-code font-bold text-slate-900">{pack.documentNo}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Received Date:</span>{' '}
+                      <span className="font-mono-code text-slate-800">{formatIndianDate(pack.inwardDate)}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Dealership:</span>{' '}
+                      <span className="font-medium text-slate-900">{pack.dealershipName}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Location/State:</span>{' '}
+                      <span className="text-slate-800">{pack.receivedState || 'Maharashtra'}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Inwarded By:</span>{' '}
+                      <span className="font-medium text-slate-900">{pack.inwardBy || 'Staff'}</span>
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-1 text-[11px]">
-                  <p>
-                    <span className="text-slate-500">Document No:</span>{' '}
-                    <span className="font-mono-code font-bold text-slate-900">{pack.documentNo || 'Line Direct Stock'}</span>
-                  </p>
-                  <p>
-                    <span className="text-slate-500">Received Date:</span>{' '}
-                    <span className="font-mono-code text-slate-800">{formatIndianDate(pack.inwardDate)}</span>
-                  </p>
-                  <p>
-                    <span className="text-slate-500">Dealership:</span>{' '}
-                    <span className="font-medium text-slate-900">{pack.dealershipName || 'Direct Line Setup'}</span>
-                  </p>
-                  <p>
-                    <span className="text-slate-500">Location/State:</span>{' '}
-                    <span className="text-slate-800">{pack.receivedState || 'Maharashtra'}</span>
-                  </p>
-                  <p>
-                    <span className="text-slate-500">Inwarded By:</span>{' '}
-                    <span className="font-medium text-slate-900">{pack.inwardBy || 'Staff'}</span>
-                  </p>
+              ) : (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      <span>1. Origin / Inward Status</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                      Line Matrix Stock
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="p-2 bg-amber-50/80 border border-amber-200/80 rounded-lg text-amber-950 text-[10.5px]">
+                      <p className="font-bold flex items-center gap-1 text-amber-900">
+                        <span>⚡ Pre-existing Line Inventory</span>
+                      </p>
+                      <p className="text-slate-600 mt-0.5 leading-snug">
+                        No Inward Dock record. This pack was added directly into Line Matrix as existing warehouse stock.
+                      </p>
+                    </div>
+                    <p className="pt-0.5">
+                      <span className="text-slate-500">Inward Status:</span>{' '}
+                      <span className="font-semibold text-slate-600 italic">Not Inwarded (Line Direct)</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Setup Line:</span>{' '}
+                      <span className="font-mono-code font-bold text-blue-700">Line {pack.lineId || 'Warehouse'}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Configured By:</span>{' '}
+                      <span className="font-medium text-slate-900">{pack.inwardBy || 'Warehouse Admin'}</span>
+                    </p>
+                    {pack.remark && (
+                      <p>
+                        <span className="text-slate-500">Remark / Condition:</span>{' '}
+                        <span className="font-semibold text-amber-800 font-mono-code">{pack.remark}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Box 2: Physical Storage Coordinates */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
@@ -283,13 +341,15 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                         <span className="font-mono-code text-slate-400">{formatIndianDate(mov.timestamp)}</span>
                       </div>
                       <p className="text-[11px] text-slate-600">
-                        {mov.fromLocation} $\rightarrow$ {mov.toLocation} (By: {mov.movedBy})
+                        {mov.fromLocation.replace(/\\\$\\rightarrow\\\$/g, '→').replace(/\$\\rightarrow\$/g, '→')} → {mov.toLocation} (By: {mov.movedBy})
                       </p>
                     </div>
                   ))
                 ) : (
                   <div className="text-[11px] text-slate-500">
-                    Initial registration recorded under Document #{pack.documentNo || 'Direct Stock'}.
+                    {isDockInward
+                      ? `Initial dock registration under Document #${pack.documentNo}.`
+                      : `Initial line allocation in Line ${pack.lineId || 'Storage'}.`}
                   </div>
                 )}
               </div>
