@@ -93,26 +93,57 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     return max > 0 ? Math.min(max, RACKS_PER_LINE) : 38;
   }, [rackMap]);
 
-  // Generate 4-column groupings matching the exact occupied racks (all racks 1 to maxOccupiedRack shown continuously)
+  // Number of columns adapted to paper size and density
+  const numColumns = useMemo(() => {
+    if (paperSize === 'A4_PORTRAIT') {
+      return maxOccupiedRack <= 18 ? 2 : 3;
+    }
+    // A4_LANDSCAPE or A3_LANDSCAPE
+    return 4;
+  }, [paperSize, maxOccupiedRack]);
+
+  // Racks per column to perfectly distribute all racks
+  const racksPerCol = useMemo(() => {
+    return Math.max(1, Math.ceil(maxOccupiedRack / numColumns));
+  }, [maxOccupiedRack, numColumns]);
+
+  // Dynamic typography and spacing density
+  const density = useMemo<'spacious' | 'balanced' | 'compact'>(() => {
+    if (racksPerCol <= 5) return 'spacious';
+    if (racksPerCol <= 8) return 'balanced';
+    return 'compact';
+  }, [racksPerCol]);
+
+  // Generate column groupings matching occupied racks and fill any short column to ensure exact alignment
   const columnGroups = useMemo(() => {
     const totalRacksToShow = maxOccupiedRack;
-    const racksPerCol = Math.ceil(totalRacksToShow / 4);
+    const cols: Array<Array<{ rackNumber: number; packs: BatteryPack[]; isEmptyPlaceholder?: boolean }>> = [];
 
-    const cols: Array<Array<{ rackNumber: number; packs: BatteryPack[] }>> = [[], [], [], []];
+    for (let c = 0; c < numColumns; c++) {
+      cols.push([]);
+    }
+
     for (let i = 1; i <= totalRacksToShow; i++) {
-      const colIdx = Math.min(Math.floor((i - 1) / racksPerCol), 3);
+      const colIdx = Math.min(Math.floor((i - 1) / racksPerCol), numColumns - 1);
       cols[colIdx].push({
         rackNumber: i,
         packs: rackMap[i] || [],
       });
     }
-    return cols;
-  }, [rackMap, maxOccupiedRack]);
 
-  // Dynamic typography scale based on density
-  const racksPerCol = Math.ceil(maxOccupiedRack / 4);
-  const isHighDensity = racksPerCol >= 8; // ~32 to 40 racks
-  const isMediumDensity = racksPerCol >= 5 && racksPerCol < 8;
+    // Pad any shorter columns with placeholder rows up to racksPerCol so all columns have exact identical height & bottom alignment
+    cols.forEach((col) => {
+      while (col.length < racksPerCol) {
+        col.push({
+          rackNumber: 0,
+          packs: [],
+          isEmptyPlaceholder: true,
+        });
+      }
+    });
+
+    return cols;
+  }, [rackMap, maxOccupiedRack, numColumns, racksPerCol]);
 
   // Public URL for QR Code (Direct public access without login)
   const publicUrl = useMemo(() => {
@@ -146,8 +177,8 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     iframe.style.position = 'fixed';
     iframe.style.top = '-10000px';
     iframe.style.left = '-10000px';
-    iframe.style.width = '1100px';
-    iframe.style.height = '850px';
+    iframe.style.width = paperSize === 'A4_PORTRAIT' ? '850px' : '1150px';
+    iframe.style.height = paperSize === 'A4_PORTRAIT' ? '1150px' : '850px';
     iframe.style.border = 'none';
     iframe.style.opacity = '0';
     iframe.style.pointerEvents = 'none';
@@ -165,19 +196,18 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
       stylesHtml += el.outerHTML;
     });
 
-    const pageOrientation =
+    const pageOrientationRule =
       paperSize === 'A4_PORTRAIT'
-        ? 'A4 portrait'
+        ? '@page { size: portrait; margin: 3.5mm !important; }'
         : paperSize === 'A3_LANDSCAPE'
-        ? 'A3 landscape'
-        : 'A4 landscape';
+        ? '@page { size: 420mm 297mm; margin: 4mm !important; }'
+        : '@page { size: landscape; margin: 3.5mm !important; }';
+
+    const headerHeightPx = density === 'spacious' ? '24px' : density === 'balanced' ? '20px' : '17px';
 
     const customPrintCss = `
       <style>
-        @page {
-          size: ${pageOrientation};
-          margin: 3mm !important;
-        }
+        ${pageOrientationRule}
         * {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
@@ -190,7 +220,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
           color: #000000 !important;
           width: 100% !important;
           height: 100% !important;
-          overflow: visible !important;
+          overflow: hidden !important;
           font-family: 'Aptos', 'Segoe UI', 'Inter', -apple-system, sans-serif !important;
         }
         #tata-line-printable-sheet {
@@ -211,9 +241,36 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
           flex-direction: column !important;
           justify-content: space-between !important;
         }
-        table {
+        .grid-stretch-container {
+          display: grid !important;
+          grid-template-columns: repeat(${numColumns}, minmax(0, 1fr)) !important;
+          gap: 3px !important;
+          flex: 1 1 0% !important;
+          height: 100% !important;
+          min-height: 0 !important;
+        }
+        .col-stretch-box {
+          border: 1.5px solid #000 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          height: 100% !important;
+          min-height: 0 !important;
+          background: #ffffff !important;
+        }
+        table.sheet-table {
           border-collapse: collapse !important;
           width: 100% !important;
+          height: 100% !important;
+          table-layout: fixed !important;
+        }
+        table.sheet-table thead {
+          height: ${headerHeightPx} !important;
+        }
+        table.sheet-table tbody {
+          height: calc(100% - ${headerHeightPx}) !important;
+        }
+        table.sheet-table tbody tr {
+          height: calc(100% / ${racksPerCol}) !important;
         }
         th, td {
           border-color: #000000 !important;
@@ -285,7 +342,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
       <style>{`
         @media print {
           @page {
-            size: ${paperSize === 'A4_PORTRAIT' ? 'portrait' : paperSize === 'A3_LANDSCAPE' ? 'A3 landscape' : 'A4 landscape'};
+            size: ${paperSize === 'A4_PORTRAIT' ? 'portrait' : paperSize === 'A3_LANDSCAPE' ? '420mm 297mm' : 'landscape'};
             margin: 3.5mm !important;
           }
           * {
@@ -293,9 +350,9 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             print-color-adjust: exact !important;
           }
           html, body {
-            height: auto !important;
+            height: 100% !important;
             max-height: 100vh !important;
-            overflow: visible !important;
+            overflow: hidden !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
@@ -311,8 +368,8 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             position: static !important;
             width: 100% !important;
             max-width: 100% !important;
-            height: 98vh !important;
-            max-height: 98vh !important;
+            height: 98.5vh !important;
+            max-height: 98.5vh !important;
             margin: 0 auto !important;
             padding: 1.5mm !important;
             box-sizing: border-box !important;
@@ -323,40 +380,73 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             break-inside: avoid !important;
             background: #ffffff !important;
           }
+          .grid-stretch-container {
+            display: grid !important;
+            grid-template-columns: repeat(${numColumns}, minmax(0, 1fr)) !important;
+            gap: 3px !important;
+            flex: 1 1 0% !important;
+            height: 100% !important;
+            min-height: 0 !important;
+          }
+          .col-stretch-box {
+            border: 1.5px solid #000 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            height: 100% !important;
+            min-height: 0 !important;
+          }
+          table.sheet-table {
+            border-collapse: collapse !important;
+            width: 100% !important;
+            height: 100% !important;
+            table-layout: fixed !important;
+          }
+          table.sheet-table thead {
+            height: ${density === 'spacious' ? '24px' : density === 'balanced' ? '20px' : '17px'} !important;
+          }
+          table.sheet-table tbody {
+            height: calc(100% - ${density === 'spacious' ? '24px' : density === 'balanced' ? '20px' : '17px'}) !important;
+          }
+          table.sheet-table tbody tr {
+            height: calc(100% / ${racksPerCol}) !important;
+          }
         }
       `}</style>
 
       {/* Modal Card */}
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[96vh] flex flex-col overflow-hidden animate-fadeIn print:shadow-none print:border-none print:max-h-none print:overflow-visible print:w-full">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[96vh] flex flex-col overflow-hidden animate-fadeIn print:shadow-none print:border-none print:max-h-none print:overflow-visible print:w-full">
         {/* Modal Header Controls (Hidden during print) */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 no-print">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
-              <Printer className="w-5 h-5" />
+        <div className="p-3 sm:p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2.5 no-print">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+              <Printer className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
                 Tata AutoComp Line Print & QR Hub
-                <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-bold font-mono">
+                <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-xs font-bold font-mono">
                   Line {currentLine}
                 </span>
+                <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 text-[11px] font-semibold">
+                  {numColumns} Cols × {racksPerCol} Racks • Auto-Stretch Fill
+                </span>
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] text-slate-500">
                 Official Plant Rack Sheet • 1-Page Fit ({maxOccupiedRack} Rows, {linePacks.length} Packs)
               </p>
             </div>
           </div>
 
           {/* Line Switcher */}
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-slate-600">Switch Line:</label>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">Line:</label>
             <select
               value={currentLine}
               onChange={(e) => {
                 setCurrentLine(e.target.value);
                 if (onSelectLine) onSelectLine(e.target.value);
               }}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
               {warehouseLines.map((line) => (
                 <option key={line} value={line}>
@@ -378,7 +468,18 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                A4 Landscape
+                A4 Landscape (4 Col)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaperSize('A4_PORTRAIT')}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
+                  paperSize === 'A4_PORTRAIT'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                A4 Portrait ({numColumns === 2 ? '2 Col' : '3 Col'})
               </button>
               <button
                 type="button"
@@ -391,64 +492,43 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               >
                 A3 Master
               </button>
-              <button
-                type="button"
-                onClick={() => setPaperSize('A4_PORTRAIT')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                  paperSize === 'A4_PORTRAIT'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                A4 Portrait
-              </button>
             </div>
 
             {/* Excel Download Button */}
             <button
               type="button"
               onClick={handleDownloadExcel}
-              className="px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Download Line Stock Matrix with OpenPyXL Architecture in Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Download Excel (.xlsx)</span>
+              <span>Excel (.xlsx)</span>
             </button>
 
             <button
               type="button"
               onClick={handleCopyLink}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
+              className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
               title="Copy Public Read-Only URL"
             >
               {copiedLink ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
-              <span>{copiedLink ? 'Link Copied!' : 'Copy Public URL'}</span>
+              <span>{copiedLink ? 'Copied' : 'URL'}</span>
             </button>
 
             <button
               type="button"
               onClick={handleDownloadQrPng}
-              className="px-3 py-1.5 rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
+              className="px-2.5 py-1.5 rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
               title="Download High-Res QR PNG Image"
             >
               <Download className="w-4 h-4 text-purple-600" />
-              <span>Download PNG QR</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadQrSvg}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
-              title="Download Scalable Vector QR SVG"
-            >
-              <Download className="w-4 h-4 text-slate-500" />
-              <span>SVG QR</span>
+              <span>QR PNG</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Print Sheet (1-Page)</span>
@@ -470,13 +550,15 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
           <div
             id="tata-line-printable-sheet"
             className={`bg-white shadow-lg border-2 border-black p-2 sm:p-3 text-black font-sans transition-all flex flex-col justify-between print:shadow-none print:p-2 ${
-              paperSize === 'A4_LANDSCAPE' || paperSize === 'A3_LANDSCAPE'
-                ? 'w-full max-w-[1050px]'
-                : 'w-full max-w-[750px]'
+              paperSize === 'A4_PORTRAIT'
+                ? 'w-full max-w-[760px] min-h-[750px]'
+                : paperSize === 'A3_LANDSCAPE'
+                ? 'w-full max-w-[1150px] min-h-[650px]'
+                : 'w-full max-w-[1050px] min-h-[620px]'
             }`}
           >
             {/* 1. MASTER HEADER: TATA AUTOCOMP SYSTEM PVT LTD + LINE BADGE */}
-            <div className="border-2 border-black rounded-xs overflow-hidden mb-1 flex-shrink-0">
+            <div className="border-2 border-black rounded-xs overflow-hidden mb-1.5 flex-shrink-0">
               <div className="flex items-center justify-between border-b-2 border-black px-2.5 py-1 bg-slate-100">
                 <div className="flex items-center gap-2">
                   <div className="h-7 w-7 bg-white p-0.5 rounded border border-black flex items-center justify-center flex-shrink-0">
@@ -515,38 +597,78 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               </div>
             </div>
 
-            {/* 3. 4-COLUMN TABLE GRID (All racks 1 to maxOccupiedRack without clipping) */}
-            <div className="grid grid-cols-4 gap-1 border-2 border-black p-0.5 bg-white flex-1 overflow-hidden">
+            {/* 3. DYNAMIC STRETCH TABLE GRID (Height 100% stretched with zero bottom whitespace) */}
+            <div
+              className="grid-stretch-container border-2 border-black p-0.5 bg-white flex-1 overflow-hidden"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${numColumns}, minmax(0, 1fr))`,
+                gap: '3px',
+                height: '100%',
+              }}
+            >
               {columnGroups.map((colGroup, colIdx) => (
-                <div key={colIdx} className="border border-black flex flex-col">
-                  <table className="w-full text-left border-collapse leading-none">
+                <div key={colIdx} className="col-stretch-box border border-black flex flex-col h-full bg-white">
+                  <table className="sheet-table w-full text-left border-collapse leading-none h-full" style={{ tableLayout: 'fixed' }}>
                     <thead>
-                      <tr className="bg-slate-200 text-black border-b border-black font-bold text-[7.5px] uppercase">
-                        <th className="p-0.5 border-r border-black text-center w-6">
-                          {colIdx === 0 ? 'Rack No.' : 'Sr.No.'}
+                      <tr className={`bg-slate-200 text-black border-b border-black font-bold uppercase ${
+                        density === 'spacious' ? 'text-[9px] h-6' : density === 'balanced' ? 'text-[8px] h-5' : 'text-[7.5px] h-4'
+                      }`}>
+                        <th className="p-0.5 border-r border-black text-center w-7">
+                          {colIdx === 0 ? 'Rack' : 'Sr.'}
                         </th>
                         <th className="p-0.5 border-r border-black text-center">Battery pack No.</th>
-                        <th className="p-0.5 text-center w-12">Discription</th>
+                        <th className="p-0.5 text-center w-14">Model</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black">
-                      {colGroup.map((item) => {
+                    <tbody className="divide-y divide-black h-full">
+                      {colGroup.map((item, rowIdx) => {
+                        if (item.isEmptyPlaceholder) {
+                          return (
+                            <tr key={`empty-${rowIdx}`} className="bg-slate-50/40" style={{ height: `calc(100% / ${racksPerCol})` }}>
+                              <td className="p-0.5 border-r border-black text-center font-bold align-middle bg-slate-100/50 text-slate-300">
+                                —
+                              </td>
+                              <td className="p-0.5 border-r border-black align-middle text-center">
+                                <span className="text-slate-300 text-[7px] italic">Empty Slot</span>
+                              </td>
+                              <td className="p-0.5 text-center align-middle text-slate-300 text-[7px]">
+                                —
+                              </td>
+                            </tr>
+                          );
+                        }
+
                         const rackPacks = item.packs;
                         // Sort by slot 1,2,3,4
                         const sortedPacks = [1, 2, 3, 4].map((s) => rackPacks.find((p) => p.rackSlot === s));
                         const hasAnyPack = rackPacks.length > 0;
 
                         return (
-                          <tr key={item.rackNumber} className="hover:bg-slate-50">
+                          <tr
+                            key={item.rackNumber}
+                            className="hover:bg-slate-50"
+                            style={{ height: `calc(100% / ${racksPerCol})` }}
+                          >
                             {/* Rack Number */}
-                            <td className={`p-0.5 border-r border-black text-center font-bold align-middle bg-slate-50 ${isHighDensity ? 'text-[7.5px]' : 'text-[8.5px]'}`}>
+                            <td className={`p-0.5 border-r border-black text-center font-black align-middle bg-slate-50 ${
+                              density === 'spacious'
+                                ? 'text-xs sm:text-sm'
+                                : density === 'balanced'
+                                ? 'text-[10px] sm:text-[11px]'
+                                : 'text-[8px]'
+                            }`}>
                               {item.rackNumber}
                             </td>
 
                             {/* 4 Stacked Battery Pack Numbers */}
-                            <td className={`p-0.5 border-r border-black font-mono font-bold align-middle ${isHighDensity ? 'py-[1px]' : isMediumDensity ? 'py-[2px]' : 'py-1'}`}>
+                            <td className={`p-0.5 border-r border-black font-mono font-bold align-middle ${
+                              density === 'spacious' ? 'py-1' : density === 'balanced' ? 'py-0.5' : 'py-[1px]'
+                            }`}>
                               {hasAnyPack ? (
-                                <div className="space-y-[0.5px]">
+                                <div className={`flex flex-col justify-center h-full ${
+                                  density === 'spacious' ? 'space-y-1' : density === 'balanced' ? 'space-y-[1px]' : 'space-y-[0.5px]'
+                                }`}>
                                   {sortedPacks.map((pack, sIdx) => {
                                     if (!pack) {
                                       return (
@@ -557,17 +679,23 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                     }
                                     return (
                                       <div key={pack.id || sIdx} className="flex items-center justify-between gap-0.5 leading-tight">
-                                        <span className={`text-black font-extrabold tracking-tight ${isHighDensity ? 'text-[7.5px]' : 'text-[8.5px]'}`}>
+                                        <span className={`text-black font-black tracking-tight ${
+                                          density === 'spacious'
+                                            ? 'text-[11px] sm:text-xs'
+                                            : density === 'balanced'
+                                            ? 'text-[9.5px] sm:text-[10.5px]'
+                                            : 'text-[7.5px]'
+                                        }`}>
                                           {pack.packNumber}
                                           {pack.secondaryStickerNumber && (
-                                            <span className="text-[6px] text-slate-500 font-normal ml-0.5">
+                                            <span className="text-[6.5px] text-slate-500 font-normal ml-0.5">
                                               ({pack.secondaryStickerNumber})
                                             </span>
                                           )}
                                         </span>
                                         {pack.remark && (
-                                          <span className="text-[5.5px] px-0.5 py-0 rounded bg-rose-100 text-rose-800 font-sans border border-rose-200 uppercase font-bold leading-none">
-                                            {pack.remark.slice(0, 9)}
+                                          <span className="text-[6px] px-1 py-0 rounded bg-rose-100 text-rose-800 font-sans border border-rose-200 uppercase font-bold leading-none">
+                                            {pack.remark.slice(0, 8)}
                                           </span>
                                         )}
                                       </div>
@@ -575,12 +703,18 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                   })}
                                 </div>
                               ) : (
-                                <span className="text-slate-300 text-[7px] italic leading-tight">Empty</span>
+                                <span className="text-slate-300 text-[7.5px] italic leading-tight">Empty</span>
                               )}
                             </td>
 
                             {/* Description / Model */}
-                            <td className="p-0.5 text-center font-semibold align-middle text-[6.5px] text-slate-700 leading-tight">
+                            <td className={`p-0.5 text-center font-bold align-middle text-slate-700 leading-tight ${
+                              density === 'spacious'
+                                ? 'text-[9.5px]'
+                                : density === 'balanced'
+                                ? 'text-[8px]'
+                                : 'text-[6.5px]'
+                            }`}>
                               {hasAnyPack ? (
                                 <span>{getProductNameAndType(rackPacks[0].packType).productType || 'Kanger1.0'}</span>
                               ) : (
@@ -597,7 +731,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             </div>
 
             {/* 4. FOOTER WITH QR CODE FOR DIGITAL SCANNING & VERIFICATION */}
-            <div className="mt-1 pt-1 border-t-2 border-black flex items-center justify-between gap-2 text-[7.5px] text-slate-700 flex-shrink-0">
+            <div className="mt-1.5 pt-1 border-t-2 border-black flex items-center justify-between gap-2 text-[7.5px] text-slate-700 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="h-9 w-9 p-0.5 bg-white border border-black flex items-center justify-center shadow-2xs flex-shrink-0">
                   <img src={qrDataUrl} alt={`QR Code for Line ${currentLine}`} className="h-full w-full object-contain" />
