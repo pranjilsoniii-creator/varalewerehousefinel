@@ -1103,7 +1103,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                             readOnly={row.isWithoutPlate}
                             onChange={(e) => handleRowChange(row.id, 'packNumber', e.target.value)}
                             onKeyDown={(e) => handlePackRowKeyDown(e, index)}
-                            placeholder={row.isWithoutPlate ? 'Auto NP Code' : 'Enter physical serial (e.g. 2195)...'}
+                            placeholder={row.isWithoutPlate ? 'Auto NP Code' : 'Enter physical serial number...'}
                             className={`w-full border rounded-lg px-3 py-2 text-xs font-mono-code font-bold focus:outline-none ${
                               row.isWithoutPlate
                                 ? 'bg-amber-50 border-amber-300 text-amber-900'
@@ -1145,7 +1145,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                               value={row.challanPackNumber || ''}
                               onChange={(e) => handleRowChange(row.id, 'challanPackNumber', e.target.value)}
                               onKeyDown={(e) => handlePackRowKeyDown(e, index, true, false)}
-                              placeholder="Challan Doc Serial # (e.g. 2190)..."
+                              placeholder="Enter challan document serial number..."
                               className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-mono-code font-bold text-purple-900 focus:outline-none focus:border-purple-600"
                               required
                             />
@@ -1155,7 +1155,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                               value={row.mismatchReason || ''}
                               onChange={(e) => handleRowChange(row.id, 'mismatchReason', e.target.value)}
                               onKeyDown={(e) => handlePackRowKeyDown(e, index, true, true)}
-                              placeholder="Mismatch reason (e.g. Received #2195 instead of #2190)..."
+                              placeholder="Enter serial mismatch reason / notes..."
                               className="w-full bg-white border border-purple-200 rounded px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:border-purple-500"
                             />
                           </div>
@@ -1210,7 +1210,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                           type="text"
                           value={row.remark || ''}
                           onChange={(e) => handleRowChange(row.id, 'remark', e.target.value)}
-                          placeholder="e.g. Damage Box, Reject Cell..."
+                          placeholder="Enter optional remark / condition..."
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none"
                         />
                       </td>

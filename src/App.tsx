@@ -1075,6 +1075,8 @@ export function App() {
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onSendToDispatch={handleSendToDispatch}
             onDeletePack={handleDeletePack}
+            onEditPack={handleEditPack}
+            onSaveLinePacks={handleSaveAdminLinePacks}
             onClearEntireLine={handleClearEntireLine}
             onOpenRackLoader={(line, rack) => {
               setIsAdminPopulatorOpen(true);

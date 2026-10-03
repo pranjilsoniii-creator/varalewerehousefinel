@@ -747,7 +747,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                         type="text"
                         value={editChallanPackNumber}
                         onChange={(e) => setEditChallanPackNumber(e.target.value)}
-                        placeholder="Challan document pack number (e.g. 2190)..."
+                        placeholder="Enter challan document serial number..."
                         className="w-full bg-white border border-purple-300 rounded-lg p-2 font-mono-code font-bold text-purple-900 focus:outline-none focus:border-purple-600"
                         required={editIsDifferentSerial}
                       />

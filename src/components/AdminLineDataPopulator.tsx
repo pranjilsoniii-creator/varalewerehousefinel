@@ -719,7 +719,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 1245 ckd"
+                      placeholder="Enter battery pack number..."
                       value={slotItem.packNumber}
                       onChange={(e) => handleSlotChange(sIdx, 'packNumber', e.target.value)}
                       className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-mono font-bold text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -734,7 +734,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. 4545"
+                        placeholder="Enter second barcode..."
                         value={slotItem.secondaryStickerNumber || ''}
                         onChange={(e) => handleSlotChange(sIdx, 'secondaryStickerNumber', e.target.value)}
                         className="w-full px-3 py-1.5 rounded-lg border border-purple-300 bg-purple-50/50 font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none"
@@ -763,7 +763,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
                     <label className="text-[10px] font-bold text-slate-600 uppercase">Remark (Optional):</label>
                     <input
                       type="text"
-                      placeholder="e.g. rejected pack, damage"
+                      placeholder="Enter optional remark (e.g. damage, rejected)..."
                       value={slotItem.remark || ''}
                       onChange={(e) => handleSlotChange(sIdx, 'remark', e.target.value)}
                       className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-[11px] text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -811,18 +811,18 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
 
             {/* Format Instructions Box */}
             <div className="p-3 bg-white rounded-lg border border-purple-200 text-[11px] text-slate-700 space-y-1">
-              <p className="font-bold text-purple-950">Supported Formats:</p>
+              <p className="font-bold text-purple-950">Supported Syntax Patterns:</p>
               <ul className="list-disc list-inside space-y-0.5 text-slate-600 pl-1 font-mono text-[10.5px]">
-                <li><code>1245 ckd rejected pack</code> — Pack #1245, Model CKD, Remark: rejected pack</li>
-                <li><code>1245 ckd - 4545 ckd rejected pack</code> — 2 Stickers (#1245 & #4545), Model CKD</li>
-                <li><code>1245 AIO</code> or <code>1245</code> — Standard Pack Serial Number</li>
-                <li><code>0</code> — Empty Slot (Skip slot without adding pack)</li>
+                <li><code>[Serial] [Model] [Remark]</code> — e.g. Pack Serial + Model + optional remark</li>
+                <li><code>[Serial1] [Model] - [Serial2] [Model] [Remark]</code> — Dual Sticker support</li>
+                <li><code>[Serial]</code> — Standard Pack Serial Number</li>
+                <li><code>0</code> — Empty Slot (Skips slot cleanly)</li>
               </ul>
             </div>
 
             <textarea
               rows={10}
-              placeholder={`1245 ckd rejected pack\n1246 AIO\n1247 ckd - 4547 ckd box damage\n0\n5284 FBU\n5285 FBU\n5286 FBU\n5287 FBU`}
+              placeholder="Paste or type pack numbers here (one per line or copied from Excel)..."
               value={matrixText}
               onChange={(e) => setMatrixText(e.target.value)}
               className="w-full p-3 rounded-xl border border-purple-300 bg-white font-mono text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none leading-relaxed"

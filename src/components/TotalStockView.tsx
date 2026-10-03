@@ -487,7 +487,7 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
                   type="text"
                   value={search1PackNumber}
                   onChange={(e) => setSearch1PackNumber(e.target.value)}
-                  placeholder="Enter pack number (e.g. 7428, 2191)..."
+                  placeholder="Enter battery pack number..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-10 pr-4 py-2.5 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 />
               </div>

@@ -93,7 +93,7 @@ export const PackLocatorSearch: React.FC<PackLocatorSearchProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Enter Pack Number (e.g. TATA-TK1G-26-894102 or partial serial)..."
+              placeholder="Enter pack serial number or location..."
               className="w-full bg-slate-50 border-2 border-slate-200 hover:border-blue-400 focus:border-blue-600 focus:bg-white rounded-xl pl-11 pr-4 py-3 text-slate-900 font-mono-code font-bold text-sm focus:outline-none shadow-2xs transition"
             />
           </div>

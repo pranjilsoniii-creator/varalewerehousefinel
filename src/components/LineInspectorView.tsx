@@ -22,9 +22,13 @@ import {
   Download,
   Copy,
   ExternalLink,
+  Edit3,
+  X,
+  Save,
+  RotateCcw,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { BATTERY_MODELS, getProductNameAndType } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType, parseBoxCodeAndModel } from '../data/batteryCatalog';
 import {
   getStoredWarehouseLines,
   saveStoredWarehouseLines,
@@ -32,6 +36,7 @@ import {
   RACKS_PER_LINE,
 } from '../data/seedWarehouse';
 import { generateQrDataUrl, generateQrPngDataUrl } from '../utils/qrCodeGenerator';
+import { exportLineSheetToExcel } from '../utils/excelExport';
 import { useAuth } from '../context/AuthContext';
 import { LinePrintAndQRModal } from './LinePrintAndQRModal';
 
@@ -44,6 +49,8 @@ interface LineInspectorViewProps {
   onSendToDispatch: (pack: BatteryPack) => void;
   onOpenRackLoader?: (line: string, rack: number) => void;
   onDeletePack?: (packId: string) => void;
+  onEditPack?: (pack: BatteryPack) => void;
+  onSaveLinePacks?: (newPacks: BatteryPack[], replaceContext?: { lineId: string; rackNumbers: number[] }) => void;
   onClearEntireLine?: (lineId: string) => void;
 }
 
@@ -56,14 +63,29 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
   onSendToDispatch,
   onOpenRackLoader,
   onDeletePack,
+  onEditPack,
+  onSaveLinePacks,
   onClearEntireLine,
 }) => {
-  const { isSuperAdmin, isManager } = useAuth();
+  const { currentUser, isSuperAdmin, isManager } = useAuth();
   const [selectedLine, setSelectedLine] = useState<string>(initialSelectedLine || warehouseLines[0] || 'A-01');
   const [lineSearchQuery, setLineSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'RACK_GRID' | 'TABLE_SHEET'>('TABLE_SHEET');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // In-Place Quick Slot Editor Modal State
+  const [activeSlotTarget, setActiveSlotTarget] = useState<{
+    rackNumber: number;
+    slot: number;
+    pack: BatteryPack | null;
+  } | null>(null);
+
+  const [slotPackNumber, setSlotPackNumber] = useState('');
+  const [slotSecondarySticker, setSlotSecondarySticker] = useState('');
+  const [slotModel, setSlotModel] = useState<BatteryPackType>('Kanger1.0_AIO');
+  const [slotRemark, setSlotRemark] = useState('');
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'warning' } | null>(null);
 
   // Sync if initialSelectedLine prop changes
   React.useEffect(() => {
@@ -175,6 +197,113 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
     setIsCreatingLine(false);
   };
 
+  const handleOpenSlotEditor = (rackNumber: number, slot: number, pack: BatteryPack | null) => {
+    setActiveSlotTarget({ rackNumber, slot, pack });
+    if (pack) {
+      setSlotPackNumber(pack.packNumber);
+      setSlotSecondarySticker(pack.secondaryStickerNumber || pack.challanPackNumber || '');
+      setSlotModel(pack.packType);
+      setSlotRemark(pack.remark || '');
+    } else {
+      setSlotPackNumber('');
+      setSlotSecondarySticker('');
+      // Default to line primary or AIO
+      setSlotModel('Kanger1.0_AIO');
+      setSlotRemark('');
+    }
+  };
+
+  const handleSaveSlotAction = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeSlotTarget) return;
+
+    const trimmedNumber = slotPackNumber.trim();
+    if (!trimmedNumber) {
+      alert('Please enter a valid battery pack serial number.');
+      return;
+    }
+
+    const operatorName = currentUser?.name || currentUser?.username || 'Operator';
+    const nowIso = new Date().toISOString();
+    const locStr = `${selectedLine}, Rack R-${String(activeSlotTarget.rackNumber).padStart(2, '0')}, Level L-0${activeSlotTarget.slot}`;
+
+    if (activeSlotTarget.pack) {
+      // Editing existing pack
+      const updatedPack: BatteryPack = {
+        ...activeSlotTarget.pack,
+        packNumber: trimmedNumber,
+        secondaryStickerNumber: slotSecondarySticker.trim() || undefined,
+        packType: slotModel,
+        remark: slotRemark.trim() || undefined,
+        movementHistory: [
+          ...activeSlotTarget.pack.movementHistory,
+          {
+            id: `mov-edit-${Date.now()}`,
+            timestamp: nowIso,
+            fromLocation: locStr,
+            toLocation: locStr,
+            movedBy: operatorName,
+            reason: `Slot Quick Update (Pack #${trimmedNumber}, Model: ${slotModel}${slotRemark ? `, Remark: ${slotRemark}` : ''})`,
+          },
+        ],
+      };
+
+      if (onEditPack) {
+        onEditPack(updatedPack);
+      }
+      setNotification({
+        message: `Updated Slot (Rack ${activeSlotTarget.rackNumber}, Level ${activeSlotTarget.slot}) to #${trimmedNumber} successfully!`,
+        type: 'success',
+      });
+    } else {
+      // Adding new pack to empty slot
+      const newPack: BatteryPack = {
+        id: `pack-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        packNumber: trimmedNumber,
+        secondaryStickerNumber: slotSecondarySticker.trim() || undefined,
+        packType: slotModel,
+        remark: slotRemark.trim() || undefined,
+        status: 'IN_STORAGE',
+        lineId: selectedLine,
+        rackNumber: activeSlotTarget.rackNumber,
+        rackSlot: activeSlotTarget.slot,
+        locationArea: selectedLine,
+        currentLocation: locStr,
+        sourceType: 'LINE_POPULATE',
+        inwardDate: nowIso,
+        documentNo: `LINE-${selectedLine}-SLOT`,
+        dealershipName: 'Tata AutoComp Varale Plant',
+        receivedState: 'Maharashtra',
+        transportName: 'Internal Line Stocking',
+        hasInwardStamp: true,
+        inwardBy: operatorName,
+        movementHistory: [
+          {
+            id: `mov-add-${Date.now()}`,
+            timestamp: nowIso,
+            fromLocation: 'Direct Slot Assignment',
+            toLocation: locStr,
+            movedBy: operatorName,
+            reason: `Direct Slot Entry into Line ${selectedLine} (Rack ${activeSlotTarget.rackNumber}, Level ${activeSlotTarget.slot})`,
+          },
+        ],
+      };
+
+      if (onSaveLinePacks) {
+        onSaveLinePacks([newPack], { lineId: selectedLine, rackNumbers: [activeSlotTarget.rackNumber] });
+      } else if (onEditPack) {
+        onEditPack(newPack);
+      }
+
+      setNotification({
+        message: `Placed Pack #${trimmedNumber} into Line ${selectedLine} (Rack ${activeSlotTarget.rackNumber}, Level ${activeSlotTarget.slot})!`,
+        type: 'success',
+      });
+    }
+
+    setActiveSlotTarget(null);
+  };
+
   const handleClearSlotPrompt = (pack: BatteryPack) => {
     if (!isSuperAdmin && !isManager) {
       alert('Permission Denied: Only Super Admin and Manager can remove packs from rack slots.');
@@ -194,6 +323,11 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
       )
     ) {
       if (onDeletePack) onDeletePack(pack.id);
+      setActiveSlotTarget(null);
+      setNotification({
+        message: `Slot (Rack ${pack.rackNumber}, Level ${pack.rackSlot}) is now empty.`,
+        type: 'success',
+      });
     }
   };
 
@@ -210,6 +344,10 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
       )
     ) {
       if (onClearEntireLine) onClearEntireLine(selectedLine);
+      setNotification({
+        message: `Line ${selectedLine} has been completely cleared. Ready for fresh stocking!`,
+        type: 'success',
+      });
     }
   };
 
@@ -234,17 +372,28 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
             Warehouse Line & Rack Storage Matrix
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time visual map of warehouse lines, 160 racks, and 4 physical slot levels per rack with instant print & QR code export
+            Real-time visual map of warehouse lines, 160 racks, and 4 physical slot levels with in-place slot editing, 1-page print & Excel download
           </p>
         </div>
 
         {/* View Switcher & Actions */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Excel Download Button */}
+          <button
+            type="button"
+            onClick={() => exportLineSheetToExcel(selectedLine, packs)}
+            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+            title="Download full line grid and pack inventory in Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Download Excel</span>
+          </button>
+
           {/* Print Sheet & QR Button */}
           <button
             type="button"
             onClick={() => setIsPrintModalOpen(true)}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Print Sheet & QR</span>
@@ -302,6 +451,29 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
         </div>
       </div>
 
+      {/* Notification Toast */}
+      {notification && (
+        <div
+          className={`p-3.5 rounded-xl text-xs font-bold flex items-center justify-between gap-2 animate-fadeIn ${
+            notification.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              : 'bg-amber-50 text-amber-800 border border-amber-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{notification.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNotification(null)}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Warehouse Lines Navigation Bar */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
@@ -324,11 +496,11 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
               type="text"
               value={newLineName}
               onChange={(e) => setNewLineName(e.target.value)}
-              placeholder="e.g. Line C-01 or Line B300-2..."
-              className="flex-1 bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-xs font-bold text-purple-900"
+              placeholder="Enter new line name (e.g. Line B-01)..."
+              className="flex-1 bg-white border border-purple-300 rounded-lg px-3 py-1.5 text-xs font-bold text-purple-900 focus:ring-2 focus:ring-purple-500 focus:outline-none"
               required
             />
-            <button type="submit" className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold">
+            <button type="submit" className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold shadow-xs">
               Save Line
             </button>
             <button
@@ -481,7 +653,7 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
           type="text"
           value={lineSearchQuery}
           onChange={(e) => setLineSearchQuery(e.target.value)}
-          placeholder={'Filter Line ' + selectedLine + ' by Pack Number, Dual Sticker, Model, Remark, or Rack (e.g. 7428, AIO, R-12)...'}
+          placeholder={'Filter Line ' + selectedLine + ' by Pack Number, Model, Remark, or Rack...'}
           className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-500 shadow-xs"
         />
       </div>
@@ -586,12 +758,21 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                             >
                               Dispatch
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSlotEditor(item.rackNumber, item.slot, p)}
+                              className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[11px] font-bold cursor-pointer flex items-center gap-1"
+                              title="Edit or replace pack in this slot"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Edit / Replace</span>
+                            </button>
                             {(isSuperAdmin || isManager) && (
                               <button
                                 type="button"
                                 onClick={() => handleClearSlotPrompt(p)}
                                 className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
-                                title="Remove pack from rack slot"
+                                title="Empty this slot (Remove pack)"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -600,21 +781,32 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                               type="button"
                               onClick={() => onOpenPackDetails(p)}
                               className="p-1 text-slate-400 hover:text-slate-700 rounded transition cursor-pointer"
+                              title="View complete pack details"
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         ) : (
-                          onOpenRackLoader &&
-                          (isSuperAdmin || isManager) && (
+                          <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
-                              onClick={() => onOpenRackLoader(selectedLine, item.rackNumber)}
-                              className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[11px] font-bold cursor-pointer"
+                              onClick={() => handleOpenSlotEditor(item.rackNumber, item.slot, null)}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[11px] font-bold cursor-pointer flex items-center gap-1"
+                              title="Add / Assign pack to this empty slot"
                             >
-                              + Fill Rack
+                              <Plus className="w-3 h-3" />
+                              <span>+ Add Pack</span>
                             </button>
-                          )
+                            {onOpenRackLoader && (isSuperAdmin || isManager) && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenRackLoader(selectedLine, item.rackNumber)}
+                                className="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[11px] font-bold cursor-pointer"
+                              >
+                                + Fill Rack
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -670,19 +862,24 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
                     return (
                       <div
                         key={slotNum}
+                        onClick={() => handleOpenSlotEditor(rackNum, slotNum, pack || null)}
                         className={
-                          'p-2 rounded-lg border flex items-center justify-between ' +
-                          (pack ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50 border-dashed border-slate-200')
+                          'p-2 rounded-lg border flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] ' +
+                          (pack ? 'bg-indigo-50/50 border-indigo-200 hover:border-indigo-400' : 'bg-slate-50 border-dashed border-slate-200 hover:border-slate-400')
                         }
+                        title="Click to edit, replace, or fill slot"
                       >
                         <span className="font-mono font-bold text-slate-500">L-0{slotNum}</span>
                         {pack ? (
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono font-black text-slate-900">#{pack.packNumber}</span>
                             <span className="text-[10px] text-indigo-700 font-semibold">{pack.packType}</span>
+                            <Edit3 className="w-3 h-3 text-slate-400" />
                           </div>
                         ) : (
-                          <span className="text-slate-400 italic">Empty</span>
+                          <span className="text-slate-400 italic flex items-center gap-1">
+                            <Plus className="w-3 h-3" /> Empty
+                          </span>
                         )}
                       </div>
                     );
@@ -704,6 +901,130 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
         </div>
       )}
 
+      {/* QUICK SLOT EDITOR & PACK REPLACEMENT MODAL */}
+      {activeSlotTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-fadeIn text-xs">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-white font-display">
+                    {activeSlotTarget.pack ? 'Edit / Replace Pack in Slot' : 'Assign Pack to Empty Slot'}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    Line {selectedLine} • Rack R-{String(activeSlotTarget.rackNumber).padStart(2, '0')} • Level L-0{activeSlotTarget.slot}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSlotTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Form Body */}
+            <form onSubmit={handleSaveSlotAction} className="p-5 space-y-4">
+              {/* Pack Number Input */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 text-xs">Battery Pack Serial Number *</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Enter battery pack serial number..."
+                  value={slotPackNumber}
+                  onChange={(e) => setSlotPackNumber(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-mono font-bold text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Model / Type Selector */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 text-xs">Battery Model / Type *</label>
+                <select
+                  value={slotModel}
+                  onChange={(e) => setSlotModel(e.target.value as BatteryPackType)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  {ALL_PACK_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {BATTERY_MODELS[type]?.name || type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Secondary Sticker (Optional) */}
+              <div className="space-y-1">
+                <label className="font-bold text-purple-700 text-xs flex items-center justify-between">
+                  <span>2nd Sticker / Barcode (Optional)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">If dual barcodes exist</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter second barcode or sticker serial..."
+                  value={slotSecondarySticker}
+                  onChange={(e) => setSlotSecondarySticker(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-purple-300 bg-purple-50/50 font-mono text-xs text-purple-950 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Remark / Notes (Optional) */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 text-xs">Quality / Storage Remark (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="Enter optional remark (e.g. damage, rejected, testing)..."
+                  value={slotRemark}
+                  onChange={(e) => setSlotRemark(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100">
+                {activeSlotTarget.pack && (isSuperAdmin || isManager) ? (
+                  <button
+                    type="button"
+                    onClick={() => handleClearSlotPrompt(activeSlotTarget.pack!)}
+                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Empty Slot</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSlotTarget(null)}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{activeSlotTarget.pack ? 'Save Changes' : 'Place in Slot'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Print & QR Sheet Modal */}
       <LinePrintAndQRModal
         isOpen={isPrintModalOpen}
@@ -716,3 +1037,4 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
     </div>
   );
 };
+

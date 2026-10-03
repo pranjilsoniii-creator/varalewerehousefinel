@@ -73,13 +73,13 @@
 @media print {
   @page {
     size: auto;
-    margin: 6mm;
+    margin: 4mm;
   }
 
   body {
     background: #ffffff !important;
     color: #000000 !important;
-    font-size: 11pt !important;
+    font-size: 10pt !important;
   }
   
   .no-print {
@@ -101,6 +101,11 @@
     max-width: 100% !important;
   }
 
+  #tata-line-printable-sheet {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
   table {
     border-collapse: collapse !important;
     width: 100% !important;
@@ -110,3 +115,4 @@
     border-color: #000000 !important;
   }
 }
+

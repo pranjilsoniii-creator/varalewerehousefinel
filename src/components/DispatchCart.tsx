@@ -658,7 +658,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                     Enter / Paste Battery Pack Numbers ({parsedDirectPacks.length} Packs Parsed)
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Paste box codes from Excel, or type shorthands (e.g. <code className="text-blue-700 font-bold">2191FBU, 2513CKD, 7417AIO, 11242K2, 11111LIMBER</code>).
+                    Paste box codes from Excel, or type pack serial numbers (one per line or separated by spaces/commas).
                   </p>
                 </div>
                 {parsedDirectPacks.length > 0 && (
@@ -677,7 +677,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                 value={directPasteText}
                 onChange={(e) => setDirectPasteText(e.target.value)}
                 rows={5}
-                placeholder="Paste battery pack numbers here (e.g. 2191FBU, 2513CKD, 7417AIO, 11242K2, 11111LIMBER, 1001, 1002)..."
+                placeholder="Paste or type battery pack numbers here..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-amber-500 focus:outline-none"
               />
 
@@ -735,7 +735,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
                       max={200}
                       value={directQuickQty}
                       onChange={(e) => setDirectQuickQty(parseInt(e.target.value, 10) || 1)}
-                      placeholder="Qty (e.g. 24)"
+                      placeholder="Enter quantity..."
                       className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 font-mono-code"
                     />
                   </div>

@@ -145,3 +145,138 @@ export function exportInvoiceToExcel(invoice: InvoiceData, filename?: string) {
   XLSX.utils.book_append_sheet(wb, ws, 'Tax Invoice');
   XLSX.writeFile(wb, filename || 'Tata_Invoice_' + invoice.invoiceNumber + '.xlsx');
 }
+
+/**
+ * High-Precision Excel Export for Line Storage Sheet (Grid Matrix + Detailed Pack Inventory)
+ * Matches plant physical print sheet & warehouse ledger requirements
+ */
+export function exportLineSheetToExcel(
+  lineId: string,
+  packs: BatteryPack[],
+  filename?: string
+) {
+  const linePacks = packs.filter(
+    (p) => p.status !== 'DISPATCHED' && p.lineId === lineId
+  );
+
+  // Group packs by Rack Number
+  const rackMap: Record<number, BatteryPack[]> = {};
+  for (let r = 1; r <= 40; r++) {
+    rackMap[r] = [];
+  }
+  linePacks.forEach((p) => {
+    if (p.rackNumber) {
+      if (!rackMap[p.rackNumber]) rackMap[p.rackNumber] = [];
+      rackMap[p.rackNumber].push(p);
+    }
+  });
+
+  // Determine highest rack to show (at least 38-40 racks)
+  let maxRack = 38;
+  Object.keys(rackMap).forEach((rStr) => {
+    const rNum = parseInt(rStr, 10);
+    if (rackMap[rNum]?.length > 0 && rNum > maxRack) {
+      maxRack = rNum;
+    }
+  });
+  maxRack = Math.min(maxRack, 160);
+
+  // 1. Sheet 1: Matrix Grid Layout (Matching Plant Physical Crate Sheet)
+  const gridRows: any[] = [];
+  for (let r = 1; r <= maxRack; r++) {
+    const rPacks = rackMap[r] || [];
+    const slot1 = rPacks.find((p) => p.rackSlot === 1);
+    const slot2 = rPacks.find((p) => p.rackSlot === 2);
+    const slot3 = rPacks.find((p) => p.rackSlot === 3);
+    const slot4 = rPacks.find((p) => p.rackSlot === 4);
+
+    const formatSlot = (p?: BatteryPack) => {
+      if (!p) return '—';
+      if (p.secondaryStickerNumber) return `${p.packNumber} (${p.secondaryStickerNumber})`;
+      return p.packNumber;
+    };
+
+    // Primary model for this rack
+    const primaryModel = rPacks[0]
+      ? (BATTERY_MODELS[rPacks[0].packType]?.name || rPacks[0].packType)
+      : '—';
+
+    // Combined remarks
+    const remarks = rPacks
+      .filter((p) => p.remark && p.remark.trim().length > 0)
+      .map((p) => `#${p.packNumber}: ${p.remark}`)
+      .join('; ') || '—';
+
+    gridRows.push({
+      'Rack No': `Rack ${r}`,
+      'Slot 1 (Level 1)': formatSlot(slot1),
+      'Slot 2 (Level 2)': formatSlot(slot2),
+      'Slot 3 (Level 3)': formatSlot(slot3),
+      'Slot 4 (Level 4)': formatSlot(slot4),
+      'Model / Type': primaryModel,
+      'Quality Remarks': remarks,
+      'Packs Count': rPacks.length,
+    });
+  }
+
+  // 2. Sheet 2: Detailed Line Inventory (Every single battery pack)
+  const detailRows = linePacks.map((p, index) => {
+    const model = BATTERY_MODELS[p.packType];
+    return {
+      'Sr No': index + 1,
+      'Line ID': `Line ${lineId}`,
+      'Rack Number': p.rackNumber ? `R-${String(p.rackNumber).padStart(2, '0')}` : '—',
+      'Slot Level': p.rackSlot ? `Level ${p.rackSlot}` : '—',
+      'Battery Pack No': p.packNumber,
+      '2nd Sticker / Barcode': p.secondaryStickerNumber || '—',
+      'Model Name': model?.name || p.packType,
+      'Category': model?.category || 'Tata Lithium',
+      'Quality / Inward Remark': p.remark || '—',
+      'Location Code': `${lineId}-R${p.rackNumber || 1}-L${p.rackSlot || 1}`,
+      'Status': p.status,
+      'Inward Date': p.inwardDate ? new Date(p.inwardDate).toLocaleString('en-IN') : '—',
+      'Tata Stamp Verified': p.hasInwardStamp ? 'YES' : 'NO',
+      'Inwarded By': p.inwardBy || '—',
+      'Approved By': p.inwardApprovedBy || '—',
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+
+  const wsGrid = XLSX.utils.json_to_sheet(gridRows);
+  wsGrid['!cols'] = [
+    { wch: 12 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 20 },
+    { wch: 30 },
+    { wch: 14 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsGrid, `Line ${lineId} Rack Grid`);
+
+  const wsDetail = XLSX.utils.json_to_sheet(detailRows);
+  wsDetail['!cols'] = [
+    { wch: 8 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 20 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 16 },
+    { wch: 25 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 16 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsDetail, `Line ${lineId} Inventory`);
+
+  const safeFilename = filename || `Tata_WMS_Line_${lineId}_Storage_Sheet_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  XLSX.writeFile(wb, safeFilename);
+}
+

@@ -99,7 +99,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
               setSearchQuery(e.target.value);
               setSelectedPack(null);
             }}
-            placeholder="Enter any Pack Number (e.g. 30250, 7428, NP-1002) or Document / LR No..."
+            placeholder="Search by Pack Serial Number, Document No, LR No, Vehicle, or Line..."
             className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none shadow-xs"
             autoFocus
           />
