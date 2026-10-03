@@ -1024,16 +1024,18 @@ export function App() {
       />
 
       {/* Dynamic Personalized Greeting & Live Realtime Cloud Sync Banner */}
-      <WelcomeHeader
-        onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
-        isCloudConnected={isCloudConnected}
-        isCloudSyncing={isCloudSyncing}
-        lastSyncTime={lastSyncTime}
-        onRefreshCloud={refreshFromCloud}
-      />
+      <div className="no-print">
+        <WelcomeHeader
+          onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+          isCloudConnected={isCloudConnected}
+          isCloudSyncing={isCloudSyncing}
+          lastSyncTime={lastSyncTime}
+          onRefreshCloud={refreshFromCloud}
+        />
+      </div>
 
       {/* Main Body View Rendering with mobile bottom safe padding */}
-      <main className="flex-1 pb-24 sm:pb-16">
+      <main className="flex-1 pb-24 sm:pb-16 no-print">
         {activeTab === 'DASHBOARD' && (
           <DashboardView
             packs={packs}
@@ -1133,38 +1135,44 @@ export function App() {
       </main>
 
       {/* 1-Thumb Native Mobile Bottom Navigation Bar */}
-      <MobileBottomNav
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onOpenDrawer={() => setIsMobileDrawerOpen(true)}
-        inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
-        totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
-        cartPacksCount={stagedCartPacks.length}
-      />
+      <div className="no-print">
+        <MobileBottomNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onOpenDrawer={() => setIsMobileDrawerOpen(true)}
+          inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
+          totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
+          cartPacksCount={stagedCartPacks.length}
+        />
+      </div>
 
       {/* Swipeable / Gesture-Driven Mobile Drawer Menu */}
-      <MobileAppDrawer
-        isOpen={isMobileDrawerOpen}
-        onClose={() => setIsMobileDrawerOpen(false)}
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        isCloudConnected={isCloudConnected}
-        isCloudSyncing={isCloudSyncing}
-        onRefreshCloud={refreshFromCloud}
-        onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
-        onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
-        onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
-        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
-        inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
-        totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
-        cartPacksCount={stagedCartPacks.length}
-      />
+      <div className="no-print">
+        <MobileAppDrawer
+          isOpen={isMobileDrawerOpen}
+          onClose={() => setIsMobileDrawerOpen(false)}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          isCloudConnected={isCloudConnected}
+          isCloudSyncing={isCloudSyncing}
+          onRefreshCloud={refreshFromCloud}
+          onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+          onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
+          onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+          inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
+          totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
+          cartPacksCount={stagedCartPacks.length}
+        />
+      </div>
 
       {/* Mobile Floating Action Button (1-tap Camera Scanner & Quick Super Search) */}
-      <MobileScannerFAB
-        onOpenScanner={() => handleTabChange('INWARD')}
-        onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
-      />
+      <div className="no-print">
+        <MobileScannerFAB
+          onOpenScanner={() => handleTabChange('INWARD')}
+          onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+        />
+      </div>
 
       {/* MODAL 1: Individual Pack Pedigree & History */}
       {inspectingPack && (
