@@ -99,8 +99,12 @@ function getPathFromTab(tab: string): string {
 export function App() {
   const { currentUser, isSuperAdmin, isManager, isSupervisor, hasPermission, isMaintenanceMode, setMaintenanceMode } = useAuth();
 
-  // Navigation Tab State initialized from URL
+  // Navigation Tab State initialized from URL (with line query parameter support)
   const [activeTab, setActiveTab] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('line') || params.get('public_line') || params.get('lineId')) {
+      return 'LINE_INSPECTOR';
+    }
     return getTabFromPath(window.location.pathname);
   });
 
@@ -532,45 +536,58 @@ export function App() {
     }
   };
 
-  // Handler: Save Historical Line Matrix Packs (with 30-Day Auto Reconciliation)
-  const handleSaveAdminLinePacks = async (newPacks: BatteryPack[]) => {
-    const packsMap = new Map<string, BatteryPack>();
-    packs.forEach((p) => packsMap.set(p.id, p));
+  // Handler: Save Historical Line Matrix / Stepper Packs (with clean slot replacement, zero duplicates, and instant reconciliation)
+  const handleSaveAdminLinePacks = async (
+    newPacks: BatteryPack[],
+    replaceContext?: { lineId: string; rackNumbers: number[] }
+  ) => {
+    let packsToKeep: BatteryPack[] = [];
+    const removedPackIds: string[] = [];
 
-    const packsToSync: BatteryPack[] = [];
+    if (replaceContext && replaceContext.rackNumbers && replaceContext.rackNumbers.length > 0) {
+      const rackSet = new Set(replaceContext.rackNumbers);
+      // Remove any previous active packs in the replaced racks of this line
+      packs.forEach((p) => {
+        if (p.status !== 'DISPATCHED' && p.lineId === replaceContext.lineId && p.rackNumber && rackSet.has(p.rackNumber)) {
+          removedPackIds.push(p.id);
+        } else {
+          packsToKeep.push(p);
+        }
+      });
+    } else {
+      // Default: filter by new pack slot positions (lineId + rackNumber + rackSlot)
+      const slotKeys = new Set(newPacks.map((p) => `${p.lineId}-R${p.rackNumber}-S${p.rackSlot}`));
+      packs.forEach((p) => {
+        const key = `${p.lineId}-R${p.rackNumber}-S${p.rackSlot}`;
+        if (p.status !== 'DISPATCHED' && slotKeys.has(key)) {
+          removedPackIds.push(p.id);
+        } else {
+          packsToKeep.push(p);
+        }
+      });
+    }
 
-    newPacks.forEach((newP) => {
-      const pendingMatch = Array.from(packsMap.values()).find(
-        (p) =>
-          p.status === 'DISPATCHED' &&
-          p.packNumber === newP.packNumber &&
-          (p.pendingInwardReconciliation || p.sourceType === 'DIRECT_DISPATCH' || !p.inwardDate)
-      );
+    // Ensure all new packs are marked as active IN_STORAGE
+    const sanitizedNewPacks = newPacks.map((p) => ({
+      ...p,
+      status: 'IN_STORAGE' as const,
+    }));
 
-      if (pendingMatch) {
-        const reconciledPack: BatteryPack = {
-          ...pendingMatch,
-          lineId: newP.lineId,
-          rackNumber: newP.rackNumber,
-          rackSlot: newP.rackSlot,
-          pendingInwardReconciliation: false,
-          reconciledAt: new Date().toISOString(),
-          notes: `${pendingMatch.notes || ''} [Matrix Line Pos: Line ${newP.lineId} Rack ${newP.rackNumber}]`.trim(),
-        };
-        packsMap.set(pendingMatch.id, reconciledPack);
-        packsToSync.push(reconciledPack);
-      } else {
-        packsMap.set(newP.id, newP);
-        packsToSync.push(newP);
-      }
-    });
-
-    const finalPacks = Array.from(packsMap.values());
+    const finalPacks = [...sanitizedNewPacks, ...packsToKeep];
     setPacks(finalPacks);
 
-    enqueueOfflineAction('SYNC_PACKS', packsToSync);
+    if (sanitizedNewPacks.length > 0) {
+      enqueueOfflineAction('SYNC_PACKS', sanitizedNewPacks);
+    }
+    for (const rId of removedPackIds) {
+      enqueueOfflineAction('DELETE_PACK', rId);
+    }
+
     try {
-      await syncPacksToCloud(packsToSync);
+      await Promise.all([
+        sanitizedNewPacks.length > 0 ? syncPacksToCloud(sanitizedNewPacks) : Promise.resolve(),
+        ...removedPackIds.map((id) => deletePackFromCloud(id)),
+      ]);
     } catch (err) {
       console.warn('Cloud sync on line populator:', err);
     }
@@ -1053,6 +1070,7 @@ export function App() {
           <LineInspectorView
             packs={packs}
             warehouseLines={warehouseLines}
+            initialSelectedLine={publicLineOverride || undefined}
             onAddNewLine={handleAddNewWarehouseLine}
             onOpenPackDetails={(pack) => setInspectingPack(pack)}
             onSendToDispatch={handleSendToDispatch}

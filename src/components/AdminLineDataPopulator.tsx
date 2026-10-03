@@ -43,7 +43,7 @@ interface AdminLineDataPopulatorProps {
   existingPacks: BatteryPack[];
   warehouseLines: string[];
   onAddNewLine?: (newLine: string) => void;
-  onSaveLinePacks: (newPacks: BatteryPack[]) => void;
+  onSaveLinePacks: (newPacks: BatteryPack[], replaceContext?: { lineId: string; rackNumbers: number[] }) => void;
   onClearEntireLine?: (lineId: string) => void;
   onOpenPrintModal?: (lineId: string) => void;
   onClose?: () => void;
@@ -242,7 +242,7 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
     }
   };
 
-  // Save current 4 slots for active rack
+  // Save current 4 slots for active rack (Precise slot replacement with zero duplicate glitch)
   const handleSaveCurrentRack = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -253,16 +253,21 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
       return;
     }
 
+    const nowIso = new Date().toISOString();
+    const operatorName = currentUser?.name || currentUser?.username || 'Line Manager';
+
+    // If all slots are blank or 0, clear this rack
     if (validSlotEntries.length === 0) {
-      // Advance to next rack without saving if all slots are 0 or blank
+      onSaveLinePacks([], { lineId: selectedLine, rackNumbers: [activeRackNumber] });
+      setNotification({
+        message: `Rack ${activeRackNumber} in Line ${selectedLine} is now empty. Moving to next rack...`,
+        type: 'success',
+      });
       if (activeRackNumber < RACKS_PER_LINE) {
         setActiveRackNumber((prev) => prev + 1);
       }
       return;
     }
-
-    const nowIso = new Date().toISOString();
-    const operatorName = currentUser?.name || currentUser?.username || 'Line Manager';
 
     // Create BatteryPack items using parseBulkLineEntry
     const newPacks: BatteryPack[] = validSlotEntries.map((slotItem, idx) => {
@@ -310,7 +315,8 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
       };
     });
 
-    onSaveLinePacks(newPacks);
+    // Save with precise replaceContext for activeRackNumber
+    onSaveLinePacks(newPacks, { lineId: selectedLine, rackNumbers: [activeRackNumber] });
     setNotification({
       message: `Saved ${newPacks.length} pack(s) into Rack ${activeRackNumber} (Line ${selectedLine})! Moving to next rack...`,
       type: 'success',
@@ -323,27 +329,44 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
   };
 
   // MULTI-PASTE MATRIX PARSER WITH FLEXIBLE REMARK & 2-STICKER SUPPORT
-  // Formats supported:
-  // "1245 ckd rejected pack"
-  // "1245 ckd - 4545 ckd rejected pack"
-  // "1245 AIO"
-  // "0" (empty slot)
+  // Supports:
+  // - 1 pack per line: "1245 ckd rejected pack"
+  // - 2 stickers: "1245 ckd - 4545 ckd rejected pack"
+  // - Plain numbers: "1245", "100"
+  // - Empty slot: "0", "-", "EMPTY"
+  // - Comma / Tab / Space separated bulk list
   const handleApplyMatrixPaste = () => {
     if (!matrixText.trim()) return;
-    const lines = matrixText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-    if (lines.length === 0) return;
+
+    // Split by newlines first
+    const rawLines = matrixText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+    if (rawLines.length === 0) return;
+
+    // If lines contain multiple comma-separated or space-separated pack numbers without remark words
+    const expandedEntries: string[] = [];
+    rawLines.forEach((line) => {
+      // If line contains multiple comma separated entries
+      if (line.includes(',') && !line.includes('\t') && !line.includes('-')) {
+        const tokens = line.split(',').map((t) => t.trim()).filter(Boolean);
+        expandedEntries.push(...tokens);
+      } else {
+        expandedEntries.push(line);
+      }
+    });
 
     const nowIso = new Date().toISOString();
     const operatorName = currentUser?.name || currentUser?.username || 'Line Manager';
     const newPacks: BatteryPack[] = [];
+    const affectedRackSet = new Set<number>();
 
     let currentRackIndex = activeRackNumber;
     let slotInRack = 1;
 
-    lines.forEach((lineText, idx) => {
-      const parsed = parseBulkLineEntry(lineText, 'AIO');
+    expandedEntries.forEach((entryText, idx) => {
+      affectedRackSet.add(currentRackIndex);
+      const parsed = parseBulkLineEntry(entryText, 'AIO');
 
-      // If not empty slot
+      // If not empty slot and has valid pack number
       if (!parsed.isEmptySlot && parsed.cleanPackNumber) {
         const locStr = `${selectedLine}, R-${String(currentRackIndex).padStart(2, '0')}, L-0${slotInRack}`;
         newPacks.push({
@@ -393,10 +416,12 @@ export const AdminLineDataPopulator: React.FC<AdminLineDataPopulatorProps> = ({
       }
     });
 
+    const affectedRacks = Array.from(affectedRackSet);
+
     if (newPacks.length > 0) {
-      onSaveLinePacks(newPacks);
+      onSaveLinePacks(newPacks, { lineId: selectedLine, rackNumbers: affectedRacks });
       setNotification({
-        message: `Successfully populated ${newPacks.length} packs across ${Math.ceil(newPacks.length / 4)} racks into Line ${selectedLine}!`,
+        message: `Successfully populated all ${newPacks.length} packs across Racks ${Math.min(...affectedRacks)} to ${Math.max(...affectedRacks)} into Line ${selectedLine}!`,
         type: 'success',
       });
       setMatrixText('');

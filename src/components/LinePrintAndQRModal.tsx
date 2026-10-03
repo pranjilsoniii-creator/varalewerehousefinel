@@ -13,7 +13,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { BatteryPack } from '../types';
-import { generateQrDataUrl, generateQrSvg } from '../utils/qrCodeGenerator';
+import { generateQrDataUrl, generateQrSvg, generateQrPngDataUrl } from '../utils/qrCodeGenerator';
 import { getProductNameAndType } from '../data/batteryCatalog';
 import { MAX_PACKS_PER_RACK, RACKS_PER_LINE } from '../data/seedWarehouse';
 
@@ -117,11 +117,10 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
   // Public URL for QR Code (Direct public access without login)
   const publicUrl = useMemo(() => {
     const origin = window.location.origin;
-    const path = window.location.pathname;
-    return `${origin}${path}?line=${encodeURIComponent(currentLine)}`;
+    return `${origin}/?line=${encodeURIComponent(currentLine)}`;
   }, [currentLine]);
 
-  // QR Code Data URL
+  // QR Code Data URL (Standard crisp SVG)
   const qrDataUrl = useMemo(() => {
     return generateQrDataUrl(publicUrl, 260);
   }, [publicUrl]);
@@ -138,7 +137,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  const handleDownloadQr = () => {
+  const handleDownloadQrSvg = () => {
     const svgStr = generateQrSvg(publicUrl, 500);
     const blob = new Blob([svgStr], { type: 'image/svg+xml;utf8' });
     const url = URL.createObjectURL(blob);
@@ -147,6 +146,14 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     a.download = `Tata-WMS-Line-${currentLine}-QR.svg`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadQrPng = async () => {
+    const pngUrl = await generateQrPngDataUrl(publicUrl, 600);
+    const a = document.createElement('a');
+    a.href = pngUrl;
+    a.download = `Tata-WMS-Line-${currentLine}-QR.png`;
+    a.click();
   };
 
   return (
@@ -241,18 +248,28 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
 
             <button
               type="button"
-              onClick={handleDownloadQr}
+              onClick={handleDownloadQrPng}
+              className="px-3 py-1.5 rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
+              title="Download High-Res QR PNG Image"
+            >
+              <Download className="w-4 h-4 text-purple-600" />
+              <span>Download PNG QR</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadQrSvg}
               className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
-              title="Download High-Res QR SVG"
+              title="Download Scalable Vector QR SVG"
             >
               <Download className="w-4 h-4 text-slate-500" />
-              <span>Download QR</span>
+              <span>SVG QR</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Print Sheet</span>

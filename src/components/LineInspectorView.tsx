@@ -19,6 +19,9 @@ import {
   Printer,
   QrCode,
   FileSpreadsheet,
+  Download,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
 import { BATTERY_MODELS, getProductNameAndType } from '../data/batteryCatalog';
@@ -28,12 +31,14 @@ import {
   MAX_PACKS_PER_RACK,
   RACKS_PER_LINE,
 } from '../data/seedWarehouse';
+import { generateQrDataUrl, generateQrPngDataUrl } from '../utils/qrCodeGenerator';
 import { useAuth } from '../context/AuthContext';
 import { LinePrintAndQRModal } from './LinePrintAndQRModal';
 
 interface LineInspectorViewProps {
   packs: BatteryPack[];
   warehouseLines: string[];
+  initialSelectedLine?: string;
   onAddNewLine?: (newLine: string) => void;
   onOpenPackDetails: (pack: BatteryPack) => void;
   onSendToDispatch: (pack: BatteryPack) => void;
@@ -45,6 +50,7 @@ interface LineInspectorViewProps {
 export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
   packs,
   warehouseLines,
+  initialSelectedLine,
   onAddNewLine,
   onOpenPackDetails,
   onSendToDispatch,
@@ -53,10 +59,18 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
   onClearEntireLine,
 }) => {
   const { isSuperAdmin, isManager } = useAuth();
-  const [selectedLine, setSelectedLine] = useState<string>(warehouseLines[0] || 'A-01');
+  const [selectedLine, setSelectedLine] = useState<string>(initialSelectedLine || warehouseLines[0] || 'A-01');
   const [lineSearchQuery, setLineSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'RACK_GRID' | 'TABLE_SHEET'>('TABLE_SHEET');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Sync if initialSelectedLine prop changes
+  React.useEffect(() => {
+    if (initialSelectedLine && warehouseLines.includes(initialSelectedLine)) {
+      setSelectedLine(initialSelectedLine);
+    }
+  }, [initialSelectedLine, warehouseLines]);
 
   // Dynamic Line Creator
   const [isCreatingLine, setIsCreatingLine] = useState(false);
@@ -380,6 +394,83 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
         <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
           <p className="text-slate-500 font-bold uppercase text-[10px]">Capacity Utilization</p>
           <p className="text-xl font-black text-emerald-600 font-mono mt-0.5">{utilizationPercent}%</p>
+        </div>
+      </div>
+
+      {/* Dedicated Personal Line QR & Public Access Hub */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          {/* Realtime Standard QR Code Thumbnail */}
+          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-white p-1 border-2 border-white flex-shrink-0 shadow-md flex items-center justify-center">
+            <img
+              src={generateQrDataUrl(`${window.location.origin}/?line=${encodeURIComponent(selectedLine)}`, 180)}
+              alt={`QR Code for Line ${selectedLine}`}
+              className="h-full w-full object-contain"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                <QrCode className="w-3 h-3 text-emerald-400" />
+                Personal Line QR Active
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-300">
+                Line {selectedLine}
+              </span>
+            </div>
+            <h3 className="text-sm sm:text-base font-black text-white font-display">
+              Scan & Public Live Sheet for Line {selectedLine}
+            </h3>
+            <p className="text-[11px] text-slate-300 line-clamp-1">
+              Anyone scanning this QR code with any phone camera will instantly view the verified stock of Line {selectedLine} without requiring login!
+            </p>
+          </div>
+        </div>
+
+        {/* QR Actions */}
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            onClick={async () => {
+              const url = `${window.location.origin}/?line=${encodeURIComponent(selectedLine)}`;
+              const pngData = await generateQrPngDataUrl(url, 600);
+              const a = document.createElement('a');
+              a.href = pngData;
+              a.download = `Tata-WMS-Line-${selectedLine}-QR.png`;
+              a.click();
+            }}
+            className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"
+            title="Download high-resolution PNG image for physical stickers & printing"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download PNG QR</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const url = `${window.location.origin}/?line=${encodeURIComponent(selectedLine)}`;
+              navigator.clipboard.writeText(url);
+              setCopiedLink(true);
+              setTimeout(() => setCopiedLink(false), 2500);
+            }}
+            className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+            <span>{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
+          </button>
+
+          <a
+            href={`/?line=${encodeURIComponent(selectedLine)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition-all"
+            title="Test and preview public live sheet"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>Test Public View</span>
+          </a>
         </div>
       </div>
 
