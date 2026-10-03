@@ -128,7 +128,126 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
   if (!isOpen) return null;
 
   const handlePrint = () => {
-    window.print();
+    const printSheet = document.getElementById('tata-line-printable-sheet');
+    if (!printSheet) {
+      window.print();
+      return;
+    }
+
+    // Remove any previous print iframe
+    const existingIframe = document.getElementById('tata-line-print-iframe');
+    if (existingIframe) {
+      existingIframe.remove();
+    }
+
+    // Create a dedicated off-screen iframe for guaranteed 100% clean 1-page printing
+    const iframe = document.createElement('iframe');
+    iframe.id = 'tata-line-print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.top = '-10000px';
+    iframe.style.left = '-10000px';
+    iframe.style.width = '1100px';
+    iframe.style.height = '850px';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      window.print();
+      return;
+    }
+
+    // Collect all loaded stylesheets and style tags
+    let stylesHtml = '';
+    document.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => {
+      stylesHtml += el.outerHTML;
+    });
+
+    const pageOrientation =
+      paperSize === 'A4_PORTRAIT'
+        ? 'A4 portrait'
+        : paperSize === 'A3_LANDSCAPE'
+        ? 'A3 landscape'
+        : 'A4 landscape';
+
+    const customPrintCss = `
+      <style>
+        @page {
+          size: ${pageOrientation};
+          margin: 3mm !important;
+        }
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          box-sizing: border-box !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          width: 100% !important;
+          height: 100% !important;
+          overflow: visible !important;
+          font-family: 'Aptos', 'Segoe UI', 'Inter', -apple-system, sans-serif !important;
+        }
+        #tata-line-printable-sheet {
+          width: 100% !important;
+          max-width: 100% !important;
+          height: 98.5vh !important;
+          max-height: 98.5vh !important;
+          margin: 0 auto !important;
+          padding: 2mm !important;
+          box-sizing: border-box !important;
+          border: 2px solid #000 !important;
+          box-shadow: none !important;
+          page-break-after: avoid !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          background: #ffffff !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+        }
+        table {
+          border-collapse: collapse !important;
+          width: 100% !important;
+        }
+        th, td {
+          border-color: #000000 !important;
+        }
+      </style>
+    `;
+
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>Tata AutoComp Line ${currentLine} Stock Matrix</title>
+          ${stylesHtml}
+          ${customPrintCss}
+        </head>
+        <body style="background: #ffffff; margin: 0; padding: 0;">
+          ${printSheet.outerHTML}
+        </body>
+      </html>
+    `);
+    iframeDoc.close();
+
+    // Trigger print after iframe renders
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.error('Iframe print error, fallback to window.print', err);
+        window.print();
+      }
+    }, 300);
   };
 
   const handleCopyLink = () => {
@@ -182,7 +301,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             background: #ffffff !important;
             color: #000000 !important;
           }
-          .no-print, header, nav, footer, button, #root > :not(.fixed) {
+          .no-print, header, nav, footer, button {
             display: none !important;
           }
           #tata-line-printable-sheet {

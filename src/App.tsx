@@ -1035,7 +1035,7 @@ export function App() {
       </div>
 
       {/* Main Body View Rendering with mobile bottom safe padding */}
-      <main className="flex-1 pb-24 sm:pb-16 no-print">
+      <main className="flex-1 pb-24 sm:pb-16">
         {activeTab === 'DASHBOARD' && (
           <DashboardView
             packs={packs}
