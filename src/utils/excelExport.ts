@@ -147,8 +147,8 @@ export function exportInvoiceToExcel(invoice: InvoiceData, filename?: string) {
 }
 
 /**
- * High-Precision Excel Export for Line Storage Sheet (Grid Matrix + Detailed Pack Inventory)
- * Matches plant physical print sheet & warehouse ledger requirements
+ * High-Precision Excel Export for Line Storage Sheet (Exact 4-Column Plant Crate Sheet + Detailed Inventory)
+ * 100% matches the physical wooden crate sheet at Tata AutoComp plant
  */
 export function exportLineSheetToExcel(
   lineId: string,
@@ -159,7 +159,7 @@ export function exportLineSheetToExcel(
     (p) => p.status !== 'DISPATCHED' && p.lineId === lineId
   );
 
-  // Group packs by Rack Number
+  // Group packs by Rack Number (1 to 40)
   const rackMap: Record<number, BatteryPack[]> = {};
   for (let r = 1; r <= 40; r++) {
     rackMap[r] = [];
@@ -171,55 +171,103 @@ export function exportLineSheetToExcel(
     }
   });
 
-  // Determine highest rack to show (at least 38-40 racks)
-  let maxRack = 38;
-  Object.keys(rackMap).forEach((rStr) => {
-    const rNum = parseInt(rStr, 10);
-    if (rackMap[rNum]?.length > 0 && rNum > maxRack) {
-      maxRack = rNum;
+  // Calculate maximum occupied rack (e.g. 38 if packs up to 38)
+  let maxRack = 0;
+  Object.entries(rackMap).forEach(([rStr, pList]) => {
+    if (pList && pList.length > 0) {
+      const rNum = parseInt(rStr, 10);
+      if (rNum > maxRack) maxRack = rNum;
     }
   });
-  maxRack = Math.min(maxRack, 160);
+  if (maxRack === 0) maxRack = 38;
 
-  // 1. Sheet 1: Matrix Grid Layout (Matching Plant Physical Crate Sheet)
-  const gridRows: any[] = [];
-  for (let r = 1; r <= maxRack; r++) {
-    const rPacks = rackMap[r] || [];
-    const slot1 = rPacks.find((p) => p.rackSlot === 1);
-    const slot2 = rPacks.find((p) => p.rackSlot === 2);
-    const slot3 = rPacks.find((p) => p.rackSlot === 3);
-    const slot4 = rPacks.find((p) => p.rackSlot === 4);
+  // 1. Sheet 1: 4-Column Plant Crate Matrix Sheet
+  const aoa: any[][] = [];
 
-    const formatSlot = (p?: BatteryPack) => {
-      if (!p) return '—';
-      if (p.secondaryStickerNumber) return `${p.packNumber} (${p.secondaryStickerNumber})`;
-      return p.packNumber;
-    };
+  // Row 1: Header - TATA AUTOCOMP SYSTEM PVT LTD | Line {lineId}
+  aoa.push([
+    'TATA AUTOCOMP SYSTEM PVT LTD', '', '',
+    '', '', '',
+    '', '', '',
+    `Line ${lineId}`, '', ''
+  ]);
 
-    // Primary model for this rack
-    const primaryModel = rPacks[0]
-      ? (BATTERY_MODELS[rPacks[0].packType]?.name || rPacks[0].packType)
-      : '—';
+  // Row 2: Sub-Header - TOTAL BATTERY PACKS NO. | {count} | TOTAL ROWS - {maxRack}
+  aoa.push([
+    'TOTAL BATTERY PACKS NO.', '', '',
+    '', '', linePacks.length,
+    `TOTAL ROWS - ${maxRack}`, '', '',
+    '', '', ''
+  ]);
 
-    // Combined remarks
-    const remarks = rPacks
-      .filter((p) => p.remark && p.remark.trim().length > 0)
-      .map((p) => `#${p.packNumber}: ${p.remark}`)
-      .join('; ') || '—';
+  // Row 3: 4 Column Group Headers
+  aoa.push([
+    'Rack No.', 'Battery pack No.', 'Discription',
+    'Sr.No.', 'Battery pack No.', 'Discription',
+    'Sr.No.', 'Battery pack No.', 'Discription',
+    'Sr.No.', 'Battery pack No.', 'Discription'
+  ]);
 
-    gridRows.push({
-      'Rack No': `Rack ${r}`,
-      'Slot 1 (Level 1)': formatSlot(slot1),
-      'Slot 2 (Level 2)': formatSlot(slot2),
-      'Slot 3 (Level 3)': formatSlot(slot3),
-      'Slot 4 (Level 4)': formatSlot(slot4),
-      'Model / Type': primaryModel,
-      'Quality Remarks': remarks,
-      'Packs Count': rPacks.length,
-    });
+  // Rows 4 to 13: 10 rows (Col 1: Racks 1-10, Col 2: Racks 11-20, Col 3: Racks 21-30, Col 4: Racks 31-40)
+  const rowsPerCol = 10;
+  for (let r = 0; r < rowsPerCol; r++) {
+    const rowCells: any[] = [];
+    for (let col = 0; col < 4; col++) {
+      const rackNum = col * rowsPerCol + r + 1;
+      const rPacks = rackMap[rackNum] || [];
+
+      // Rack / Sr No
+      rowCells.push(rackNum <= maxRack ? rackNum : (rackNum <= 40 ? rackNum : ''));
+
+      // 4 Stacked Pack Numbers separated by newline
+      const packStrings = [1, 2, 3, 4]
+        .map((slot) => {
+          const p = rPacks.find((x) => x.rackSlot === slot);
+          if (!p) return '';
+          let str = p.packNumber;
+          if (p.secondaryStickerNumber) str += ` (${p.secondaryStickerNumber})`;
+          if (p.remark) str += ` [${p.remark}]`;
+          return str;
+        })
+        .filter(Boolean);
+
+      rowCells.push(packStrings.length > 0 ? packStrings.join('\r\n') : (rackNum <= maxRack ? '—' : ''));
+
+      // Description (Model name, e.g. Kanger1.0)
+      const desc = rPacks.length > 0
+        ? (BATTERY_MODELS[rPacks[0].packType]?.shortCode || BATTERY_MODELS[rPacks[0].packType]?.name || rPacks[0].packType || 'Kanger1.0')
+        : (rackNum <= maxRack ? 'Kanger1.0' : '');
+      rowCells.push(rPacks.length > 0 ? desc : (rackNum <= maxRack ? '—' : ''));
+    }
+    aoa.push(rowCells);
   }
 
-  // 2. Sheet 2: Detailed Line Inventory (Every single battery pack)
+  const wb = XLSX.utils.book_new();
+
+  const wsSheet = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Merges for headers
+  wsSheet['!merges'] = [
+    // Row 1: A1:I1 for TATA title, J1:L1 for Line badge
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+    { s: { r: 0, c: 9 }, e: { r: 0, c: 11 } },
+    // Row 2: A2:E2 for TOTAL BATTERY PACKS, F2 for count, G2:L2 for TOTAL ROWS
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+    { s: { r: 1, c: 5 }, e: { r: 1, c: 5 } },
+    { s: { r: 1, c: 6 }, e: { r: 1, c: 11 } },
+  ];
+
+  // Column widths
+  wsSheet['!cols'] = [
+    { wch: 10 }, { wch: 22 }, { wch: 15 },
+    { wch: 10 }, { wch: 22 }, { wch: 15 },
+    { wch: 10 }, { wch: 22 }, { wch: 15 },
+    { wch: 10 }, { wch: 22 }, { wch: 15 },
+  ];
+
+  XLSX.utils.book_append_sheet(wb, wsSheet, `Line ${lineId} Sheet`);
+
+  // 2. Sheet 2: Detailed Line Inventory (Every individual battery pack)
   const detailRows = linePacks.map((p, index) => {
     const model = BATTERY_MODELS[p.packType];
     return {
@@ -240,21 +288,6 @@ export function exportLineSheetToExcel(
       'Approved By': p.inwardApprovedBy || '—',
     };
   });
-
-  const wb = XLSX.utils.book_new();
-
-  const wsGrid = XLSX.utils.json_to_sheet(gridRows);
-  wsGrid['!cols'] = [
-    { wch: 12 },
-    { wch: 22 },
-    { wch: 22 },
-    { wch: 22 },
-    { wch: 22 },
-    { wch: 20 },
-    { wch: 30 },
-    { wch: 14 },
-  ];
-  XLSX.utils.book_append_sheet(wb, wsGrid, `Line ${lineId} Rack Grid`);
 
   const wsDetail = XLSX.utils.json_to_sheet(detailRows);
   wsDetail['!cols'] = [
