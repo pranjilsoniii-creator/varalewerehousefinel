@@ -24,18 +24,28 @@ export const DownloadOnPhoneModal: React.FC<DownloadOnPhoneModalProps> = ({ isOp
   const [activeTab, setActiveTab] = useState<'apk' | 'qr' | 'pwa'>('apk');
   const [copied, setCopied] = useState<boolean>(false);
 
-  if (!isOpen) return null;
-
   const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://tata-wms.local';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(currentUrl)}`;
-  const directApkUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases/download/v1.0.0-apk/Tata-AutoComp-WMS-v1.0.apk';
-  const githubReleasesUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases';
-  const githubActionsUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/actions';
+  const directApkUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases/latest/download/Tata-AutoComp-WMS-Latest.apk';
+  const directApkFallbackUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases/download/latest/Tata-AutoComp-WMS-Latest.apk';
+  const githubReleasesUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases/latest';
+  const githubAllReleasesUrl = 'https://github.com/pranjilsoniii-creator/varalewerehousefinel/releases';
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(currentUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
+  };
+
+  const handleForceUpdateApp = () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.update();
+        }
+      });
+    }
+    window.location.reload();
   };
 
   return (
@@ -48,9 +58,14 @@ export const DownloadOnPhoneModal: React.FC<DownloadOnPhoneModalProps> = ({ isOp
               <Smartphone className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 font-display">
-                Download & Install on Phone / Scanner
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-slate-900 font-display">
+                  App Download & Live Updates
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                  Latest Build
+                </span>
+              </div>
               <p className="text-[11px] text-slate-500">
                 Tata AutoComp Lithium Battery Warehouse Management System
               </p>
@@ -75,7 +90,7 @@ export const DownloadOnPhoneModal: React.FC<DownloadOnPhoneModalProps> = ({ isOp
             }`}
           >
             <Package className="w-3.5 h-3.5" />
-            <span>Android APK (.apk)</span>
+            <span>Latest APK (.apk)</span>
           </button>
 
           <button
@@ -99,23 +114,23 @@ export const DownloadOnPhoneModal: React.FC<DownloadOnPhoneModalProps> = ({ isOp
             }`}
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Instant PWA Install</span>
+            <span>Instant Auto-Update (PWA)</span>
           </button>
         </div>
 
         {/* Modal Body */}
         <div className="p-5 sm:p-6 space-y-5">
-          {/* TAB 1: APK DOWNLOAD */}
+          {/* TAB 1: APK DOWNLOAD & UPDATE */}
           {activeTab === 'apk' && (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex items-start gap-3">
                 <ShieldCheck className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-extrabold text-blue-900 text-sm">
-                    Tata AutoComp Native Android App (.apk)
+                    Tata AutoComp Native Android App (Latest Release)
                   </h4>
                   <p className="text-[11px] text-blue-700 mt-1">
-                    Native Android build for floor barcode scanning, camera recognition, and offline storage.
+                    Continuous GitHub build with 1-page line matrix printing, high-speed camera scanning & Supabase live cloud sync.
                   </p>
                 </div>
               </div>
@@ -123,30 +138,41 @@ export const DownloadOnPhoneModal: React.FC<DownloadOnPhoneModalProps> = ({ isOp
               <div className="space-y-2.5">
                 <a
                   href={directApkUrl}
-                  download="Tata-AutoComp-WMS-v1.0.apk"
+                  download="Tata-AutoComp-WMS-Latest.apk"
                   className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-md transition cursor-pointer text-sm"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download Direct APK (Tata-AutoComp-WMS-v1.0.apk)</span>
+                  <span>Download Latest APK (Tata-AutoComp-WMS-Latest.apk)</span>
                 </a>
 
-                <a
-                  href={githubReleasesUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-2xl flex items-center justify-center gap-2 border border-blue-200 transition cursor-pointer text-[11px]"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Open GitHub Releases Page</span>
-                </a>
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={githubReleasesUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-2xl flex items-center justify-center gap-1.5 border border-blue-200 transition cursor-pointer text-[11px]"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Latest Release Page</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleForceUpdateApp}
+                    className="py-2.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold rounded-2xl flex items-center justify-center gap-1.5 border border-purple-200 transition cursor-pointer text-[11px]"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Check Web Updates</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 text-[11px] text-slate-600">
-                <p className="font-bold text-slate-800">📱 Installation Instructions:</p>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-[11px] text-slate-600">
+                <p className="font-bold text-slate-800">📱 How to Update Existing App:</p>
                 <ol className="list-decimal list-inside space-y-1 pl-1">
-                  <li>Download the <strong>.apk</strong> file onto your phone or PDA scanner.</li>
-                  <li>Tap the file and click <strong>"Install"</strong>.</li>
-                  <li>Login with your Supervisor or Employee credentials to start scanning.</li>
+                  <li>Click <strong>"Download Latest APK"</strong> above.</li>
+                  <li>Open the downloaded APK file on your Android device.</li>
+                  <li>Click <strong>"Update"</strong> when prompted — your login and offline data will be preserved automatically!</li>
                 </ol>
               </div>
             </div>

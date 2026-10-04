@@ -50,28 +50,35 @@ jobs:
 
       - name: Rename APK Artifact
         run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ./Tata-AutoComp-WMS-Latest.apk
           cp android/app/build/outputs/apk/debug/app-debug.apk ./Tata-AutoComp-WMS-v1.0.apk
 
       - name: Upload APK as Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Tata-AutoComp-WMS-Android-APK
-          path: ./Tata-AutoComp-WMS-v1.0.apk
+          path: |
+            ./Tata-AutoComp-WMS-Latest.apk
+            ./Tata-AutoComp-WMS-v1.0.apk
           retention-days: 30
 
-      - name: Create Release with Downloadable APK
+      - name: Create / Update GitHub Release with Latest APK
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.0.0-apk
-          name: 'Tata AutoComp WMS Mobile App v1.0'
+          tag_name: latest
+          name: 'Tata AutoComp WMS Mobile App (Latest Build)'
           body: |
-            ### 📱 Tata AutoComp Lithium Battery WMS - Android Application
+            ### 📱 Tata AutoComp Lithium Battery WMS - Latest Android APK
             - **Plant:** Varale (B300 Plant) & Chakan
-            - **App Version:** 1.0.0
+            - **Build Date:** Automatic Continuous Build on Git Push
             - **Target:** Android Phones, Tablets & Handheld Barcode Scanners (Zebra / Honeywell PDA)
-            - **Features:** Direct Barcode Scanning, Live Supabase Cloud Sync, Offline Access
-          files: ./Tata-AutoComp-WMS-v1.0.apk
+            - **Features:** Direct Barcode Scanning, Live Supabase Cloud Sync, Offline Access, 1-Page Matrix Print
+          files: |
+            ./Tata-AutoComp-WMS-Latest.apk
+            ./Tata-AutoComp-WMS-v1.0.apk
           make_latest: true
+          overwrite: true
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
