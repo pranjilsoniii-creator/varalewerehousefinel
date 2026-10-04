@@ -283,6 +283,22 @@ export function exportLineSheetToExcel(
     }
   }
 
+  // Row 44 (Excel Footer): Prepared by Jitendra Soni & Plant Verification
+  const footerRowIdx = aoa.length;
+  aoa.push([
+    'PREPARED BY: JITENDRA SONI', '', '',
+    'VERIFIED BY: PLANT QUALITY INCHARGE', '', '',
+    'TATA AUTOCOMP SYSTEMS LTD • VARALE B300 PLANT', '', '',
+    'PRINTED DATE:', todayStr, ''
+  ]);
+
+  merges.push(
+    { s: { r: footerRowIdx, c: 0 }, e: { r: footerRowIdx, c: 2 } },
+    { s: { r: footerRowIdx, c: 3 }, e: { r: footerRowIdx, c: 5 } },
+    { s: { r: footerRowIdx, c: 6 }, e: { r: footerRowIdx, c: 8 } },
+    { s: { r: footerRowIdx, c: 10 }, e: { r: footerRowIdx, c: 11 } }
+  );
+
   const wb = XLSX.utils.book_new();
   const wsSheet = XLSX.utils.aoa_to_sheet(aoa);
 

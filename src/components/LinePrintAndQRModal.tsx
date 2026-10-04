@@ -597,7 +597,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               </div>
             </div>
 
-            {/* 3. DYNAMIC STRETCH TABLE GRID (Height 100% stretched with zero bottom whitespace) */}
+            {/* 3. DYNAMIC STRETCH TABLE GRID (Height 100% stretched with crisp Excel grid lining) */}
             <div
               className="grid-stretch-container border-2 border-black p-0.5 bg-white flex-1 overflow-hidden"
               style={{
@@ -608,31 +608,37 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               }}
             >
               {columnGroups.map((colGroup, colIdx) => (
-                <div key={colIdx} className="col-stretch-box border border-black flex flex-col h-full bg-white">
+                <div key={colIdx} className="col-stretch-box border-2 border-black flex flex-col h-full bg-white">
                   <table className="sheet-table w-full text-left border-collapse leading-none h-full" style={{ tableLayout: 'fixed' }}>
                     <thead>
-                      <tr className={`bg-slate-200 text-black border-b border-black font-bold uppercase ${
-                        density === 'spacious' ? 'text-[9px] h-6' : density === 'balanced' ? 'text-[8px] h-5' : 'text-[7.5px] h-4'
+                      <tr className={`bg-slate-200 text-black border-b-2 border-black font-black uppercase ${
+                        density === 'spacious' ? 'text-[10px] h-6' : density === 'balanced' ? 'text-[9px] h-5' : 'text-[8px] h-4'
                       }`}>
-                        <th className="p-0.5 border-r border-black text-center w-7">
+                        <th className="p-0.5 border-r-2 border-black text-center w-8 sm:w-10">
                           {colIdx === 0 ? 'Rack' : 'Sr.'}
                         </th>
-                        <th className="p-0.5 border-r border-black text-center">Battery pack No.</th>
-                        <th className="p-0.5 text-center w-14">Model</th>
+                        <th className="p-0.5 border-r-2 border-black text-center">Battery pack No.</th>
+                        <th className="p-0.5 text-center w-14 sm:w-16">Model</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black h-full">
+                    <tbody className="divide-y-2 divide-black h-full">
                       {colGroup.map((item, rowIdx) => {
                         if (item.isEmptyPlaceholder) {
                           return (
-                            <tr key={`empty-${rowIdx}`} className="bg-slate-50/40" style={{ height: `calc(100% / ${racksPerCol})` }}>
-                              <td className="p-0.5 border-r border-black text-center font-bold align-middle bg-slate-100/50 text-slate-300">
+                            <tr key={`empty-${rowIdx}`} className="bg-slate-50/30" style={{ height: `calc(100% / ${racksPerCol})` }}>
+                              <td className="p-0 border-r-2 border-black text-center font-bold align-middle bg-slate-100 text-slate-300 w-8 sm:w-10">
                                 —
                               </td>
-                              <td className="p-0.5 border-r border-black align-middle text-center">
-                                <span className="text-slate-300 text-[7px] italic">Empty Slot</span>
+                              <td className="p-0 border-r-2 border-black align-middle text-center">
+                                <div className="h-full flex flex-col justify-around divide-y divide-slate-200">
+                                  {[1, 2, 3, 4].map((s) => (
+                                    <div key={s} className="h-1/4 flex items-center justify-center text-slate-300 text-[8px] italic">
+                                      Empty Level {s}
+                                    </div>
+                                  ))}
+                                </div>
                               </td>
-                              <td className="p-0.5 text-center align-middle text-slate-300 text-[7px]">
+                              <td className="p-0 text-center align-middle text-slate-300 text-[8px] w-14 sm:w-16">
                                 —
                               </td>
                             </tr>
@@ -650,84 +656,86 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                             className="hover:bg-slate-50"
                             style={{ height: `calc(100% / ${racksPerCol})` }}
                           >
-                            {/* Rack Number */}
-                            <td className={`p-0.5 border-r border-black text-center font-black align-middle bg-slate-50 ${
+                            {/* 1. Rack Number Cell (Prominent & Lined) */}
+                            <td className={`p-0.5 border-r-2 border-black text-center font-black align-middle bg-slate-100 text-black w-8 sm:w-10 ${
                               density === 'spacious'
-                                ? 'text-xs sm:text-sm'
+                                ? 'text-base sm:text-lg'
                                 : density === 'balanced'
-                                ? 'text-[10px] sm:text-[11px]'
-                                : 'text-[8px]'
+                                ? 'text-sm sm:text-base'
+                                : 'text-xs sm:text-sm'
                             }`}>
                               {item.rackNumber}
                             </td>
 
-                            {/* 4 Stacked Battery Pack Numbers */}
-                            <td className={`p-0.5 border-r border-black font-mono font-bold align-middle ${
-                              density === 'spacious' ? 'py-1' : density === 'balanced' ? 'py-0.5' : 'py-[1px]'
-                            }`}>
-                              {hasAnyPack ? (
-                                <div className={`flex flex-col justify-center h-full ${
-                                  density === 'spacious' ? 'space-y-1' : density === 'balanced' ? 'space-y-[1px]' : 'space-y-[0.5px]'
-                                }`}>
-                                  {sortedPacks.map((pack, sIdx) => {
-                                    if (!pack) {
-                                      return (
-                                        <div key={sIdx} className="text-slate-300 text-[6.5px] font-normal leading-tight">
-                                          —
-                                        </div>
-                                      );
-                                    }
-                                    const shortType = getShortPackTypeName(pack.packType);
+                            {/* 2. 4 Distinct Excel-Style Lined Slot Rows (Levels 1 to 4) */}
+                            <td className="p-0 border-r-2 border-black align-middle font-mono h-full">
+                              <div className="h-full flex flex-col justify-stretch divide-y divide-black/80">
+                                {sortedPacks.map((pack, sIdx) => {
+                                  if (!pack) {
                                     return (
-                                      <div key={pack.id || sIdx} className="flex items-center justify-between gap-1 leading-tight">
-                                        <div className="flex items-center gap-1 min-w-0">
-                                          <span className={`text-black font-black tracking-tight ${
-                                            density === 'spacious'
-                                              ? 'text-[11px] sm:text-xs'
-                                              : density === 'balanced'
-                                              ? 'text-[9.5px] sm:text-[10.5px]'
-                                              : 'text-[7.5px]'
-                                          }`}>
-                                            {pack.packNumber}
-                                            {pack.secondaryStickerNumber && (
-                                              <span className="text-[6.5px] text-slate-500 font-normal ml-0.5">
-                                                ({pack.secondaryStickerNumber})
-                                              </span>
-                                            )}
-                                          </span>
-                                          {pack.remark && (
-                                            <span className="text-[5.5px] px-0.5 rounded bg-rose-50 text-rose-700 font-sans border border-rose-200 uppercase font-semibold truncate max-w-[42px]">
-                                              {pack.remark.slice(0, 7)}
-                                            </span>
-                                          )}
-                                        </div>
-
-                                        {/* Pack Name Badge (CKD, FBU, AIO, GEN3, etc.) */}
-                                        <span className={`font-black uppercase tracking-wider font-mono px-1 py-0 rounded border border-black bg-slate-100 text-black flex-shrink-0 ${
-                                          density === 'spacious'
-                                            ? 'text-[8.5px]'
-                                            : density === 'balanced'
-                                            ? 'text-[7.5px]'
-                                            : 'text-[6.5px]'
-                                        }`}>
-                                          {shortType}
-                                        </span>
+                                      <div
+                                        key={sIdx}
+                                        className="flex-1 flex items-center justify-between px-1.5 bg-slate-50/20 text-slate-300"
+                                        style={{ minHeight: '0' }}
+                                      >
+                                        <span className="text-[7.5px] italic text-slate-400 font-sans">L{sIdx + 1}: Empty</span>
+                                        <span className="text-[7px] text-slate-300 font-sans">—</span>
                                       </div>
                                     );
-                                  })}
-                                </div>
-                              ) : (
-                                <span className="text-slate-300 text-[7.5px] italic leading-tight">Empty</span>
-                              )}
+                                  }
+                                  const shortType = getShortPackTypeName(pack.packType);
+                                  return (
+                                    <div
+                                      key={pack.id || sIdx}
+                                      className="flex-1 flex items-center justify-between px-1.5 sm:px-2 gap-1 leading-none bg-white"
+                                      style={{ minHeight: '0' }}
+                                    >
+                                      {/* Pack Serial Number (Large, Bold, Sharp Font) */}
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <span className={`text-black font-black tracking-tight ${
+                                          density === 'spacious'
+                                            ? 'text-sm sm:text-base'
+                                            : density === 'balanced'
+                                            ? 'text-xs sm:text-[13px]'
+                                            : 'text-[10px] sm:text-[11px]'
+                                        }`}>
+                                          {pack.packNumber}
+                                        </span>
+                                        {pack.secondaryStickerNumber && (
+                                          <span className="text-[7.5px] text-slate-600 font-normal font-sans">
+                                            ({pack.secondaryStickerNumber})
+                                          </span>
+                                        )}
+                                        {pack.remark && (
+                                          <span className="text-[6.5px] px-1 py-0 rounded bg-rose-100 text-rose-800 font-sans font-bold border border-rose-300 uppercase truncate max-w-[50px]">
+                                            {pack.remark.slice(0, 8)}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Pack Name Badge (CKD, FBU, AIO, GEN3, etc. - Solid Black Badge) */}
+                                      <span className={`font-black uppercase tracking-wider font-mono px-1.5 py-0.5 rounded border border-black bg-black text-white flex-shrink-0 ${
+                                        density === 'spacious'
+                                          ? 'text-[10px]'
+                                          : density === 'balanced'
+                                          ? 'text-[8.5px]'
+                                          : 'text-[7.5px]'
+                                      }`}>
+                                        {shortType}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </td>
 
-                            {/* Description / Model */}
-                            <td className={`p-0.5 text-center font-bold align-middle text-slate-700 leading-tight ${
+                            {/* 3. Description / Model Cell */}
+                            <td className={`p-0.5 text-center font-black align-middle text-slate-900 uppercase leading-tight w-14 sm:w-16 bg-slate-50/40 ${
                               density === 'spacious'
-                                ? 'text-[9.5px]'
+                                ? 'text-[11px]'
                                 : density === 'balanced'
-                                ? 'text-[8px]'
-                                : 'text-[6.5px]'
+                                ? 'text-[9.5px]'
+                                : 'text-[8px]'
                             }`}>
                               {hasAnyPack ? (
                                 <span>{getProductNameAndType(rackPacks[0].packType).productType || 'Kanger1.0'}</span>
@@ -744,23 +752,34 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               ))}
             </div>
 
-            {/* 4. FOOTER WITH QR CODE FOR DIGITAL SCANNING & VERIFICATION */}
-            <div className="mt-1.5 pt-1 border-t-2 border-black flex items-center justify-between gap-2 text-[7.5px] text-slate-700 flex-shrink-0">
+            {/* 4. FOOTER WITH QR CODE + PREPARED BY JITENDRA SONI + TATA PLANT INFO */}
+            <div className="mt-1.5 pt-1.5 border-t-2 border-black flex items-center justify-between gap-2 text-slate-800 flex-shrink-0">
+              {/* Left: QR Code */}
               <div className="flex items-center gap-2">
-                <div className="h-9 w-9 p-0.5 bg-white border border-black flex items-center justify-center shadow-2xs flex-shrink-0">
+                <div className="h-10 w-10 p-0.5 bg-white border-2 border-black flex items-center justify-center shadow-xs flex-shrink-0">
                   <img src={qrDataUrl} alt={`QR Code for Line ${currentLine}`} className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <p className="font-bold text-black uppercase text-[8px] leading-tight">Instant Mobile Scan QR Code</p>
-                  <p className="text-[7px] text-slate-600 leading-tight">Scan with any phone camera to view real-time live stock of Line {currentLine} without login</p>
-                  <p className="text-[6.5px] font-mono text-slate-500 leading-none">{publicUrl}</p>
+                  <p className="font-black text-black uppercase text-[8.5px] leading-tight tracking-wide">Live Mobile Scan QR Code</p>
+                  <p className="text-[7.5px] text-slate-700 leading-tight">Scan camera to view real-time stock of Line {currentLine}</p>
+                  <p className="text-[7px] font-mono text-slate-500 leading-none">{publicUrl}</p>
                 </div>
               </div>
 
+              {/* Center: PREPARED BY JITENDRA SONI */}
+              <div className="text-center border-2 border-black px-3 py-1 bg-slate-50 rounded-xs shadow-2xs">
+                <p className="text-[7.5px] font-bold text-slate-600 uppercase tracking-wider">Sheet Incharge / Author</p>
+                <p className="text-[10px] sm:text-[11.5px] font-black text-black uppercase tracking-wider">
+                  PREPARED BY: JITENDRA SONI
+                </p>
+                <p className="text-[6.5px] font-bold text-emerald-800 uppercase">Tata Warehouse Quality Verified</p>
+              </div>
+
+              {/* Right: Plant Information */}
               <div className="text-right leading-tight">
-                <p className="font-bold text-black text-[8px]">Tata AutoComp Systems Limited</p>
-                <p className="text-[7px] text-slate-600">Varale B300 Plant • Quality Approved</p>
-                <p className="text-[6.5px] text-slate-400 mt-0.5">Printed: {new Date().toLocaleString('en-IN')}</p>
+                <p className="font-black text-black text-[9px] uppercase">Tata AutoComp Systems Limited</p>
+                <p className="text-[7.5px] font-semibold text-slate-700">Varale (B300 Plant) • Lithium Battery Division</p>
+                <p className="text-[7px] font-mono text-slate-500 mt-0.5">Printed: {new Date().toLocaleString('en-IN')}</p>
               </div>
             </div>
           </div>
