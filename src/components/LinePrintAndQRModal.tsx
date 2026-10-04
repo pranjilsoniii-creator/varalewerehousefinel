@@ -212,6 +212,8 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
           box-sizing: border-box !important;
+          font-variant-numeric: normal !important;
+          font-feature-settings: "zero" 0 !important;
         }
         html, body {
           margin: 0 !important;
@@ -221,7 +223,9 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
           width: 100% !important;
           height: 100% !important;
           overflow: hidden !important;
-          font-family: 'Aptos', 'Segoe UI', 'Inter', -apple-system, sans-serif !important;
+          font-family: 'Alatsi', 'Arial', 'Segoe UI', 'Inter', -apple-system, sans-serif !important;
+          font-variant-numeric: normal !important;
+          font-feature-settings: "zero" 0 !important;
         }
         #tata-line-printable-sheet {
           width: 100% !important;
@@ -240,6 +244,9 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
           display: flex !important;
           flex-direction: column !important;
           justify-content: space-between !important;
+          font-family: 'Alatsi', 'Arial', 'Segoe UI', 'Inter', -apple-system, sans-serif !important;
+          font-variant-numeric: normal !important;
+          font-feature-settings: "zero" 0 !important;
         }
         .grid-stretch-container {
           display: grid !important;
@@ -668,7 +675,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                             </td>
 
                             {/* 2. 4 Distinct Excel-Style Lined Slot Rows (Levels 1 to 4) */}
-                            <td className="p-0 border-r-2 border-black align-middle font-mono h-full">
+                            <td className="p-0 border-r-2 border-black align-middle font-sans h-full">
                               <div className="h-full flex flex-col justify-stretch divide-y divide-black/80">
                                 {sortedPacks.map((pack, sIdx) => {
                                   if (!pack) {
@@ -692,7 +699,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                     >
                                       {/* Pack Serial Number (Large, Bold, Sharp Font) */}
                                       <div className="flex items-center gap-1 min-w-0">
-                                        <span className={`text-black font-black tracking-tight ${
+                                        <span className={`text-black font-black tracking-tight font-sans ${
                                           density === 'spacious'
                                             ? 'text-sm sm:text-base'
                                             : density === 'balanced'
@@ -714,7 +721,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                       </div>
 
                                       {/* Pack Name Badge (CKD, FBU, AIO, GEN3, etc. - Solid Black Badge) */}
-                                      <span className={`font-black uppercase tracking-wider font-mono px-1.5 py-0.5 rounded border border-black bg-black text-white flex-shrink-0 ${
+                                      <span className={`font-black uppercase tracking-wider font-sans px-1.5 py-0.5 rounded border border-black bg-black text-white flex-shrink-0 ${
                                         density === 'spacious'
                                           ? 'text-[10px]'
                                           : density === 'balanced'
@@ -762,7 +769,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                 <div>
                   <p className="font-black text-black uppercase text-[8.5px] leading-tight tracking-wide">Live Mobile Scan QR Code</p>
                   <p className="text-[7.5px] text-slate-700 leading-tight">Scan camera to view real-time stock of Line {currentLine}</p>
-                  <p className="text-[7px] font-mono text-slate-500 leading-none">{publicUrl}</p>
+                  <p className="text-[7px] font-sans text-slate-500 leading-none">{publicUrl}</p>
                 </div>
               </div>
 

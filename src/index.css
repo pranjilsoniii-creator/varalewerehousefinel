@@ -2,20 +2,24 @@
 
 @layer base {
   html, body {
-    font-family: 'Aptos', 'Segoe UI', 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Alatsi', 'Aptos', 'Arial', 'Segoe UI', 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     letter-spacing: -0.011em;
+    font-variant-numeric: normal !important;
+    font-feature-settings: "zero" 0 !important;
   }
   
   .font-mono-code {
-    font-family: 'JetBrains Mono', 'Segoe UI Mono', monospace;
-    letter-spacing: -0.02em;
+    font-family: 'Alatsi', 'Segoe UI', 'Arial', sans-serif;
+    letter-spacing: 0.02em;
+    font-variant-numeric: normal !important;
+    font-feature-settings: "zero" 0 !important;
   }
   
   .font-display {
-    font-family: 'Outfit', 'Aptos Display', 'Segoe UI', 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Alatsi', 'Outfit', 'Aptos Display', 'Segoe UI', 'Plus Jakarta Sans', sans-serif;
     letter-spacing: -0.025em;
   }
 
