@@ -713,11 +713,6 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                             ({pack.secondaryStickerNumber})
                                           </span>
                                         )}
-                                        {pack.remark && (
-                                          <span className="text-[6.5px] px-1 py-0 rounded bg-rose-100 text-rose-800 font-sans font-bold border border-rose-300 uppercase truncate max-w-[50px]">
-                                            {pack.remark.slice(0, 8)}
-                                          </span>
-                                        )}
                                       </div>
 
                                       {/* Pack Name Badge (CKD, FBU, AIO, GEN3, etc. - Solid Black Badge) */}
@@ -759,34 +754,27 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
               ))}
             </div>
 
-            {/* 4. FOOTER WITH QR CODE + PREPARED BY JITENDRA SONI + TATA PLANT INFO */}
-            <div className="mt-1.5 pt-1.5 border-t-2 border-black flex items-center justify-between gap-2 text-slate-800 flex-shrink-0">
+            {/* 4. FOOTER WITH QR CODE + PLANT INFO & SUBTLE PREPARED BY */}
+            <div className="mt-1.5 pt-1 border-t-2 border-black flex items-center justify-between gap-2 text-slate-800 flex-shrink-0">
               {/* Left: QR Code */}
               <div className="flex items-center gap-2">
-                <div className="h-10 w-10 p-0.5 bg-white border-2 border-black flex items-center justify-center shadow-xs flex-shrink-0">
+                <div className="h-9 w-9 p-0.5 bg-white border border-black flex items-center justify-center shadow-2xs flex-shrink-0">
                   <img src={qrDataUrl} alt={`QR Code for Line ${currentLine}`} className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <p className="font-black text-black uppercase text-[8.5px] leading-tight tracking-wide">Live Mobile Scan QR Code</p>
-                  <p className="text-[7.5px] text-slate-700 leading-tight">Scan camera to view real-time stock of Line {currentLine}</p>
-                  <p className="text-[7px] font-sans text-slate-500 leading-none">{publicUrl}</p>
+                  <p className="font-bold text-black uppercase text-[8px] leading-tight">Instant Mobile Scan QR Code</p>
+                  <p className="text-[7px] text-slate-600 leading-tight">Scan with phone camera to view live stock of Line {currentLine}</p>
+                  <p className="text-[6.5px] font-sans text-slate-500 leading-none">{publicUrl}</p>
                 </div>
               </div>
 
-              {/* Center: PREPARED BY JITENDRA SONI */}
-              <div className="text-center border-2 border-black px-3 py-1 bg-slate-50 rounded-xs shadow-2xs">
-                <p className="text-[7.5px] font-bold text-slate-600 uppercase tracking-wider">Sheet Incharge / Author</p>
-                <p className="text-[10px] sm:text-[11.5px] font-black text-black uppercase tracking-wider">
-                  PREPARED BY: JITENDRA SONI
-                </p>
-                <p className="text-[6.5px] font-bold text-emerald-800 uppercase">Tata Warehouse Quality Verified</p>
-              </div>
-
-              {/* Right: Plant Information */}
+              {/* Right: Plant Information & Subtle Prepared By */}
               <div className="text-right leading-tight">
-                <p className="font-black text-black text-[9px] uppercase">Tata AutoComp Systems Limited</p>
-                <p className="text-[7.5px] font-semibold text-slate-700">Varale (B300 Plant) • Lithium Battery Division</p>
-                <p className="text-[7px] font-mono text-slate-500 mt-0.5">Printed: {new Date().toLocaleString('en-IN')}</p>
+                <p className="font-bold text-black text-[8.5px] uppercase">Tata AutoComp Systems Limited</p>
+                <p className="text-[7px] text-slate-600">Varale (B300 Plant) • Lithium Battery Division</p>
+                <p className="text-[6.5px] text-slate-500 mt-0.5">
+                  Prepared By: <span className="font-bold text-black">Jitendra Soni</span> • Printed: {new Date().toLocaleString('en-IN')}
+                </p>
               </div>
             </div>
           </div>
