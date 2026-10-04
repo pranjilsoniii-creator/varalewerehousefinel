@@ -1228,9 +1228,6 @@ export function App() {
         </div>
       )}
 
-      {/* PWA Mobile & Desktop Install Prompt */}
-      <PWAInstallPrompt />
-
       {/* MODAL 6: Download APK / Install App on Phone */}
       <DownloadOnPhoneModal
         isOpen={isDownloadModalOpen}

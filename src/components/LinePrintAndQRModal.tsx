@@ -186,7 +186,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
         ? '@page { size: 420mm 297mm; margin: 4mm !important; }'
         : '@page { size: landscape; margin: 3.5mm !important; }';
 
-    const headerHeightPx = density === 'spacious' ? '24px' : density === 'balanced' ? '20px' : '17px';
+    const headerHeightPx = '20px';
 
     const customPrintCss = `
       <style>
@@ -392,10 +392,10 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
             table-layout: fixed !important;
           }
           table.sheet-table thead {
-            height: ${density === 'spacious' ? '24px' : density === 'balanced' ? '20px' : '17px'} !important;
+            height: 20px !important;
           }
           table.sheet-table tbody {
-            height: calc(100% - ${density === 'spacious' ? '24px' : density === 'balanced' ? '20px' : '17px'}) !important;
+            height: calc(100% - 20px) !important;
           }
           table.sheet-table tbody tr {
             height: calc(100% / ${racksPerCol}) !important;
