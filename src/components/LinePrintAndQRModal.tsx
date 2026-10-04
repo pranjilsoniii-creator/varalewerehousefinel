@@ -93,57 +93,40 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
     return max > 0 ? Math.min(max, RACKS_PER_LINE) : 38;
   }, [rackMap]);
 
-  // Number of columns adapted to paper size and density
+  // Standard fixed uniform column layout matching Tata plant sheet (4 cols x 10 racks = 40 racks)
   const numColumns = useMemo(() => {
-    if (paperSize === 'A4_PORTRAIT') {
-      return maxOccupiedRack <= 18 ? 2 : 3;
-    }
-    // A4_LANDSCAPE or A3_LANDSCAPE
+    if (paperSize === 'A4_PORTRAIT') return 2;
     return 4;
-  }, [paperSize, maxOccupiedRack]);
+  }, [paperSize]);
 
-  // Racks per column to perfectly distribute all racks
+  // Fixed uniform racks per column so row sizes never deform or blow up
   const racksPerCol = useMemo(() => {
-    return Math.max(1, Math.ceil(maxOccupiedRack / numColumns));
-  }, [maxOccupiedRack, numColumns]);
+    if (paperSize === 'A4_PORTRAIT') return 20;
+    return 10;
+  }, [paperSize]);
 
-  // Dynamic typography and spacing density
-  const density = useMemo<'spacious' | 'balanced' | 'compact'>(() => {
-    if (racksPerCol <= 5) return 'spacious';
-    if (racksPerCol <= 8) return 'balanced';
-    return 'compact';
-  }, [racksPerCol]);
-
-  // Generate column groupings matching occupied racks and fill any short column to ensure exact alignment
+  // Standard uniform column groupings (Col 1: 1-10, Col 2: 11-20, Col 3: 21-30, Col 4: 31-40)
   const columnGroups = useMemo(() => {
-    const totalRacksToShow = maxOccupiedRack;
     const cols: Array<Array<{ rackNumber: number; packs: BatteryPack[]; isEmptyPlaceholder?: boolean }>> = [];
 
     for (let c = 0; c < numColumns; c++) {
-      cols.push([]);
-    }
+      const colList: Array<{ rackNumber: number; packs: BatteryPack[]; isEmptyPlaceholder?: boolean }> = [];
+      const startRack = c * racksPerCol + 1;
+      const endRack = startRack + racksPerCol - 1;
 
-    for (let i = 1; i <= totalRacksToShow; i++) {
-      const colIdx = Math.min(Math.floor((i - 1) / racksPerCol), numColumns - 1);
-      cols[colIdx].push({
-        rackNumber: i,
-        packs: rackMap[i] || [],
-      });
-    }
-
-    // Pad any shorter columns with placeholder rows up to racksPerCol so all columns have exact identical height & bottom alignment
-    cols.forEach((col) => {
-      while (col.length < racksPerCol) {
-        col.push({
-          rackNumber: 0,
-          packs: [],
-          isEmptyPlaceholder: true,
+      for (let r = startRack; r <= endRack; r++) {
+        const pList = rackMap[r] || [];
+        colList.push({
+          rackNumber: r,
+          packs: pList,
+          isEmptyPlaceholder: r > 38 && pList.length === 0,
         });
       }
-    });
+      cols.push(colList);
+    }
 
     return cols;
-  }, [rackMap, maxOccupiedRack, numColumns, racksPerCol]);
+  }, [rackMap, numColumns, racksPerCol]);
 
   // Public URL for QR Code (Direct public access without login)
   const publicUrl = useMemo(() => {
@@ -618,9 +601,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                 <div key={colIdx} className="col-stretch-box border-2 border-black flex flex-col h-full bg-white">
                   <table className="sheet-table w-full text-left border-collapse leading-none h-full" style={{ tableLayout: 'fixed' }}>
                     <thead>
-                      <tr className={`bg-slate-200 text-black border-b-2 border-black font-black uppercase ${
-                        density === 'spacious' ? 'text-[10px] h-6' : density === 'balanced' ? 'text-[9px] h-5' : 'text-[8px] h-4'
-                      }`}>
+                      <tr className="bg-slate-200 text-black border-b-2 border-black font-black uppercase text-[8px] sm:text-[8.5px] h-5">
                         <th className="p-0.5 border-r-2 border-black text-center w-8 sm:w-10">
                           {colIdx === 0 ? 'Rack' : 'Sr.'}
                         </th>
@@ -633,19 +614,19 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                         if (item.isEmptyPlaceholder) {
                           return (
                             <tr key={`empty-${rowIdx}`} className="bg-slate-50/30" style={{ height: `calc(100% / ${racksPerCol})` }}>
-                              <td className="p-0 border-r-2 border-black text-center font-bold align-middle bg-slate-100 text-slate-300 w-8 sm:w-10">
+                              <td className="p-0 border-r-2 border-black text-center font-bold align-middle bg-slate-100 text-slate-300 w-8 sm:w-10 text-xs">
                                 —
                               </td>
                               <td className="p-0 border-r-2 border-black align-middle text-center">
                                 <div className="h-full flex flex-col justify-around divide-y divide-slate-200">
                                   {[1, 2, 3, 4].map((s) => (
-                                    <div key={s} className="h-1/4 flex items-center justify-center text-slate-300 text-[8px] italic">
-                                      Empty Level {s}
+                                    <div key={s} className="h-1/4 flex items-center justify-center text-slate-300 text-[7.5px] italic">
+                                      —
                                     </div>
                                   ))}
                                 </div>
                               </td>
-                              <td className="p-0 text-center align-middle text-slate-300 text-[8px] w-14 sm:w-16">
+                              <td className="p-0 text-center align-middle text-slate-300 text-[7.5px] w-14 sm:w-16">
                                 —
                               </td>
                             </tr>
@@ -664,14 +645,8 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                             style={{ height: `calc(100% / ${racksPerCol})` }}
                           >
                             {/* 1. Rack Number Cell (Prominent & Lined) */}
-                            <td className={`p-0.5 border-r-2 border-black text-center font-black align-middle bg-slate-100 text-black w-8 sm:w-10 ${
-                              density === 'spacious'
-                                ? 'text-base sm:text-lg'
-                                : density === 'balanced'
-                                ? 'text-sm sm:text-base'
-                                : 'text-xs sm:text-sm'
-                            }`}>
-                              {item.rackNumber}
+                            <td className="p-0.5 border-r-2 border-black text-center font-black align-middle bg-slate-100 text-black w-8 sm:w-10 text-xs sm:text-sm">
+                              {item.rackNumber <= 38 ? item.rackNumber : (hasAnyPack ? item.rackNumber : '—')}
                             </td>
 
                             {/* 2. 4 Distinct Excel-Style Lined Slot Rows (Levels 1 to 4) */}
@@ -685,7 +660,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                         className="flex-1 flex items-center justify-between px-1.5 bg-slate-50/20 text-slate-300"
                                         style={{ minHeight: '0' }}
                                       >
-                                        <span className="text-[7.5px] italic text-slate-400 font-sans">L{sIdx + 1}: Empty</span>
+                                        <span className="text-[7.5px] italic text-slate-400 font-sans">L{sIdx + 1}: —</span>
                                         <span className="text-[7px] text-slate-300 font-sans">—</span>
                                       </div>
                                     );
@@ -699,30 +674,18 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                                     >
                                       {/* Pack Serial Number (Large, Bold, Sharp Font) */}
                                       <div className="flex items-center gap-1 min-w-0">
-                                        <span className={`text-black font-black tracking-tight font-sans ${
-                                          density === 'spacious'
-                                            ? 'text-sm sm:text-base'
-                                            : density === 'balanced'
-                                            ? 'text-xs sm:text-[13px]'
-                                            : 'text-[10px] sm:text-[11px]'
-                                        }`}>
+                                        <span className="text-black font-black tracking-tight font-sans text-[10px] sm:text-[11px]">
                                           {pack.packNumber}
                                         </span>
                                         {pack.secondaryStickerNumber && (
-                                          <span className="text-[7.5px] text-slate-600 font-normal font-sans">
+                                          <span className="text-[7px] text-slate-600 font-normal font-sans">
                                             ({pack.secondaryStickerNumber})
                                           </span>
                                         )}
                                       </div>
 
                                       {/* Pack Name Badge (CKD, FBU, AIO, GEN3, etc. - Solid Black Badge) */}
-                                      <span className={`font-black uppercase tracking-wider font-sans px-1.5 py-0.5 rounded border border-black bg-black text-white flex-shrink-0 ${
-                                        density === 'spacious'
-                                          ? 'text-[10px]'
-                                          : density === 'balanced'
-                                          ? 'text-[8.5px]'
-                                          : 'text-[7.5px]'
-                                      }`}>
+                                      <span className="font-black uppercase tracking-wider font-sans px-1 py-0.5 rounded border border-black bg-black text-white flex-shrink-0 text-[7.5px]">
                                         {shortType}
                                       </span>
                                     </div>
@@ -732,13 +695,7 @@ export const LinePrintAndQRModal: React.FC<LinePrintAndQRModalProps> = ({
                             </td>
 
                             {/* 3. Description / Model Cell */}
-                            <td className={`p-0.5 text-center font-black align-middle text-slate-900 uppercase leading-tight w-14 sm:w-16 bg-slate-50/40 ${
-                              density === 'spacious'
-                                ? 'text-[11px]'
-                                : density === 'balanced'
-                                ? 'text-[9.5px]'
-                                : 'text-[8px]'
-                            }`}>
+                            <td className="p-0.5 text-center font-black align-middle text-slate-900 uppercase leading-tight w-14 sm:w-16 bg-slate-50/40 text-[8px] sm:text-[8.5px]">
                               {hasAnyPack ? (
                                 <span>{getProductNameAndType(rackPacks[0].packType).productType || 'Kanger1.0'}</span>
                               ) : (
