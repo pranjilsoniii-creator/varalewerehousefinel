@@ -1229,10 +1229,12 @@ export function App() {
       )}
 
       {/* MODAL 6: Download APK / Install App on Phone */}
-      <DownloadOnPhoneModal
-        isOpen={isDownloadModalOpen}
-        onClose={() => setIsDownloadModalOpen(false)}
-      />
+      {isDownloadModalOpen && (
+        <DownloadOnPhoneModal
+          isOpen={isDownloadModalOpen}
+          onClose={() => setIsDownloadModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
