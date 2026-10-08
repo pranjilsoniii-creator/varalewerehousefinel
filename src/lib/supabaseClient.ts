@@ -194,12 +194,32 @@ export async function fetchPacksFromCloud(): Promise<BatteryPack[] | null> {
   try {
     const sb = getSupabase();
     if (!sb) return null;
-    const { data, error } = await sb.from('battery_packs').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.warn('Supabase fetch packs warning:', error.message);
-      return null;
+
+    let allRows: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+
+    // Auto-paginated fetch to bypass Supabase default 1,000-row PostgREST ceiling
+    while (true) {
+      const { data, error } = await sb
+        .from('battery_packs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.warn('Supabase fetch packs error:', error.message);
+        if (allRows.length > 0) break; // Return what we fetched
+        return null;
+      }
+
+      if (!data || data.length === 0) break;
+      allRows = allRows.concat(data);
+      if (data.length < pageSize) break; // Reached last page
+      from += pageSize;
     }
-    return (data || []).map(mapRowToPack);
+
+    return allRows.map(mapRowToPack);
   } catch (e) {
     console.warn('Supabase fetch packs exception:', e);
     return null;
@@ -211,10 +231,15 @@ export async function syncPacksToCloud(packs: BatteryPack[]): Promise<boolean> {
     const sb = getSupabase();
     if (!sb || packs.length === 0) return false;
     const rows = packs.map(mapPackToRow);
-    const { error } = await sb.from('battery_packs').upsert(rows, { onConflict: 'id' });
-    if (error) {
-      console.warn('Supabase sync packs error:', error.message);
-      return false;
+
+    // Chunk in batches of 100 to avoid payload size/timeout limits on mobile
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100);
+      const { error } = await sb.from('battery_packs').upsert(chunk, { onConflict: 'id' });
+      if (error) {
+        console.warn('Supabase sync packs chunk error:', error.message);
+        return false;
+      }
     }
     return true;
   } catch (e) {
@@ -320,12 +345,31 @@ export async function fetchInwardsFromCloud(): Promise<InwardShipmentRecord[] | 
   try {
     const sb = getSupabase();
     if (!sb) return null;
-    const { data, error } = await sb.from('inward_shipments').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.warn('Supabase fetch inwards warning:', error.message);
-      return null;
+
+    let allRows: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+
+    while (true) {
+      const { data, error } = await sb
+        .from('inward_shipments')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.warn('Supabase fetch inwards warning:', error.message);
+        if (allRows.length > 0) break;
+        return null;
+      }
+
+      if (!data || data.length === 0) break;
+      allRows = allRows.concat(data);
+      if (data.length < pageSize) break;
+      from += pageSize;
     }
-    return (data || []).map(mapRowToInward);
+
+    return allRows.map(mapRowToInward);
   } catch (e) {
     console.warn('Supabase fetch inwards exception:', e);
     return null;
@@ -423,13 +467,32 @@ export async function fetchLotsFromCloud(): Promise<DispatchLot[] | null> {
   try {
     const sb = getSupabase();
     if (!sb) return null;
-    const { data, error } = await sb.from('dispatch_lots').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.warn('Supabase fetch lots warning:', error.message);
-      return null;
+
+    let allRows: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+
+    while (true) {
+      const { data, error } = await sb
+        .from('dispatch_lots')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.warn('Supabase fetch lots warning:', error.message);
+        if (allRows.length > 0) break;
+        return null;
+      }
+
+      if (!data || data.length === 0) break;
+      allRows = allRows.concat(data);
+      if (data.length < pageSize) break;
+      from += pageSize;
     }
+
     // Filter out internal Daily Stock and User sync rows so they don't pollute dispatch lots list
-    return (data || [])
+    return allRows
       .filter((row: any) => row.consignee_name !== 'DAILY_STOCK_MAINTENANCE' && row.consignee_name !== 'SYSTEM_USER_ACCOUNTS')
       .map(mapRowToLot);
   } catch (e) {
