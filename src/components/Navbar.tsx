@@ -35,6 +35,7 @@ interface NavbarProps {
   onOpenLinePopulatorModal?: () => void;
   onOpenDownloadModal?: () => void;
   onOpenMobileDrawer?: () => void;
+  onOpenSuperSearch?: () => void;
   onQuickSearch?: (query: string) => void;
 }
 
@@ -52,6 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenLinePopulatorModal,
   onOpenDownloadModal,
   onOpenMobileDrawer,
+  onOpenSuperSearch,
   onQuickSearch,
 }) => {
   const { currentUser, isSuperAdmin, isManager, hasPermission, isMaintenanceMode, setMaintenanceMode, logout } = useAuth();
@@ -202,6 +204,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action Icons & User Profile */}
           <div className="flex items-center gap-2">
+            {/* Universal Super Search / Janamkundli Shortcut */}
+            {onOpenSuperSearch && (
+              <button
+                onClick={onOpenSuperSearch}
+                className="px-2.5 sm:px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Universal Super Search & Pack Janamkundli"
+              >
+                <Search className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden md:inline font-display">Janamkundli</span>
+              </button>
+            )}
+
             {/* Super Admin & Manager: Line Populator Matrix Shortcut */}
             {(isSuperAdmin || isManager) && onOpenLinePopulatorModal && (
               <button
@@ -340,6 +354,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Table className="w-4 h-4 text-purple-600" />
               <span>Line Populator</span>
+            </button>
+          )}
+
+          {onOpenSuperSearch && (
+            <button
+              onClick={() => {
+                onOpenSuperSearch();
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full px-4 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold flex items-center gap-2"
+            >
+              <Search className="w-4 h-4 text-blue-600" />
+              <span>Super Search (Janamkundli)</span>
             </button>
           )}
         </div>

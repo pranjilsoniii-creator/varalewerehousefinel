@@ -117,8 +117,24 @@ export function App() {
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState<boolean>(false);
   const [isAdminPopulatorOpen, setIsAdminPopulatorOpen] = useState<boolean>(false);
   const [isSuperSearchOpen, setIsSuperSearchOpen] = useState<boolean>(false);
+  const [superSearchPack, setSuperSearchPack] = useState<BatteryPack | null>(null);
+  const [superSearchQuery, setSuperSearchQuery] = useState<string>('');
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false);
+
+  const handleOpenSuperSearch = (target?: BatteryPack | string) => {
+    if (typeof target === 'string') {
+      setSuperSearchQuery(target);
+      setSuperSearchPack(null);
+    } else if (target && typeof target === 'object') {
+      setSuperSearchPack(target);
+      setSuperSearchQuery(target.packNumber);
+    } else {
+      setSuperSearchPack(null);
+      setSuperSearchQuery('');
+    }
+    setIsSuperSearchOpen(true);
+  };
 
   // Core Warehouse State initialized with clean local cache
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
@@ -1021,12 +1037,13 @@ export function App() {
         onOpenLinePopulatorModal={() => setIsAdminPopulatorOpen(true)}
         onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
         onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+        onOpenSuperSearch={() => handleOpenSuperSearch()}
       />
 
       {/* Dynamic Personalized Greeting & Live Realtime Cloud Sync Banner */}
       <div className="no-print">
         <WelcomeHeader
-          onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+          onOpenSuperSearch={() => handleOpenSuperSearch()}
           isCloudConnected={isCloudConnected}
           isCloudSyncing={isCloudSyncing}
           lastSyncTime={lastSyncTime}
@@ -1156,7 +1173,7 @@ export function App() {
           isCloudConnected={isCloudConnected}
           isCloudSyncing={isCloudSyncing}
           onRefreshCloud={refreshFromCloud}
-          onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+          onOpenSuperSearch={() => handleOpenSuperSearch()}
           onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
           onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
           onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
@@ -1170,7 +1187,7 @@ export function App() {
       <div className="no-print">
         <MobileScannerFAB
           onOpenScanner={() => handleTabChange('INWARD')}
-          onOpenSuperSearch={() => setIsSuperSearchOpen(true)}
+          onOpenSuperSearch={() => handleOpenSuperSearch()}
         />
       </div>
 
@@ -1179,9 +1196,11 @@ export function App() {
         <PackDetailsModal
           pack={inspectingPack}
           onClose={() => setInspectingPack(null)}
-          onSendToDispatch={(p) => {
-            handleSendToDispatch(p);
+          onAddToDispatch={handleSendToDispatch}
+          onSendToDispatch={handleSendToDispatch}
+          onOpenJanamkundli={(p) => {
             setInspectingPack(null);
+            handleOpenSuperSearch(p);
           }}
         />
       )}
@@ -1207,9 +1226,15 @@ export function App() {
       {/* MODAL 0: Universal Super Search ("Janamkundli") */}
       <SuperSearchModal
         isOpen={isSuperSearchOpen}
-        onClose={() => setIsSuperSearchOpen(false)}
+        onClose={() => {
+          setIsSuperSearchOpen(false);
+          setSuperSearchPack(null);
+          setSuperSearchQuery('');
+        }}
         packs={packs}
         dispatchLots={dispatchLots}
+        initialPack={superSearchPack}
+        initialQuery={superSearchQuery}
       />
 
       {/* MODAL 5: Historical Line & Rack Data Populator Modal */}

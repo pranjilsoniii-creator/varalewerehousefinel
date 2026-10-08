@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   X,
@@ -14,6 +14,9 @@ import {
   Tag,
   FileText,
   FileSpreadsheet,
+  RotateCcw,
+  Sparkles,
+  Box,
 } from 'lucide-react';
 import { BatteryPack, DispatchLot } from '../types';
 import { BATTERY_MODELS } from '../data/batteryCatalog';
@@ -24,6 +27,8 @@ interface SuperSearchModalProps {
   onClose: () => void;
   packs: BatteryPack[];
   dispatchLots: DispatchLot[];
+  initialPack?: BatteryPack | null;
+  initialQuery?: string;
 }
 
 export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
@@ -31,9 +36,27 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
   onClose,
   packs,
   dispatchLots,
+  initialPack,
+  initialQuery = '',
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPack, setSelectedPack] = useState<BatteryPack | null>(null);
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [selectedPack, setSelectedPack] = useState<BatteryPack | null>(initialPack || null);
+
+  // Sync with initial props when opened
+  useEffect(() => {
+    if (isOpen) {
+      if (initialPack) {
+        setSelectedPack(initialPack);
+        setSearchQuery(initialPack.packNumber);
+      } else if (initialQuery) {
+        setSearchQuery(initialQuery);
+        setSelectedPack(null);
+      } else {
+        setSearchQuery('');
+        setSelectedPack(null);
+      }
+    }
+  }, [isOpen, initialPack, initialQuery]);
 
   const lotMap = useMemo(() => {
     const map = new Map<string, DispatchLot>();
@@ -41,40 +64,70 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
     return map;
   }, [dispatchLots]);
 
+  // Clean sanitized query
+  const cleanQ = useMemo(() => {
+    return searchQuery.trim().toLowerCase().replace(/^#+/, '');
+  }, [searchQuery]);
+
   // Search matching packs
   const matchingPacks = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase().trim();
+    if (!cleanQ) return [];
     return packs.filter((p) => {
-      const matchPack = p.packNumber.toLowerCase().includes(q);
-      const matchDoc = p.documentNo?.toLowerCase().includes(q);
-      const matchDispDoc = p.dispatchDocNo?.toLowerCase().includes(q);
-      const matchLr = p.dispatchLrNo?.toLowerCase().includes(q);
-      const matchModel = p.packType.toLowerCase().includes(q);
-      return matchPack || matchDoc || matchDispDoc || matchLr || matchModel;
+      const matchPack = p.packNumber.toLowerCase().includes(cleanQ);
+      const matchDoc = p.documentNo?.toLowerCase().includes(cleanQ);
+      const matchDispDoc = p.dispatchDocNo?.toLowerCase().includes(cleanQ);
+      const matchLr = p.dispatchLrNo?.toLowerCase().includes(cleanQ);
+      const matchModel = p.packType.toLowerCase().includes(cleanQ);
+      const matchDealership = p.dealershipName?.toLowerCase().includes(cleanQ);
+      const matchTransport = p.transportName?.toLowerCase().includes(cleanQ);
+      const matchLocation = p.currentLocation?.toLowerCase().includes(cleanQ) || p.lineId?.toLowerCase().includes(cleanQ);
+      const matchChallan = p.challanPackNumber?.toLowerCase().includes(cleanQ);
+      return matchPack || matchDoc || matchDispDoc || matchLr || matchModel || matchDealership || matchTransport || matchLocation || matchChallan;
     });
-  }, [packs, searchQuery]);
+  }, [packs, cleanQ]);
+
+  // Exact matching pack
+  const exactMatch = useMemo(() => {
+    if (!cleanQ) return null;
+    return packs.find((p) => p.packNumber.toLowerCase() === cleanQ);
+  }, [packs, cleanQ]);
+
+  // Recent/Active packs for quick 1-click selection when search is empty
+  const quickPacks = useMemo(() => {
+    return packs.slice(0, 16);
+  }, [packs]);
 
   if (!isOpen) return null;
 
-  const pack = selectedPack || (matchingPacks.length === 1 ? matchingPacks[0] : null);
+  const pack = selectedPack || exactMatch || (matchingPacks.length === 1 ? matchingPacks[0] : null);
   const model = pack ? BATTERY_MODELS[pack.packType] : null;
   const lot = pack?.dispatchLotId ? lotMap.get(pack.dispatchLotId) : null;
 
-  const isDockInward = useMemo(() => {
-    if (!pack) return false;
-    if (pack.sourceType === 'LINE_POPULATE') return false;
-    if (pack.sourceType === 'DIRECT_DISPATCH') return false;
-    if (pack.documentNo?.startsWith('MATRIX-LOAD-')) return false;
-    if (pack.documentNo?.startsWith('LINE-LOAD-')) return false;
-    if (pack.documentNo?.startsWith('LINE-') && pack.documentNo?.includes('SLOT')) return false;
-    if (pack.documentNo === 'DIRECT-DISPATCH' || pack.documentNo === 'Line Direct Stock' || pack.documentNo === 'DIRECT-LINE-STOCK') return false;
-    return Boolean(pack.documentNo && pack.documentNo.trim() && pack.dealershipName && pack.dealershipName !== 'Varale B300 Line Stock' && pack.dealershipName !== 'Direct Line Setup');
-  }, [pack]);
+  const isDockInward = Boolean(
+    pack &&
+    pack.sourceType !== 'LINE_POPULATE' &&
+    pack.sourceType !== 'DIRECT_DISPATCH' &&
+    !pack.documentNo?.startsWith('MATRIX-LOAD-') &&
+    !pack.documentNo?.startsWith('LINE-LOAD-') &&
+    !(pack.documentNo?.startsWith('LINE-') && pack.documentNo?.includes('SLOT')) &&
+    pack.documentNo !== 'DIRECT-DISPATCH' &&
+    pack.documentNo !== 'Line Direct Stock' &&
+    pack.documentNo !== 'DIRECT-LINE-STOCK' &&
+    pack.documentNo?.trim() &&
+    pack.dealershipName &&
+    pack.dealershipName !== 'Varale B300 Line Stock' &&
+    pack.dealershipName !== 'Direct Line Setup'
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 space-y-6 my-8">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-5 my-8 text-xs text-slate-800"
+      >
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
@@ -82,11 +135,16 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
               <Search className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 font-display">
-                Universal Super Search & Pack Janamkundli
-              </h2>
-              <p className="text-xs text-slate-500">
-                Track full lifecycle: Receiving Dock → Storage Rack → Outward Dispatch Manifest.
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 font-display">
+                  Universal Super Search & Pack Janamkundli
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
+                  Live Passport
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Full Lifecycle: Receiving Dock ➔ Physical Line & Rack ➔ Outward Dispatch Manifest.
               </p>
             </div>
           </div>
@@ -110,10 +168,23 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
               setSearchQuery(e.target.value);
               setSelectedPack(null);
             }}
-            placeholder="Search by Pack Serial Number, Document No, LR No, Vehicle, or Line..."
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none shadow-xs"
+            placeholder="Search by Pack Number (e.g. 5284, 101), Document No, LR No, Vehicle, or Line..."
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-3 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none shadow-xs"
             autoFocus
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedPack(null);
+              }}
+              className="absolute right-3 top-3 text-slate-400 hover:text-slate-700 p-0.5 rounded transition cursor-pointer"
+              title="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Quick Matching Chips if multiple found */}
@@ -143,7 +214,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
             {/* Pack Title Header Banner */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-blue-950 text-white flex flex-wrap items-center justify-between gap-3 shadow-md">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center font-mono-code font-extrabold text-lg text-blue-300">
+                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center font-mono-code font-extrabold text-lg text-blue-300">
                   #{pack.packNumber}
                 </div>
                 <div>
@@ -156,9 +227,14 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                         NO-PLATE
                       </span>
                     )}
+                    {pack.isDifferentSerial && (
+                      <span className="px-1.5 py-0.2 rounded bg-purple-300 text-purple-950 font-extrabold text-[9px]">
+                        DIFF-NO
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-blue-200 font-mono-code">
-                    Model: {pack.packType} • Source: {isDockInward ? 'Dock Inward Delivery Challan' : 'Direct Line Matrix (Existing Warehouse Stock)'}
+                  <p className="text-[11px] text-blue-200 font-mono-code mt-0.5">
+                    Model: {pack.packType} • Source: {isDockInward ? 'Dock Inward Delivery Challan' : 'Direct Line Matrix Stock'}
                   </p>
                 </div>
               </div>
@@ -173,7 +249,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                       : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
                   }`}
                 >
-                  {pack.status === 'DISPATCHED' ? 'Dispatched to EV Plant' : pack.status === 'IN_STORAGE' ? 'Stored in Rack' : 'In Inward Area'}
+                  {pack.status === 'DISPATCHED' ? 'Dispatched to EV Plant' : pack.status === 'IN_STORAGE' ? 'Stored in Rack' : 'In Inward Dock'}
                 </span>
               </div>
             </div>
@@ -195,7 +271,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                   <div className="space-y-1 text-[11px]">
                     <p>
                       <span className="text-slate-500">Document No:</span>{' '}
-                      <span className="font-mono-code font-bold text-slate-900">{pack.documentNo}</span>
+                      <span className="font-mono-code font-bold text-slate-900">{pack.documentNo || '—'}</span>
                     </p>
                     <p>
                       <span className="text-slate-500">Received Date:</span>{' '}
@@ -203,11 +279,15 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                     </p>
                     <p>
                       <span className="text-slate-500">Dealership:</span>{' '}
-                      <span className="font-medium text-slate-900">{pack.dealershipName}</span>
+                      <span className="font-medium text-slate-900">{pack.dealershipName || '—'}</span>
                     </p>
                     <p>
                       <span className="text-slate-500">Location/State:</span>{' '}
                       <span className="text-slate-800">{pack.receivedState || 'Maharashtra'}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Transporter:</span>{' '}
+                      <span className="font-medium text-slate-900">{pack.transportName || '—'}</span>
                     </p>
                     <p>
                       <span className="text-slate-500">Inwarded By:</span>{' '}
@@ -278,7 +358,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                   </p>
                   <p>
                     <span className="text-slate-500">Current Area:</span>{' '}
-                    <span className="font-medium text-slate-900">{pack.currentLocation || pack.locationArea}</span>
+                    <span className="font-medium text-slate-900">{pack.currentLocation || pack.locationArea || 'Storage'}</span>
                   </p>
                 </div>
               </div>
@@ -341,30 +421,57 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                         <span className="font-mono-code text-slate-400">{formatIndianDate(mov.timestamp)}</span>
                       </div>
                       <p className="text-[11px] text-slate-600">
-                        {mov.fromLocation.replace(/\\\$\\rightarrow\\\$/g, '→').replace(/\$\\rightarrow\$/g, '→')} → {mov.toLocation} (By: {mov.movedBy})
+                        {(mov.fromLocation || '').replace(/\\\$\\rightarrow\\\$/g, '➔').replace(/\$\\rightarrow\$/g, '➔')} ➔ {mov.toLocation || ''} (By: {mov.movedBy || 'Staff'})
                       </p>
                     </div>
                   ))
                 ) : (
                   <div className="text-[11px] text-slate-500">
                     {isDockInward
-                      ? `Initial dock registration under Document #${pack.documentNo}.`
+                      ? `Initial dock registration under Document #${pack.documentNo || 'Inward'}.`
                       : `Initial line allocation in Line ${pack.lineId || 'Storage'}.`}
                   </div>
                 )}
               </div>
             </div>
           </div>
+        ) : cleanQ ? (
+          <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-2xl space-y-2">
+            <p>No battery pack found matching "{searchQuery}".</p>
+            <p className="text-[11px] text-slate-400">Please check the pack serial number or document number.</p>
+          </div>
         ) : (
-          searchQuery.trim() && matchingPacks.length === 0 && (
-            <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-2xl">
-              No battery pack found matching "{searchQuery}". Please check the pack serial number.
+          /* QUICK SELECT FROM RECENT INVENTORY */
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                <Box className="w-3.5 h-3.5 text-blue-600" /> Quick Select Pack to View Janamkundli:
+              </span>
+              <span className="text-[11px] text-slate-400 font-mono-code">{packs.length} total packs</span>
             </div>
-          )
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1">
+              {quickPacks.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelectedPack(p)}
+                  className="p-2.5 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-400 rounded-xl text-left transition cursor-pointer shadow-2xs group"
+                >
+                  <div className="font-mono-code font-bold text-slate-900 group-hover:text-blue-700 text-xs">
+                    #{p.packNumber}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                    {formatPackDisplayName(p.packType)} • {p.lineId ? `Line ${p.lineId}` : 'Dock'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Modal Footer with Close Button */}
-        <div className="flex justify-end pt-3 border-t border-slate-100">
+        <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+          <span className="text-[11px] text-slate-400">Tata AutoComp Systems Limited</span>
           <button
             type="button"
             onClick={onClose}

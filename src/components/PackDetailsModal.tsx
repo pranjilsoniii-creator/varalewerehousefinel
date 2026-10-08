@@ -17,6 +17,7 @@ import {
   FileCheck,
   Building,
   User,
+  Search,
 } from 'lucide-react';
 import { BatteryPack } from '../types';
 import { BATTERY_MODELS } from '../data/batteryCatalog';
@@ -24,16 +25,20 @@ import { BATTERY_MODELS } from '../data/batteryCatalog';
 interface PackDetailsModalProps {
   pack: BatteryPack | null;
   onClose: () => void;
-  onSelectForMove: (pack: BatteryPack) => void;
-  onAddToDispatch: (pack: BatteryPack) => void;
-  onNavigateToLine: (lineId: string) => void;
+  onSelectForMove?: (pack: BatteryPack) => void;
+  onAddToDispatch?: (pack: BatteryPack) => void;
+  onSendToDispatch?: (pack: BatteryPack) => void;
+  onNavigateToLine?: (lineId: string) => void;
+  onOpenJanamkundli?: (pack: BatteryPack) => void;
 }
 
 export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
   pack,
   onClose,
   onAddToDispatch,
+  onSendToDispatch,
   onNavigateToLine,
+  onOpenJanamkundli,
 }) => {
   if (!pack) return null;
 
@@ -309,19 +314,36 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg font-semibold border border-slate-200 text-xs cursor-pointer"
-          >
-            Close
-          </button>
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg font-semibold border border-slate-200 text-xs cursor-pointer"
+            >
+              Close
+            </button>
+            {onOpenJanamkundli && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenJanamkundli(pack);
+                }}
+                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
+                title="Open full Janamkundli lifecycle & passport"
+              >
+                <Search className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Open Janamkundli 📜</span>
+              </button>
+            )}
+          </div>
 
           {!isDispatched && !isPending && (
             <button
               onClick={() => {
                 onClose();
-                onAddToDispatch(pack);
+                if (onAddToDispatch) onAddToDispatch(pack);
+                else if (onSendToDispatch) onSendToDispatch(pack);
               }}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer text-xs shadow-xs"
             >
