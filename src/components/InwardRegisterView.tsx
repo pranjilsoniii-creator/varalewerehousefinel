@@ -43,12 +43,23 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [modelFilter, setModelFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'INWARD_AREA' | 'IN_STORAGE' | 'PENDING_APPROVAL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'INWARD_AREA' | 'IN_STORAGE' | 'DISPATCHED' | 'PENDING_APPROVAL'>('ALL');
   
   // Date Range Filter: 'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'CUSTOM'
   const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'CUSTOM'>('ALL');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  // Helper for consistent local YYYY-MM-DD string
+  const getLocalDateStr = (d?: string | Date) => {
+    if (!d) return '';
+    const dt = typeof d === 'string' ? new Date(d) : d;
+    if (isNaN(dt.getTime())) return typeof d === 'string' ? d.slice(0, 10) : '';
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   // Editing Modal State
   const [editingPack, setEditingPack] = useState<BatteryPack | null>(null);
@@ -62,57 +73,47 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [editChallanPackNumber, setEditChallanPackNumber] = useState('');
   const [editMismatchReason, setEditMismatchReason] = useState('');
 
-  // STRICT ISOLATION & HIERARCHICAL WORKFLOW:
-  // 1. SuperAdmin (Pranjil): Sees 100% of all inward records (Pending, Approved, In Storage)
-  // 2. Supervisor (Vikas, Nitin): Sees all inward records to inspect, approve, or reject
-  // 3. Manager (Suresh Chavan): Sees records ONLY AFTER Supervisor approval (plus manager/admin created records)
-  // 4. Employee (Deepak, Jitendra): Sees their own submitted drafts + approved warehouse inventory
+  // 100% PERMANENT INWARD DOCK LEDGER PRESERVATION:
+  // All packs received through Inward Dock are permanently preserved here,
+  // even after subsequent allocation to storage lines or outward dispatch to EV plants.
   const inwardOnlyPacks = useMemo(() => {
     return packs.filter((p) => {
-      if (p.sourceType === 'LINE_POPULATE' || p.sourceType === 'DIRECT_DISPATCH') return false;
-      if (p.documentNo === 'DIRECT-DISPATCH') return false;
-      if (p.dealershipName === 'Direct Plant Dispatch') return false;
+      // Exclude direct populate dummy lines
+      if (p.sourceType === 'LINE_POPULATE') return false;
+      if (p.sourceType === 'DIRECT_DISPATCH' && !p.inwardDate && (!p.documentNo || p.documentNo === 'DIRECT-DISPATCH')) return false;
+      if (p.documentNo === 'DIRECT-DISPATCH' && !p.inwardDate) return false;
+      if (p.dealershipName === 'Direct Plant Dispatch' && !p.inwardDate) return false;
+      if (p.documentNo?.startsWith('MATRIX-LOAD-') || p.documentNo?.startsWith('LINE-LOAD-')) return false;
 
-      if (isSuperAdmin) return true;
-      if (isSupervisor) return true;
-
-      if (isManager) {
-        // Manager only sees packs that are APPROVED by supervisor or created by Manager/SuperAdmin
-        const isApproved = p.status !== 'PENDING_APPROVAL' || Boolean(p.inwardApprovedBy);
-        const isCreatedByManager = p.inwardBy?.toLowerCase().includes('suresh') || p.inwardBy?.toLowerCase().includes('pranjil');
-        return isApproved || isCreatedByManager;
-      }
-
-      if (isEmployee) {
-        const myName = (currentUser?.name || '').toLowerCase();
-        const myUsername = (currentUser?.username || '').toLowerCase();
-        const packOwner = (p.inwardBy || '').toLowerCase();
-        const isMyEntry = packOwner.includes(myName) || packOwner.includes(myUsername);
-        const isApproved = p.status !== 'PENDING_APPROVAL';
-        return isMyEntry || isApproved;
-      }
-
-      return true;
+      // Retain all packs that have Inward receipts, document numbers, or inward dock history
+      return Boolean(p.documentNo || p.inwardDate || p.dealershipName || p.sourceType === 'INWARD');
     });
-  }, [packs, isSuperAdmin, isSupervisor, isManager, isEmployee, currentUser]);
+  }, [packs]);
 
   // Count of total pending packs in warehouse waiting for supervisor approval
   const totalPendingInwardsCount = useMemo(() => {
     return packs.filter((p) => p.status === 'PENDING_APPROVAL' && p.sourceType !== 'LINE_POPULATE').length;
   }, [packs]);
 
-  // Today Date String
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Today Date String (Local timezone aware)
+  const todayStr = useMemo(() => getLocalDateStr(new Date()), []);
 
-  // Series Breakdown for Inward Packs
+  // Series Breakdown & Stock Status for Inward Packs
   const inwardSeriesSummary = useMemo(() => {
     let k1Count = 0;
     let k2Count = 0;
     let limberCount = 0;
     let pendingCount = 0;
     let diffCount = 0;
+    let inWarehouseCount = 0;
+    let dispatchedCount = 0;
 
     inwardOnlyPacks.forEach((p) => {
+      if (p.status === 'DISPATCHED') {
+        dispatchedCount += 1;
+      } else {
+        inWarehouseCount += 1;
+      }
       if (p.status === 'PENDING_APPROVAL') pendingCount += 1;
       if (p.isDifferentSerial) diffCount += 1;
       if (p.packType.startsWith('Kanger1.0')) k1Count += 1;
@@ -122,6 +123,8 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
     return {
       total: inwardOnlyPacks.length,
+      inWarehouse: inWarehouseCount,
+      dispatched: dispatchedCount,
       k1: k1Count,
       k2: k2Count,
       limber: limberCount,
@@ -146,7 +149,8 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
         const matchesDealer = p.dealershipName?.toLowerCase().includes(q);
         const matchesModel = p.packType.toLowerCase().includes(q);
         const matchesReason = p.mismatchReason?.toLowerCase().includes(q);
-        if (!matchesPack && !matchesChallan && !matchesDoc && !matchesDealer && !matchesModel && !matchesReason) return false;
+        const matchesCustomer = p.dispatchToCustomer?.toLowerCase().includes(q);
+        if (!matchesPack && !matchesChallan && !matchesDoc && !matchesDealer && !matchesModel && !matchesReason && !matchesCustomer) return false;
       }
 
       // 2. Model Filter
@@ -155,13 +159,17 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       }
 
       // 3. Status Filter
-      if (statusFilter !== 'ALL' && p.status !== statusFilter) {
-        return false;
+      if (statusFilter !== 'ALL') {
+        if (statusFilter === 'DISPATCHED' && p.status !== 'DISPATCHED') return false;
+        if (statusFilter === 'PENDING_APPROVAL' && p.status !== 'PENDING_APPROVAL') return false;
+        if (statusFilter === 'INWARD_AREA' && p.status !== 'INWARD_AREA') return false;
+        if (statusFilter === 'IN_STORAGE' && p.status !== 'IN_STORAGE') return false;
       }
 
       // 4. Date Range Filter
+      const packDateStr = getLocalDateStr(p.inwardDate || p.scannedAt);
       if (dateFilter === 'TODAY') {
-        if (!p.inwardDate || p.inwardDate.slice(0, 10) !== todayStr) return false;
+        if (!packDateStr || packDateStr !== todayStr) return false;
       } else if (dateFilter === '7_DAYS') {
         if (!p.inwardDate) return false;
         const packTime = new Date(p.inwardDate).getTime();
@@ -171,8 +179,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
         const packTime = new Date(p.inwardDate).getTime();
         if (now.getTime() - packTime > ms30Days) return false;
       } else if (dateFilter === 'CUSTOM') {
-        if (!p.inwardDate) return false;
-        const packDateStr = p.inwardDate.slice(0, 10);
+        if (!packDateStr) return false;
         if (customStartDate && packDateStr < customStartDate) return false;
         if (customEndDate && packDateStr > customEndDate) return false;
       }
@@ -313,23 +320,29 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
             Inward Shipment Register & Dock Ledger
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Strict inward dock delivery challans ledger with complete traceability.
+            Strict inward dock delivery challans ledger with complete traceability (Preserves all inward receipts).
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono-code font-bold text-slate-800">
+            Total Inwarded: <span className="text-blue-700 font-extrabold">{inwardSeriesSummary.total}</span>
+          </div>
+          <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-mono-code font-bold text-emerald-800">
+            In Warehouse: <span className="text-emerald-700 font-extrabold">{inwardSeriesSummary.inWarehouse}</span>
+          </div>
+          <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-mono-code font-bold text-blue-800">
+            Dispatched: <span className="text-blue-700 font-extrabold">{inwardSeriesSummary.dispatched}</span>
+          </div>
           <button
             type="button"
             onClick={handleExportExcel}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer ml-1"
             title="Export currently visible filtered records to Excel spreadsheet"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Export to Excel ({filteredPacks.length})</span>
           </button>
-          <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono-code font-bold text-slate-800">
-            Total Inwarded: <span className="text-blue-700">{inwardOnlyPacks.length}</span>
-          </div>
         </div>
       </div>
 
@@ -382,41 +395,53 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       )}
 
       {/* Inward Series KPI Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
-          <p className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Total Inward Packs</p>
-          <p className="text-2xl font-extrabold font-mono-code text-slate-900">{inwardSeriesSummary.total}</p>
-          <p className="text-[11px] text-slate-400">Dock Delivery Challans</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-xs">
+        <div className="bg-white border-2 border-blue-300 p-3.5 rounded-xl shadow-2xs space-y-1">
+          <p className="text-blue-900 font-bold uppercase tracking-wider text-[10px]">Total Inwarded</p>
+          <p className="text-2xl font-black font-mono-code text-blue-800">{inwardSeriesSummary.total}</p>
+          <p className="text-[10px] text-slate-400 font-medium">100% Inward Ledger</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
-          <p className="text-blue-600 font-bold uppercase tracking-wider text-[10px]">Kanger 1.0 Series</p>
-          <p className="text-2xl font-extrabold font-mono-code text-blue-700">{inwardSeriesSummary.k1}</p>
-          <p className="text-[11px] text-slate-400">AIO / Gen3 / CKD / FBU</p>
+        <div className="bg-white border border-emerald-300 p-3.5 rounded-xl shadow-2xs space-y-1">
+          <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">In Warehouse</p>
+          <p className="text-2xl font-black font-mono-code text-emerald-700">{inwardSeriesSummary.inWarehouse}</p>
+          <p className="text-[10px] text-emerald-600 font-medium">Available in Stock</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-blue-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+          <p className="text-blue-600 font-bold uppercase tracking-wider text-[10px]">Dispatched</p>
+          <p className="text-2xl font-black font-mono-code text-blue-600">{inwardSeriesSummary.dispatched}</p>
+          <p className="text-[10px] text-blue-500 font-medium">Outward to Plants</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+          <p className="text-slate-600 font-bold uppercase tracking-wider text-[10px]">Kanger 1.0 Series</p>
+          <p className="text-2xl font-extrabold font-mono-code text-slate-800">{inwardSeriesSummary.k1}</p>
+          <p className="text-[10px] text-slate-400">AIO / Gen3 / CKD / FBU</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-2xs space-y-1">
           <p className="text-purple-600 font-bold uppercase tracking-wider text-[10px]">Kanger 2.0 Series</p>
           <p className="text-2xl font-extrabold font-mono-code text-purple-700">{inwardSeriesSummary.k2}</p>
-          <p className="text-[11px] text-slate-400">Kanger 2.0</p>
+          <p className="text-[10px] text-slate-400">Kanger 2.0</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-2xs space-y-1">
           <p className="text-emerald-600 font-bold uppercase tracking-wider text-[10px]">Limber Series</p>
           <p className="text-2xl font-extrabold font-mono-code text-emerald-700">{inwardSeriesSummary.limber}</p>
-          <p className="text-[11px] text-slate-400">Limber Series</p>
+          <p className="text-[10px] text-slate-400">Limber Series</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-amber-200 p-3.5 rounded-xl shadow-2xs space-y-1">
           <p className="text-amber-600 font-bold uppercase tracking-wider text-[10px]">Pending Approval</p>
           <p className="text-2xl font-extrabold font-mono-code text-amber-600">{inwardSeriesSummary.pending}</p>
-          <p className="text-[11px] text-slate-400">Supervisor Check</p>
+          <p className="text-[10px] text-slate-400">Supervisor Check</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs space-y-1">
-          <p className="text-purple-700 font-bold uppercase tracking-wider text-[10px]">Diff No / Mismatch</p>
+        <div className="bg-white border border-purple-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+          <p className="text-purple-700 font-bold uppercase tracking-wider text-[10px]">Diff / Mismatch</p>
           <p className="text-2xl font-extrabold font-mono-code text-purple-700">{inwardSeriesSummary.diff}</p>
-          <p className="text-[11px] text-slate-400">Challan Mismatches</p>
+          <p className="text-[10px] text-slate-400">Challan Mismatches</p>
         </div>
       </div>
 
@@ -456,9 +481,10 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
               onChange={(e) => setStatusFilter(e.target.value as any)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="INWARD_AREA">Inward Area</option>
-              <option value="IN_STORAGE">Allocated to Lines</option>
+              <option value="ALL">All Statuses (In Stock & Dispatched)</option>
+              <option value="INWARD_AREA">In Inward Dock</option>
+              <option value="IN_STORAGE">Allocated to Lines / Storage</option>
+              <option value="DISPATCHED">Dispatched Outward</option>
               <option value="PENDING_APPROVAL">Pending Approval</option>
             </select>
           </div>
@@ -642,17 +668,31 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                     </td>
                     <td className="p-3">
                       {pack.status === 'DISPATCHED' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                          <Truck className="w-3 h-3" /> Dispatched
-                        </span>
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300">
+                            <Truck className="w-3 h-3 text-blue-600" /> Dispatched
+                          </span>
+                          {pack.dispatchToCustomer && (
+                            <div className="text-[10px] text-slate-600 font-medium truncate max-w-[140px]" title={pack.dispatchToCustomer}>
+                              To: {pack.dispatchToCustomer}
+                            </div>
+                          )}
+                          {pack.dispatchedAt && (
+                            <div className="text-[10px] text-slate-400 font-mono-code">
+                              {new Date(pack.dispatchedAt).toLocaleDateString('en-IN')}
+                            </div>
+                          )}
+                        </div>
                       ) : isPending ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                           <Clock className="w-3 h-3" /> Pending Approval
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3" /> {pack.locationArea || 'Inward Area'}
-                        </span>
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3" /> {pack.status === 'IN_STORAGE' ? `Line ${pack.lineId || 1} (R-${pack.rackNumber || 1})` : (pack.locationArea || 'Inward Area')}
+                          </span>
+                        </div>
                       )}
                     </td>
                     <td className="p-3 text-right">

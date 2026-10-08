@@ -65,7 +65,9 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
     const modelName = p.packType === 'Limber_Non_Ais' || p.packType === 'Limber_Ais' 
       ? 'Limber_Ais' 
       : (model?.name || p.packType);
-    const statusLabel = p.status === 'PENDING_APPROVAL'
+    const statusLabel = p.status === 'DISPATCHED'
+      ? `Dispatched (${p.dispatchToCustomer || 'EV Plant'})`
+      : p.status === 'PENDING_APPROVAL'
       ? 'Pending Approval'
       : p.status === 'IN_STORAGE'
       ? `Allocated (Line ${p.lineId || 1})`
@@ -83,9 +85,13 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
       'Inward Date': p.inwardDate ? new Date(p.inwardDate).toLocaleString('en-IN') : '—',
       'Tata Inward Stamp Verified': p.hasInwardStamp ? 'YES' : 'NO',
       'Current Status': statusLabel,
-      'Location Area': p.status === 'IN_STORAGE'
+      'Location Area': p.status === 'DISPATCHED'
+        ? `Dispatched (${p.dispatchToCustomer || 'EV Plant'})`
+        : p.status === 'IN_STORAGE'
         ? `Line ${p.lineId} (R-${p.rackNumber || 1}, Slot ${p.rackSlot || 1})`
         : (p.locationArea || 'Inward Area'),
+      'Dispatched Date': p.dispatchedAt ? new Date(p.dispatchedAt).toLocaleString('en-IN') : '—',
+      'Dispatched Customer': p.dispatchToCustomer || '—',
       'Inwarded By': p.inwardBy || '—',
       'Approved By': p.inwardApprovedBy || '—',
     };

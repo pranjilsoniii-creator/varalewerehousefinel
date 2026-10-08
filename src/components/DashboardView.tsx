@@ -74,7 +74,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   // Date filter state
   const [dateFilter, setDateFilter] = useState<DateFilterType>('TODAY');
-  const [specificDate, setSpecificDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [specificDate, setSpecificDate] = useState<string>(() => {
+    const dt = new Date();
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
@@ -82,20 +88,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [activeTableTab, setActiveTableTab] = useState<'INWARD' | 'DISPATCH' | 'MOVEMENT_MATRIX'>('MOVEMENT_MATRIX');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Helper for consistent local YYYY-MM-DD string
+  const getLocalDateStr = (d?: string | Date) => {
+    if (!d) return '';
+    const dt = typeof d === 'string' ? new Date(d) : d;
+    if (isNaN(dt.getTime())) return typeof d === 'string' ? d.slice(0, 10) : '';
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Today & Yesterday Strings
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayStr = useMemo(() => getLocalDateStr(new Date()), []);
   const yesterdayStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
+    return getLocalDateStr(d);
   }, []);
 
   // Filter Helper Function for dates
   const isDateInFilter = (timestampStr?: string) => {
     if (!timestampStr) return false;
+    const itemDateStr = getLocalDateStr(timestampStr);
     const itemDate = new Date(timestampStr);
-    if (isNaN(itemDate.getTime())) return false;
-    const itemDateStr = itemDate.toISOString().slice(0, 10);
+    if (!itemDateStr || isNaN(itemDate.getTime())) return false;
 
     if (dateFilter === 'ALL_TIME') return true;
 
