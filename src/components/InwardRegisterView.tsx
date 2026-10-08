@@ -29,6 +29,7 @@ interface InwardRegisterViewProps {
   onAllocatePackToRack?: (pack: BatteryPack) => void;
   onDeletePack?: (packId: string) => void;
   onEditPack?: (updatedPack: BatteryPack) => void;
+  onBatchEditPacks?: (updatedPacks: BatteryPack[]) => void;
 }
 
 export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
@@ -38,6 +39,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   onAllocatePackToRack,
   onDeletePack,
   onEditPack,
+  onBatchEditPacks,
 }) => {
   const { currentUser, isSuperAdmin, isManager, isSupervisor, isEmployee } = useAuth();
 
@@ -49,6 +51,11 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'CUSTOM'>('ALL');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  // Multi-Select Pack IDs for Batch Actions
+  const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
+  const [isBulkDateModalOpen, setIsBulkDateModalOpen] = useState(false);
+  const [bulkNewReceivedDate, setBulkNewReceivedDate] = useState('');
 
   // Helper for consistent local YYYY-MM-DD string
   const getLocalDateStr = (d?: string | Date) => {
@@ -65,6 +72,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [editingPack, setEditingPack] = useState<BatteryPack | null>(null);
   const [editPackNumber, setEditPackNumber] = useState('');
   const [editPackType, setEditPackType] = useState<BatteryPackType>('Kanger1.0_AIO');
+  const [editInwardDate, setEditInwardDate] = useState('');
   const [editDocumentNo, setEditDocumentNo] = useState('');
   const [editDealership, setEditDealership] = useState('');
   const [editReceivedState, setEditReceivedState] = useState('');
@@ -72,6 +80,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [editIsDifferentSerial, setEditIsDifferentSerial] = useState(false);
   const [editChallanPackNumber, setEditChallanPackNumber] = useState('');
   const [editMismatchReason, setEditMismatchReason] = useState('');
+  const [applyDateToEntireChallan, setApplyDateToEntireChallan] = useState(true);
 
   // 100% PERMANENT INWARD DOCK LEDGER PRESERVATION:
   // All packs received through Inward Dock are permanently preserved here,
@@ -235,6 +244,59 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     );
   };
 
+  // Find all packs that share the same Challan / Document number
+  const matchingChallanPacks = useMemo(() => {
+    if (!editingPack || !editDocumentNo.trim()) return [];
+    const doc = editDocumentNo.trim().toLowerCase();
+    return packs.filter((p) => p.documentNo && p.documentNo.trim().toLowerCase() === doc);
+  }, [editingPack, editDocumentNo, packs]);
+
+  // Multi-Select Handlers
+  const toggleSelectPack = (packId: string) => {
+    setSelectedPackIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(packId)) next.delete(packId);
+      else next.add(packId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = () => {
+    if (selectedPackIds.size === filteredPacks.length && filteredPacks.length > 0) {
+      setSelectedPackIds(new Set());
+    } else {
+      setSelectedPackIds(new Set(filteredPacks.map((p) => p.id)));
+    }
+  };
+
+  const handleApplyBulkDate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkNewReceivedDate) {
+      alert('Please select a valid Received Date.');
+      return;
+    }
+    const selectedPacks = packs.filter((p) => selectedPackIds.has(p.id));
+    if (selectedPacks.length === 0) return;
+
+    const timeStr = `${new Date().toTimeString().slice(0, 8)}.000Z`;
+    const newDateIso = `${bulkNewReceivedDate}T${timeStr}`;
+
+    const updatedPacks: BatteryPack[] = selectedPacks.map((p) => ({
+      ...p,
+      inwardDate: newDateIso,
+    }));
+
+    if (onBatchEditPacks) {
+      onBatchEditPacks(updatedPacks);
+    } else if (onEditPack) {
+      updatedPacks.forEach((p) => onEditPack(p));
+    }
+
+    setIsBulkDateModalOpen(false);
+    setSelectedPackIds(new Set());
+    alert(`⚡ Successfully updated Received Date to ${bulkNewReceivedDate} for ${updatedPacks.length} selected pack(s)!`);
+  };
+
   // Handle Edit Click
   const handleStartEdit = (pack: BatteryPack) => {
     const isApproved = pack.status !== 'PENDING_APPROVAL';
@@ -246,6 +308,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     setEditingPack(pack);
     setEditPackNumber(pack.packNumber);
     setEditPackType(pack.packType);
+    const rawDate = pack.inwardDate || pack.scannedAt || new Date().toISOString();
+    const formattedDate = getLocalDateStr(rawDate) || new Date().toISOString().slice(0, 10);
+    setEditInwardDate(formattedDate);
     setEditDocumentNo(pack.documentNo || '');
     setEditDealership(pack.dealershipName || '');
     setEditReceivedState(pack.receivedState || '');
@@ -253,6 +318,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     setEditIsDifferentSerial(Boolean(pack.isDifferentSerial));
     setEditChallanPackNumber(pack.challanPackNumber || '');
     setEditMismatchReason(pack.mismatchReason || '');
+    setApplyDateToEntireChallan(true); // Default to true as user requested
   };
 
   const handleEditDealershipChange = (val: string) => {
@@ -273,10 +339,20 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       return;
     }
 
+    // Compose new inward date ISO string
+    let newDateIso = editInwardDate;
+    if (editInwardDate) {
+      const existingTime = editingPack.inwardDate && editingPack.inwardDate.includes('T')
+        ? editingPack.inwardDate.split('T')[1]
+        : `${new Date().toTimeString().slice(0, 8)}.000Z`;
+      newDateIso = `${editInwardDate}T${existingTime}`;
+    }
+
     const updated: BatteryPack = {
       ...editingPack,
       packNumber: editPackNumber.trim(),
       packType: editPackType,
+      inwardDate: newDateIso || editingPack.inwardDate,
       documentNo: editDocumentNo.trim(),
       dealershipName: editDealership.trim(),
       receivedState: editReceivedState.trim(),
@@ -286,8 +362,28 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       mismatchReason: editIsDifferentSerial ? editMismatchReason.trim() : undefined,
     };
 
-    if (onEditPack) {
-      onEditPack(updated);
+    if (applyDateToEntireChallan && matchingChallanPacks.length > 1) {
+      // Update ALL packs in this document/challan
+      const allUpdatedPacks: BatteryPack[] = matchingChallanPacks.map((p) => {
+        if (p.id === updated.id) return updated;
+        return {
+          ...p,
+          inwardDate: newDateIso || p.inwardDate,
+          documentNo: editDocumentNo.trim() || p.documentNo,
+          dealershipName: editDealership.trim() || p.dealershipName,
+          receivedState: editReceivedState.trim() || p.receivedState,
+        };
+      });
+
+      if (onBatchEditPacks) {
+        onBatchEditPacks(allUpdatedPacks);
+      } else if (onEditPack) {
+        allUpdatedPacks.forEach((p) => onEditPack(p));
+      }
+    } else {
+      if (onEditPack) {
+        onEditPack(updated);
+      }
     }
     setEditingPack(null);
   };
@@ -576,24 +672,57 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       {/* Ledger Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
-            Inward Ledger Records ({filteredPacks.length} Packs)
-          </h3>
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            title="Download visible filtered packs as Excel spreadsheet"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Download Excel ({filteredPacks.length})</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+              Inward Ledger Records ({filteredPacks.length} Packs)
+            </h3>
+            {selectedPackIds.size > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-bold">
+                {selectedPackIds.size} Selected
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {selectedPackIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkNewReceivedDate(todayStr);
+                  setIsBulkDateModalOpen(true);
+                }}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs animate-fadeIn"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Change Received Date ({selectedPackIds.size})</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Download visible filtered packs as Excel spreadsheet"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Download Excel ({filteredPacks.length})</span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                <th className="p-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredPacks.length > 0 && selectedPackIds.size === filteredPacks.length}
+                    onChange={toggleSelectAllVisible}
+                    className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+                    title="Select / Deselect all visible packs"
+                  />
+                </th>
                 <th className="p-3">#</th>
                 <th className="p-3">Pack Number</th>
                 <th className="p-3">Product Name</th>
@@ -602,7 +731,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                 <th className="p-3">Doc / Challan No</th>
                 <th className="p-3">Dealership / Source</th>
                 <th className="p-3">State / City</th>
-                <th className="p-3">Inward Date</th>
+                <th className="p-3">Received Date</th>
                 <th className="p-3">Status</th>
                 <th className="p-3 text-right">Actions</th>
               </tr>
@@ -612,9 +741,18 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                 const model = BATTERY_MODELS[pack.packType];
                 const { productName, productType } = getProductNameAndType(pack.packType);
                 const isPending = pack.status === 'PENDING_APPROVAL';
+                const isSelected = selectedPackIds.has(pack.id);
 
                 return (
-                  <tr key={pack.id} className="hover:bg-slate-50/80 transition">
+                  <tr key={pack.id} className={`hover:bg-slate-50/80 transition ${isSelected ? 'bg-blue-50/50' : ''}`}>
+                    <td className="p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectPack(pack.id)}
+                        className="w-3.5 h-3.5 rounded text-blue-600 cursor-pointer"
+                      />
+                    </td>
                     <td className="p-3 font-mono-code text-slate-400">{index + 1}</td>
                     <td className="p-3">
                       <div className="space-y-0.5">
@@ -663,7 +801,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                     <td className="p-3 font-mono-code text-slate-900 font-bold">{pack.documentNo || '—'}</td>
                     <td className="p-3 font-medium text-slate-800 max-w-[180px] truncate">{pack.dealershipName || '—'}</td>
                     <td className="p-3 text-slate-600">{pack.receivedState || 'Maharashtra'}</td>
-                    <td className="p-3 font-mono-code text-slate-600">
+                    <td className="p-3 font-mono-code font-bold text-slate-800">
                       {pack.inwardDate ? new Date(pack.inwardDate).toLocaleDateString('en-IN') : '—'}
                     </td>
                     <td className="p-3">
@@ -711,7 +849,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                           type="button"
                           onClick={() => handleStartEdit(pack)}
                           className="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50 transition cursor-pointer"
-                          title="Edit Inward Entry"
+                          title="Edit Inward Entry & Received Date"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -744,12 +882,107 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
         </div>
       </div>
 
+      {/* Floating Bottom Selection Bar */}
+      {selectedPackIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-700 animate-fadeIn text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
+            <span className="font-bold">
+              {selectedPackIds.size} pack(s) selected
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-slate-700" />
+
+          <button
+            type="button"
+            onClick={() => {
+              setBulkNewReceivedDate(todayStr);
+              setIsBulkDateModalOpen(true);
+            }}
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Change Received Date</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedPackIds(new Set())}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl transition cursor-pointer"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      {/* Bulk Change Received Date Modal */}
+      {isBulkDateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm font-display">Batch Change Received Date</h3>
+                  <p className="text-[11px] text-slate-500">Updating {selectedPackIds.size} selected packs</p>
+                </div>
+              </div>
+              <button onClick={() => setIsBulkDateModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleApplyBulkDate} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" /> New Received / Inward Date
+                </label>
+                <input
+                  type="date"
+                  value={bulkNewReceivedDate}
+                  onChange={(e) => setBulkNewReceivedDate(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none text-sm"
+                  required
+                />
+              </div>
+
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-[11px]">
+                ⚡ <strong>Instant Multi-Pack Update</strong>: Selected {selectedPackIds.size} packs ki inward received date turant update hokar Supabase Cloud mein sync ho jayegi.
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDateModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Update {selectedPackIds.size} Packs</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Edit Inward Pack Modal */}
       {editingPack && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base font-display">Edit Inward Pack #{editingPack.packNumber}</h3>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base font-display">Edit Inward Pack #{editingPack.packNumber}</h3>
+                <p className="text-[11px] text-slate-500">Modify serial number, received date, challan, or dealership</p>
+              </div>
               <button onClick={() => setEditingPack(null)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
@@ -765,6 +998,42 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-mono-code font-bold text-slate-900"
                   required
                 />
+              </div>
+
+              {/* Received Date Input */}
+              <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2">
+                <div>
+                  <label className="block font-bold text-blue-950 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" /> Received / Inward Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editInwardDate}
+                    onChange={(e) => setEditInwardDate(e.target.value)}
+                    className="w-full bg-white border border-blue-300 rounded-lg p-2 font-mono-code font-bold text-slate-900 focus:outline-none focus:border-blue-600"
+                    required
+                  />
+                </div>
+
+                {/* Auto Invoice / Challan Batch Sync Option */}
+                {matchingChallanPacks.length > 1 && (
+                  <div className="pt-2 border-t border-blue-200/60 space-y-1 animate-fadeIn">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-blue-950 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={applyDateToEntireChallan}
+                        onChange={(e) => setApplyDateToEntireChallan(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                      />
+                      <span>
+                        Apply new Received Date & Details to ALL {matchingChallanPacks.length} packs in Challan #{editDocumentNo}
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-blue-700 pl-6 leading-relaxed">
+                      ⚡ Invoice SB / Challan #{editDocumentNo} ke sabhi {matchingChallanPacks.length} battery packs ki inward date ek saath update ho jayegi.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Discrepancy Toggle & Inputs */}

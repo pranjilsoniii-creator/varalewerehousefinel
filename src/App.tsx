@@ -661,6 +661,24 @@ export function App() {
     }
   };
 
+  // Handler: Batch Edit Multiple Packs (e.g. Challan-wide date or details update)
+  const handleBatchEditPacks = async (updatedPacks: BatteryPack[]) => {
+    if (!updatedPacks || updatedPacks.length === 0) return;
+    const updatedMap = new Map<string, BatteryPack>();
+    updatedPacks.forEach((p) => updatedMap.set(p.id, p));
+
+    setPacks((prev) =>
+      prev.map((p) => updatedMap.get(p.id) || p)
+    );
+
+    enqueueOfflineAction('SYNC_PACKS', updatedPacks);
+    try {
+      await syncPacksToCloud(updatedPacks);
+    } catch (err) {
+      console.warn('Cloud sync on batch edit packs:', err);
+    }
+  };
+
   // Handler: Add New Warehouse Line
   const handleAddNewWarehouseLine = (newLine: string) => {
     if (!warehouseLines.includes(newLine)) {
@@ -1079,6 +1097,7 @@ export function App() {
             onAllocatePackToRack={(pack) => handleTabChange('LINE_INSPECTOR')}
             onDeletePack={handleDeletePack}
             onEditPack={handleEditPack}
+            onBatchEditPacks={handleBatchEditPacks}
           />
         )}
 
