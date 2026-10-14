@@ -101,6 +101,22 @@ export function mapRowToPack(row: any): BatteryPack {
   const mismatchReason = diffMatch ? diffMatch[2]?.trim() : (row.mismatch_reason || undefined);
   const pendingReconcile = Boolean(row.pending_inward_reconciliation || rawNotes.includes('[PendingReconcileUntil:'));
 
+  let lifecycleHistory: any[] = [];
+  const cycleMatch = rawNotes.match(/\[LIFECYCLE_HISTORY:\s*(\{.*\}|\[.*\])\s*\]/);
+  if (cycleMatch) {
+    try {
+      lifecycleHistory = JSON.parse(cycleMatch[1]);
+    } catch (e) {
+      console.warn('Failed to parse lifecycleHistory from notes:', e);
+    }
+  } else if (Array.isArray(row.lifecycle_history)) {
+    lifecycleHistory = row.lifecycle_history;
+  }
+
+  const cycleCount = row.lifecycle_count != null
+    ? Number(row.lifecycle_count)
+    : (lifecycleHistory.length > 0 ? lifecycleHistory.length + 1 : 1);
+
   return {
     id: row.id,
     packNumber: String(row.pack_number || ''),
@@ -138,6 +154,8 @@ export function mapRowToPack(row: any): BatteryPack {
     reconciledAt: row.reconciled_at || undefined,
     dispatchToAddress: row.dispatch_to_address || undefined,
     dispatchToCustomer: row.dispatch_to_customer || undefined,
+    lifecycleCount: cycleCount,
+    lifecycleHistory: lifecycleHistory,
     notes: row.notes || undefined,
     movementHistory: Array.isArray(row.movement_history) ? row.movement_history : [],
   };
@@ -151,6 +169,9 @@ export function mapPackToRow(p: BatteryPack): any {
   }
   if (p.pendingInwardReconciliation && !composedNotes.includes('[PendingReconcileUntil:')) {
     composedNotes = `[PendingReconcileUntil: ${p.reconciliationValidUntil || ''}] ${composedNotes}`.trim();
+  }
+  if (p.lifecycleHistory && p.lifecycleHistory.length > 0 && !composedNotes.includes('[LIFECYCLE_HISTORY:')) {
+    composedNotes = `[LIFECYCLE_HISTORY: ${JSON.stringify(p.lifecycleHistory)}] ${composedNotes}`.trim();
   }
 
   return {

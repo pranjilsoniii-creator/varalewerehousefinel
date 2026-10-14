@@ -448,7 +448,7 @@ export function App() {
     };
   }, []);
 
-  // Handler: Add Inward Packs (with 30-Day Auto Reconciliation for Direct Dispatches)
+  // Handler: Add Inward Packs (with 60-Day Auto Reconciliation for Direct Dispatches)
   const handleAddInwardPacks = async (
     newPacks: BatteryPack[],
     shipmentRecord: InwardShipmentRecord
@@ -470,6 +470,15 @@ export function App() {
 
       if (pendingMatch) {
         // Link inward data to the previously dispatched pack
+        const reconcileMovement = {
+          id: `mov-rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: shipmentRecord.timestamp || new Date().toISOString(),
+          fromLocation: 'Receiving Dock',
+          toLocation: pendingMatch.currentLocation || `Dispatched to ${pendingMatch.dispatchToCustomer || 'EV Plant'}`,
+          movedBy: shipmentRecord.inwardBy || 'Inward Clerk',
+          reason: `60-Day Auto-Reconciled with Inward Challan #${shipmentRecord.documentNo} (${shipmentRecord.dealershipName})`,
+        };
+
         const reconciledPack: BatteryPack = {
           ...pendingMatch,
           inwardDate: shipmentRecord.timestamp || new Date().toISOString(),
@@ -482,6 +491,7 @@ export function App() {
           pendingInwardReconciliation: false,
           reconciledAt: new Date().toISOString(),
           notes: `${pendingMatch.notes || ''} [Auto-Reconciled with Inward DC #${shipmentRecord.documentNo} on ${new Date().toLocaleDateString('en-IN')}]`.trim(),
+          movementHistory: [...(pendingMatch.movementHistory || []), reconcileMovement],
         };
         packsMap.set(pendingMatch.id, reconciledPack);
         packsToSync.push(reconciledPack);
@@ -510,7 +520,7 @@ export function App() {
     }
 
     if (reconciledCount > 0) {
-      alert(`⚡ 30-Day Auto-Reconciliation Complete: ${reconciledCount} inward pack(s) were automatically matched & linked with previously dispatched records!`);
+      alert(`⚡ 60-Day Auto-Reconciliation Complete: ${reconciledCount} inward pack(s) were automatically matched & linked with previously dispatched records!`);
     }
   };
 
@@ -821,6 +831,15 @@ export function App() {
     lot.packs.forEach((lotPack) => {
       const existing = existingPackMap.get(lotPack.id) || existingNumberMap.get(lotPack.packNumber);
       if (existing) {
+        const dispatchMovement: MovementLog = {
+          id: `mov-disp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: lot.timestamp || new Date().toISOString(),
+          fromLocation: existing.currentLocation || (existing.lineId ? `Line ${existing.lineId}` : 'Warehouse Storage'),
+          toLocation: `Dispatched to ${lot.consigneeName || 'TATA AUTOCOMP'}`,
+          movedBy: lot.dispatchedBy || 'Dispatch Lead',
+          reason: `Outward Dispatch (Doc #${lot.transportDocNo || lot.lotNumber} | Vehicle #${lot.vehicleNumber || '—'} | LR #${lot.lrNumber || '—'})`,
+        };
+
         const updated: BatteryPack = {
           ...existing,
           status: 'DISPATCHED' as const,
@@ -828,18 +847,20 @@ export function App() {
           locationArea: 'Dispatched to EV Plant',
           dispatchLotId: lot.id,
           dispatchedAt: lot.timestamp,
+          dispatchedBy: lot.dispatchedBy || existing.dispatchedBy || 'Dispatch Lead',
           dispatchDocNo: lot.transportDocNo || lot.lotNumber,
           dispatchLrNo: lot.lrNumber || '',
           dispatchVehicleNo: lot.vehicleNumber || '',
           dispatchTransporter: lot.transportName || 'Sahyadri Enterprises',
           dispatchToCustomer: lot.consigneeName || 'TATA AUTOCOMP',
           dispatchToAddress: lot.consigneeAddress || 'Pune / Maharashtra',
+          movementHistory: [...(existing.movementHistory || []), dispatchMovement],
         };
         existingPackMap.set(existing.id, updated);
         dispatchedPacksToSync.push(updated);
       } else {
         // Brand new direct dispatched pack (Pre-inward direct dispatch)
-        const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const validUntil = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
         const newDirectPack: BatteryPack = {
           ...lotPack,
           id: lotPack.id || `pack-direct-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -849,6 +870,7 @@ export function App() {
           locationArea: 'Dispatched to EV Plant',
           dispatchLotId: lot.id,
           dispatchedAt: lot.timestamp,
+          dispatchedBy: lot.dispatchedBy || 'Dispatcher',
           dispatchDocNo: lot.transportDocNo || lot.lotNumber,
           dispatchLrNo: lot.lrNumber || '',
           dispatchVehicleNo: lot.vehicleNumber || '',
@@ -871,7 +893,7 @@ export function App() {
               fromLocation: 'High-Load Direct Dispatch',
               toLocation: `Dispatched to ${lot.consigneeName}`,
               movedBy: lot.dispatchedBy || 'Dispatcher',
-              reason: 'Direct Bulk Dispatch (30-Day Auto-Reconciliation Window)',
+              reason: 'Direct Bulk Dispatch (60-Day Auto-Reconciliation Window)',
             },
           ],
         };

@@ -143,16 +143,33 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
                 )}
               </div>
             ) : (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 font-semibold flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-blue-950 block">
-                    Current Location: {pack.currentLocation || (pack.lineId ? `Line ${pack.lineId}` : 'Warehouse Storage')}
-                  </span>
-                  <span className="text-[11px] text-blue-700 font-normal">Stored at Tata AutoComp Systems Limited - Varale</span>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 font-semibold space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-blue-950 block">
+                      Current Location: {pack.currentLocation || (pack.lineId ? `Line ${pack.lineId}` : 'Warehouse Storage')}
+                    </span>
+                    <span className="text-[11px] text-blue-700 font-normal">Stored at Tata AutoComp Systems Limited - Varale</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {((pack.lifecycleCount && pack.lifecycleCount > 1) || (pack.lifecycleHistory && pack.lifecycleHistory.length > 0)) && (
+                      <span className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded font-bold text-[10px] border border-purple-300">
+                        Cycle #{pack.lifecycleCount || (pack.lifecycleHistory ? pack.lifecycleHistory.length + 1 : 2)}
+                      </span>
+                    )}
+                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-bold text-xs border border-emerald-300">
+                      Ready in Storage
+                    </span>
+                  </div>
                 </div>
-                <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-bold text-xs border border-emerald-300">
-                  Ready in Storage
-                </span>
+                {(pack.lastDispatchedAt || (pack.lifecycleHistory && pack.lifecycleHistory.length > 0)) && (
+                  <p className="text-[10.5px] text-slate-600 bg-white/70 p-1.5 rounded border border-blue-100 font-normal">
+                    🔄 <strong>Re-Inwarded Pack:</strong> Previously dispatched to{' '}
+                    <strong>{pack.lastDispatchCustomer || pack.lifecycleHistory?.[pack.lifecycleHistory.length - 1]?.dispatchToCustomer || 'Customer Plant'}</strong> on{' '}
+                    {new Date(pack.lastDispatchedAt || pack.lifecycleHistory?.[pack.lifecycleHistory.length - 1]?.dispatchedAt || '').toLocaleDateString('en-IN')}{' '}
+                    (Doc #{pack.lastDispatchDocNo || pack.lifecycleHistory?.[pack.lifecycleHistory.length - 1]?.dispatchDocNo || '—'}).
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -287,25 +304,42 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
 
           {/* Movement Audit History Trail */}
           <div className="space-y-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-blue-600" /> Lifecycle Audit Trail ({pack.movementHistory?.length || 0} events)
-            </span>
-            <div className="space-y-2 max-h-36 overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-600" /> Lifecycle Audit Trail ({pack.movementHistory?.length || 0} events)
+              </span>
+              {pack.lifecycleHistory && pack.lifecycleHistory.length > 0 && (
+                <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                  {pack.lifecycleHistory.length + 1} Cycles Preserved
+                </span>
+              )}
+            </div>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
               {pack.movementHistory && pack.movementHistory.length > 0 ? (
-                pack.movementHistory.map((mov) => (
-                  <div
-                    key={mov.id}
-                    className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1"
-                  >
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-slate-900 font-mono-code">{mov.fromLocation} ➔ {mov.toLocation}</span>
-                      <span className="text-slate-500 text-[10px]">{new Date(mov.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                pack.movementHistory.map((mov) => {
+                  const cleanReason = (mov.reason || '')
+                    .replace(/30-Day/gi, '60-Day')
+                    .replace(/30 Day/gi, '60 Day')
+                    .replace(/30 days/gi, '60 days');
+
+                  return (
+                    <div
+                      key={mov.id}
+                      className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1"
+                    >
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-900 font-mono-code">{mov.fromLocation} ➔ {mov.toLocation}</span>
+                        <span className="text-slate-500 text-[10px]">
+                          {new Date(mov.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}{' '}
+                          {new Date(mov.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-600">
+                        Reason: {cleanReason} • By: {mov.movedBy}
+                      </p>
                     </div>
-                    <p className="text-[10px] text-slate-600">
-                      Reason: {mov.reason} • By: {mov.movedBy}
-                    </p>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-slate-400 italic">No movement events recorded yet.</p>
               )}

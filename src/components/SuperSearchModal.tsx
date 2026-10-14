@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Sparkles,
   Box,
+  RefreshCw,
 } from 'lucide-react';
 import { BatteryPack, DispatchLot } from '../types';
 import { BATTERY_MODELS } from '../data/batteryCatalog';
@@ -118,6 +119,66 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
     pack.dealershipName !== 'Varale B300 Line Stock' &&
     pack.dealershipName !== 'Direct Line Setup'
   );
+
+  // Complete unified chronological activity timeline with zero data loss
+  const fullTimeline = useMemo(() => {
+    if (!pack) return [];
+    const list: {
+      id: string;
+      timestamp: string;
+      fromLocation: string;
+      toLocation: string;
+      movedBy: string;
+      reason: string;
+      type: 'INWARD' | 'STORAGE' | 'DISPATCH' | 'RE_INWARD' | 'RECONCILED' | 'OTHER';
+    }[] = [];
+
+    // Add recorded movement history
+    if (pack.movementHistory && pack.movementHistory.length > 0) {
+      pack.movementHistory.forEach((mov, idx) => {
+        const rLower = (mov.reason || '').toLowerCase();
+        let evType: 'INWARD' | 'STORAGE' | 'DISPATCH' | 'RE_INWARD' | 'RECONCILED' | 'OTHER' = 'OTHER';
+        if (rLower.includes('reconcil')) evType = 'RECONCILED';
+        else if (rLower.includes('re-inward') || rLower.includes('return')) evType = 'RE_INWARD';
+        else if (rLower.includes('dispatch') || (mov.toLocation || '').toLowerCase().includes('dispatched')) evType = 'DISPATCH';
+        else if (rLower.includes('inward')) evType = 'INWARD';
+        else if (rLower.includes('storage') || rLower.includes('line') || rLower.includes('rack')) evType = 'STORAGE';
+
+        const cleanReason = (mov.reason || '')
+          .replace(/30-Day/gi, '60-Day')
+          .replace(/30 Day/gi, '60 Day')
+          .replace(/30 days/gi, '60 days');
+
+        list.push({
+          id: mov.id || `mov-${idx}`,
+          timestamp: mov.timestamp,
+          fromLocation: (mov.fromLocation || '').replace(/\\\$\\rightarrow\\\$/g, '➔').replace(/\$\\rightarrow\$/g, '➔'),
+          toLocation: mov.toLocation || '',
+          movedBy: mov.movedBy || 'Staff',
+          reason: cleanReason,
+          type: evType,
+        });
+      });
+    }
+
+    // Check if pack is currently dispatched but no dispatch movement was in movementHistory
+    const hasCurrentDispatch = list.some((m) => m.type === 'DISPATCH' || m.toLocation.toLowerCase().includes('dispatched'));
+    if (pack.status === 'DISPATCHED' && pack.dispatchedAt && !hasCurrentDispatch) {
+      list.push({
+        id: `mov-cur-disp-${pack.id}`,
+        timestamp: pack.dispatchedAt,
+        fromLocation: pack.lineId ? `Line ${pack.lineId}` : 'Warehouse Storage',
+        toLocation: `Dispatched to ${pack.dispatchToCustomer || 'TATA AUTOCOMP'}`,
+        movedBy: pack.dispatchedBy || 'Dispatch Lead',
+        reason: `Outward Dispatch (Doc #${pack.dispatchDocNo || '—'} | Vehicle #${pack.dispatchVehicleNo || '—'})`,
+        type: 'DISPATCH',
+      });
+    }
+
+    // Sort chronologically (oldest first)
+    list.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return list;
+  }, [pack]);
 
   return (
     <div
@@ -230,6 +291,12 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                     {pack.isDifferentSerial && (
                       <span className="px-1.5 py-0.2 rounded bg-purple-300 text-purple-950 font-extrabold text-[9px]">
                         DIFF-NO
+                      </span>
+                    )}
+                    {((pack.lifecycleCount && pack.lifecycleCount > 1) || (pack.lifecycleHistory && pack.lifecycleHistory.length > 0)) && (
+                      <span className="px-2 py-0.5 rounded bg-emerald-400 text-slate-950 font-extrabold text-[9px] flex items-center gap-1 shadow-xs">
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin-slow" />
+                        CYCLE #{pack.lifecycleCount || (pack.lifecycleHistory ? pack.lifecycleHistory.length + 1 : 1)}
                       </span>
                     )}
                   </div>
@@ -396,6 +463,33 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
                       <span className="font-medium text-slate-900">{pack.dispatchToCustomer || lot?.consigneeName || 'TATA AUTOCOMP - Chakan'}</span>
                     </p>
                   </div>
+                ) : (pack.lastDispatchedAt || (pack.lifecycleHistory && pack.lifecycleHistory.length > 0)) ? (
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-900">
+                      <span className="font-bold block text-emerald-950">📦 Re-Inwarded in Warehouse</span>
+                      <span className="text-[10px] text-emerald-800">
+                        Current cycle active in storage. Previously dispatched in Cycle #{pack.lifecycleHistory?.length || 1}.
+                      </span>
+                    </div>
+                    <p>
+                      <span className="text-slate-500">Last Dispatched:</span>{' '}
+                      <span className="font-mono-code font-bold text-slate-900">
+                        {formatIndianDate(pack.lastDispatchedAt || pack.lifecycleHistory?.[pack.lifecycleHistory.length - 1]?.dispatchedAt)}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Last Consignee:</span>{' '}
+                      <span className="font-medium text-slate-900">
+                        {pack.lastDispatchCustomer || pack.lifecycleHistory?.[pack.lifecycleHistory.length - 1]?.dispatchToCustomer || 'TATA AUTOCOMP'}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Last Doc No:</span>{' '}
+                      <span className="font-mono-code font-bold text-blue-700">
+                        {pack.lastDispatchDocNo || pack.lifecycleHistory?.[pack.lifecycleHistory.length - 1]?.dispatchDocNo || '—'}
+                      </span>
+                    </p>
+                  </div>
                 ) : (
                   <div className="py-4 text-center text-slate-400 text-xs">
                     Pack is currently in warehouse (Not yet dispatched).
@@ -404,24 +498,131 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
               </div>
             </div>
 
+            {/* Complete Multi-Cycle Janamkundli Journey (Preserved Inward & Dispatch Cycles) */}
+            {pack.lifecycleHistory && pack.lifecycleHistory.length > 0 && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5 font-display">
+                    <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
+                    Complete Multi-Cycle Janamkundli Journey ({pack.lifecycleHistory.length + 1} Total Lifecycle Cycles)
+                  </h4>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Zero Data Loss
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {pack.lifecycleHistory.map((cycle, cIdx) => (
+                    <div key={cIdx} className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 text-xs">
+                        <span className="font-bold text-blue-700 flex items-center gap-1">
+                          <span>📜</span> Cycle #{cycle.cycleNumber || cIdx + 1} (Completed Past Cycle)
+                        </span>
+                        <span className="text-[10px] font-mono-code text-slate-500">
+                          {formatIndianDate(cycle.inwardDate)} ➔ {formatIndianDate(cycle.dispatchedAt)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 space-y-0.5">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block">📥 Inward Received</span>
+                          <p><span className="text-slate-500">Date:</span> <strong className="font-mono-code text-slate-900">{formatIndianDate(cycle.inwardDate)}</strong></p>
+                          <p><span className="text-slate-500">Doc No:</span> <strong className="font-mono-code text-blue-700">{cycle.documentNo || '—'}</strong></p>
+                          <p><span className="text-slate-500">Origin / Dealer:</span> <span className="text-slate-800">{cycle.dealershipName || '—'}</span></p>
+                          <p><span className="text-slate-500">Inwarded By:</span> <strong className="text-slate-900">{cycle.inwardBy || 'Staff'}</strong></p>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 space-y-0.5">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block">🚚 Outward Dispatched</span>
+                          <p><span className="text-slate-500">Date:</span> <strong className="font-mono-code text-emerald-700">{formatIndianDate(cycle.dispatchedAt)}</strong></p>
+                          <p><span className="text-slate-500">Dispatch Doc:</span> <strong className="font-mono-code text-blue-700">{cycle.dispatchDocNo || '—'}</strong></p>
+                          <p><span className="text-slate-500">Consignee:</span> <span className="text-slate-800">{cycle.dispatchToCustomer || 'TATA AUTOCOMP'}</span></p>
+                          <p><span className="text-slate-500">Vehicle / Transporter:</span> <span className="text-slate-800">{cycle.dispatchVehicleNo || '—'} ({cycle.dispatchTransporter || '—'})</span></p>
+                          <p><span className="text-slate-500">Dispatched By:</span> <strong className="text-slate-900">{cycle.dispatchedBy || 'Dispatch Lead'}</strong></p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Current Active Cycle Card */}
+                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between border-b border-emerald-200/60 pb-1.5 text-xs">
+                      <span className="font-bold text-emerald-900 flex items-center gap-1">
+                        <span>✨</span> Current Cycle #{pack.lifecycleCount || pack.lifecycleHistory.length + 1} ({pack.status === 'DISPATCHED' ? 'Dispatched' : 'Active in Warehouse'})
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-600 text-white">
+                        {pack.status === 'DISPATCHED' ? 'Dispatched' : 'Active in Warehouse'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                      <div className="bg-white p-2 rounded-lg border border-emerald-100 space-y-0.5">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">📥 Inward Received</span>
+                        <p><span className="text-slate-500">Date:</span> <strong className="font-mono-code text-slate-900">{formatIndianDate(pack.inwardDate)}</strong></p>
+                        <p><span className="text-slate-500">Doc No:</span> <strong className="font-mono-code text-blue-700">{pack.documentNo || '—'}</strong></p>
+                        <p><span className="text-slate-500">Source:</span> <span className="text-slate-800">{pack.dealershipName || '—'}</span></p>
+                        <p><span className="text-slate-500">Inwarded By:</span> <strong className="text-slate-900">{pack.inwardBy || 'Staff'}</strong></p>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-emerald-100 space-y-0.5">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                          {pack.status === 'DISPATCHED' ? '🚚 Outward Dispatched' : '📍 Current Coordinates'}
+                        </span>
+                        {pack.status === 'DISPATCHED' ? (
+                          <>
+                            <p><span className="text-slate-500">Date:</span> <strong className="font-mono-code text-emerald-700">{formatIndianDate(pack.dispatchedAt)}</strong></p>
+                            <p><span className="text-slate-500">Dispatch Doc:</span> <strong className="font-mono-code text-blue-700">{pack.dispatchDocNo || '—'}</strong></p>
+                            <p><span className="text-slate-500">Destination:</span> <span className="text-slate-800">{pack.dispatchToCustomer || '—'}</span></p>
+                            <p><span className="text-slate-500">Vehicle:</span> <span className="text-slate-800">{pack.dispatchVehicleNo || '—'}</span></p>
+                          </>
+                        ) : (
+                          <>
+                            <p><span className="text-slate-500">Location:</span> <strong className="text-slate-900">{pack.currentLocation || 'Inward Area'}</strong></p>
+                            <p><span className="text-slate-500">Line:</span> <strong className="font-mono-code text-blue-700">{pack.lineId ? `Line ${pack.lineId}` : 'Dock / Staging'}</strong></p>
+                            <p><span className="text-slate-500">Status:</span> <span className="text-emerald-700 font-bold">Ready in Warehouse</span></p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Movement History Chronological Timeline */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5 font-display">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
-                Chronological Activity & Movement History
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5 font-display">
+                  <Clock className="w-3.5 h-3.5 text-blue-600" />
+                  Chronological Activity & Movement History ({fullTimeline.length} events)
+                </h4>
+                <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  Full Audit Passport
+                </span>
+              </div>
 
               <div className="space-y-2 border-l-2 border-blue-200 pl-4 ml-1 text-xs">
-                {pack.movementHistory && pack.movementHistory.length > 0 ? (
-                  pack.movementHistory.map((mov, idx) => (
+                {fullTimeline.length > 0 ? (
+                  fullTimeline.map((mov, idx) => (
                     <div key={mov.id || idx} className="relative pb-2">
-                      <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-blue-600 border border-white"></div>
+                      <div className={`absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full border border-white ${
+                        mov.type === 'DISPATCH' ? 'bg-orange-500' :
+                        mov.type === 'RE_INWARD' ? 'bg-purple-600' :
+                        mov.type === 'STORAGE' ? 'bg-emerald-600' :
+                        mov.type === 'RECONCILED' ? 'bg-amber-500' :
+                        'bg-blue-600'
+                      }`}></div>
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-slate-900">{mov.reason || 'Movement Recorded'}</span>
+                        <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                          <span>
+                            {mov.type === 'DISPATCH' ? '🚚' :
+                             mov.type === 'RE_INWARD' ? '🔄' :
+                             mov.type === 'STORAGE' ? '📦' :
+                             mov.type === 'RECONCILED' ? '⚡' :
+                             '📥'}
+                          </span>
+                          <span>{mov.reason || 'Movement Recorded'}</span>
+                        </span>
                         <span className="font-mono-code text-slate-400">{formatIndianDate(mov.timestamp)}</span>
                       </div>
-                      <p className="text-[11px] text-slate-600">
-                        {(mov.fromLocation || '').replace(/\\\$\\rightarrow\\\$/g, '➔').replace(/\$\\rightarrow\$/g, '➔')} ➔ {mov.toLocation || ''} (By: {mov.movedBy || 'Staff'})
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        {mov.fromLocation} ➔ {mov.toLocation} (By: <strong className="text-slate-800">{mov.movedBy || 'Staff'}</strong>)
                       </p>
                     </div>
                   ))

@@ -95,7 +95,7 @@ export interface BatteryPack {
   mismatchReason?: string;            // Notes on serial discrepancy
   sourceType?: 'INWARD' | 'LINE_POPULATE' | 'DIRECT_DISPATCH'; // Source: Inward Dock vs Direct Line Matrix vs Fast Direct Dispatch
 
-  // 30-Day Auto Reconciliation (For Direct Fast Dispatch before Inward)
+  // 60-Day Auto Reconciliation (For Direct Fast Dispatch before Inward)
   pendingInwardReconciliation?: boolean;
   reconciliationValidUntil?: string;
   reconciledAt?: string;
@@ -128,7 +128,8 @@ export interface BatteryPack {
   returnReason?: string;
   returnPlant?: string;
   returnChallanNo?: string;
-  lifecycleCount?: number;
+  lifecycleCount?: number;            // Current cycle (1 = 1st inward, 2 = 2nd inward / return, etc.)
+  lifecycleHistory?: PackCycle[];     // Completed past cycles (Cycle 1, Cycle 2, ...)
 
   // Dispatch Details
   dispatchedAt?: string;
@@ -140,6 +141,44 @@ export interface BatteryPack {
   dispatchTransporter?: string;
   dispatchToAddress?: string;
   dispatchToCustomer?: string;
+
+  // Previous Cycle Dispatch Archive (Retained when pack is re-inwarded)
+  lastDispatchedAt?: string;
+  lastDispatchDocNo?: string;
+  lastDispatchCustomer?: string;
+}
+
+export interface PackCycle {
+  cycleNumber: number;
+  inwardDate: string;
+  documentNo: string;
+  dealershipName: string;
+  receivedState?: string;
+  transportName?: string;
+  inwardBy: string;
+  remark?: string;
+  hasInwardStamp?: boolean;
+  isWithoutPlate?: boolean;
+  isDifferentSerial?: boolean;
+  challanPackNumber?: string;
+  mismatchReason?: string;
+  lineId?: string;
+  rackNumber?: number;
+  rackSlot?: number;
+  dispatchedAt?: string;
+  dispatchedBy?: string;
+  dispatchLotId?: string;
+  dispatchDocNo?: string;
+  dispatchLrNo?: string;
+  dispatchVehicleNo?: string;
+  dispatchTransporter?: string;
+  dispatchToCustomer?: string;
+  dispatchToAddress?: string;
+  isCustomerReturn?: boolean;
+  returnReason?: string;
+  returnPlant?: string;
+  returnChallanNo?: string;
+  completedAt?: string;
 }
 
 export interface InwardShipmentRecord {

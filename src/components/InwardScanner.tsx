@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   Camera,
   Upload,
@@ -15,10 +15,11 @@ import {
   Copy,
   Tag,
   MapPin,
+  UserCheck,
 } from 'lucide-react';
-import { BatteryPack, BatteryPackType, InwardShipmentRecord } from '../types';
+import { BatteryPack, BatteryPackType, InwardShipmentRecord, PackCycle, MovementLog } from '../types';
 import { ALL_PACK_TYPES, COMMON_TRANSPORTERS, deriveModelFromShorthand, parseBoxCodeAndModel, INITIAL_SAVED_ADDRESSES } from '../data/batteryCatalog';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, DEFAULT_USERS } from '../context/AuthContext';
 import { TataLoadingSpinner } from './TataLoadingSpinner';
 
 interface InwardScannerProps {
@@ -43,7 +44,48 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
   onAddPacks,
   onNavigateToInwardLog,
 }) => {
-  const { currentUser, canDirectApprove } = useAuth();
+  const { currentUser, canDirectApprove, users } = useAuth();
+
+  // Inward Operator List derived from registered users + active staff
+  const availableOperators = useMemo(() => {
+    const list: { name: string; username: string; role: string }[] = [];
+    const seen = new Set<string>();
+
+    const allUsers = users && users.length > 0 ? users : DEFAULT_USERS;
+    allUsers.forEach((u) => {
+      const val = u.name || u.username;
+      if (val && !seen.has(val.toLowerCase()) && u.active !== false) {
+        seen.add(val.toLowerCase());
+        list.push({ name: u.name || u.username, username: u.username, role: u.role || 'Staff' });
+      }
+    });
+
+    const defaults = [
+      { name: 'Jitendra Soni', username: 'Jitendra', role: 'Staff' },
+      { name: 'Deepak Kumar', username: 'Deepak', role: 'Staff' },
+      { name: 'Nitin Pawar', username: 'Nitin', role: 'Supervisor' },
+      { name: 'Vikas Kumar Bharti', username: 'Vikas', role: 'Supervisor' },
+      { name: 'Suresh Chavan', username: 'Sureshchavan', role: 'Manager' },
+      { name: 'Pranjil Soni', username: 'Pranjils0ni', role: 'Superadmin' },
+    ];
+    defaults.forEach((d) => {
+      if (!seen.has(d.name.toLowerCase())) {
+        seen.add(d.name.toLowerCase());
+        list.push(d);
+      }
+    });
+
+    return list;
+  }, [users]);
+
+  // Operator Inward By State
+  const [inwardBy, setInwardBy] = useState<string>(() => currentUser?.name || currentUser?.username || 'Jitendra Soni');
+
+  useEffect(() => {
+    if (currentUser?.name || currentUser?.username) {
+      setInwardBy(currentUser.name || currentUser.username);
+    }
+  }, [currentUser]);
 
   // Mode: 'AI_SCAN' vs 'MANUAL_TABLE'
   const [entryMode, setEntryMode] = useState<'AI_SCAN' | 'MANUAL_TABLE'>('AI_SCAN');
@@ -483,33 +525,95 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 
     const nowIso = new Date().toISOString();
     const finalTransporter = transportName === 'Other' ? (customTransport || 'Other') : transportName;
-    const operatorName = currentUser?.name || currentUser?.username || 'Staff Operator';
+    const operatorName = (inwardBy && inwardBy.trim()) ? inwardBy.trim() : (currentUser?.name || currentUser?.username || 'Jitendra Soni');
     const autoApproved = canDirectApprove;
     const finalStateStr = receivedCity.trim() ? `${receivedCity.trim()}, ${receivedState.trim()}` : (receivedState.trim() || 'Maharashtra');
 
     const newPacks: BatteryPack[] = validRows.map((r, index) => {
       const packNumKey = r.packNumber.toLowerCase().trim();
       const existing = existingPackMap.get(packNumKey);
-      const isReInward = existing && existing.status === 'DISPATCHED';
+      const isReInward = Boolean(existing && (existing.status === 'DISPATCHED' || existing.dispatchedAt));
       const packRemark = (r.remark && r.remark.trim()) ? r.remark.trim() : (remark.trim() || undefined);
-      const lifecycle = isReInward ? (existing.lifecycleCount || 1) + 1 : 1;
 
-      const previousHistory = isReInward && existing.movementHistory ? existing.movementHistory : [];
-      const newMovement = {
-        id: `mov-${Date.now()}-${index}`,
-        timestamp: nowIso,
-        fromLocation: isReInward ? `Customer Return (${existing.dispatchToCustomer || 'Customer'})` : 'Receiving Dock',
+      let prevHistory: MovementLog[] = existing && existing.movementHistory ? [...existing.movementHistory] : [];
+      let updatedLifecycleHistory: PackCycle[] = existing?.lifecycleHistory ? [...existing.lifecycleHistory] : [];
+      let currentCycleNumber = 1;
+
+      if (isReInward && existing) {
+        const prevCycleNumber = existing.lifecycleCount || (updatedLifecycleHistory.length > 0 ? updatedLifecycleHistory.length : 1);
+        currentCycleNumber = prevCycleNumber + 1;
+
+        // Snapshot previous completed cycle so no historical data is ever lost
+        const previousCycle: PackCycle = {
+          cycleNumber: prevCycleNumber,
+          inwardDate: existing.inwardDate,
+          documentNo: existing.documentNo,
+          dealershipName: existing.dealershipName,
+          receivedState: existing.receivedState,
+          transportName: existing.transportName,
+          inwardBy: existing.inwardBy || 'Staff',
+          remark: existing.remark,
+          hasInwardStamp: existing.hasInwardStamp,
+          isWithoutPlate: existing.isWithoutPlate,
+          isDifferentSerial: existing.isDifferentSerial,
+          challanPackNumber: existing.challanPackNumber,
+          mismatchReason: existing.mismatchReason,
+          lineId: existing.lineId,
+          rackNumber: existing.rackNumber,
+          rackSlot: existing.rackSlot,
+          dispatchedAt: existing.dispatchedAt,
+          dispatchedBy: existing.dispatchedBy,
+          dispatchLotId: existing.dispatchLotId,
+          dispatchDocNo: existing.dispatchDocNo,
+          dispatchLrNo: existing.dispatchLrNo,
+          dispatchVehicleNo: existing.dispatchVehicleNo,
+          dispatchTransporter: existing.dispatchTransporter,
+          dispatchToCustomer: existing.dispatchToCustomer,
+          dispatchToAddress: existing.dispatchToAddress,
+          isCustomerReturn: existing.isCustomerReturn,
+          returnReason: existing.returnReason,
+          returnPlant: existing.returnPlant,
+          returnChallanNo: existing.returnChallanNo,
+          completedAt: existing.dispatchedAt || nowIso,
+        };
+        updatedLifecycleHistory.push(previousCycle);
+
+        // Ensure the dispatch event is recorded in previous movementHistory if missing
+        const hasDispatchLog = prevHistory.some((m) =>
+          (m.toLocation && m.toLocation.toLowerCase().includes('dispatched')) ||
+          (m.reason && m.reason.toLowerCase().includes('dispatch'))
+        );
+        if (!hasDispatchLog && existing.dispatchedAt) {
+          prevHistory.push({
+            id: `mov-disp-hist-${Date.now()}-${index}`,
+            timestamp: existing.dispatchedAt,
+            fromLocation: existing.currentLocation || (existing.lineId ? `Line ${existing.lineId}` : 'Warehouse Storage'),
+            toLocation: `Dispatched to ${existing.dispatchToCustomer || 'EV Plant'}`,
+            movedBy: existing.dispatchedBy || 'Dispatch Lead',
+            reason: `Outward Dispatch (Doc #${existing.dispatchDocNo || '—'} | Vehicle #${existing.dispatchVehicleNo || '—'})`,
+          });
+        }
+      }
+
+      const newMovement: MovementLog = {
+        id: `mov-inw-${Date.now()}-${index}`,
+        timestamp: receivedDate ? `${receivedDate}T${nowIso.split('T')[1] || '12:00:00.000Z'}` : nowIso,
+        fromLocation: isReInward && existing
+          ? `Customer Return / Re-Inward (${existing.dispatchToCustomer || existing.dealershipName || 'Customer Plant'})`
+          : 'Receiving Dock',
         toLocation: 'Inward Area',
         movedBy: operatorName,
         reason: inwardCategory === 'CUSTOMER_RETURN'
-          ? `Customer Return Inward (Doc #${documentNo.trim()}) - Reason: ${returnReason}`
+          ? `Cycle #${currentCycleNumber} Customer Return Inward (Doc #${documentNo.trim()}) - Reason: ${returnReason}`
+          : isReInward
+          ? `Cycle #${currentCycleNumber} Re-Inward (Doc #${documentNo.trim()} | Prev Doc: ${existing?.dispatchDocNo || existing?.documentNo || '—'})`
           : r.isDifferentSerial
           ? `Initial Inward Receiving (Doc #${documentNo.trim()}) - [DIFF NO: Challan #${r.challanPackNumber || '—'} vs Phys #${r.packNumber}]`
           : `Initial Inward Receiving (Doc #${documentNo.trim()})`,
       };
 
       return {
-        id: isReInward ? existing.id : `pack-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
+        id: isReInward && existing ? existing.id : `pack-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 6)}`,
         packNumber: r.packNumber.trim(),
         packType: r.packType,
         status: autoApproved ? ('INWARD_AREA' as const) : ('PENDING_APPROVAL' as const),
@@ -534,8 +638,12 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
         returnReason: inwardCategory === 'CUSTOMER_RETURN' ? returnReason : undefined,
         returnPlant: inwardCategory === 'CUSTOMER_RETURN' ? dealershipName.trim() : undefined,
         returnChallanNo: inwardCategory === 'CUSTOMER_RETURN' ? documentNo.trim() : undefined,
-        lifecycleCount: lifecycle,
-        movementHistory: [...previousHistory, newMovement],
+        lifecycleCount: currentCycleNumber,
+        lifecycleHistory: updatedLifecycleHistory,
+        lastDispatchedAt: isReInward && existing ? existing.dispatchedAt : undefined,
+        lastDispatchDocNo: isReInward && existing ? existing.dispatchDocNo : undefined,
+        lastDispatchCustomer: isReInward && existing ? existing.dispatchToCustomer : undefined,
+        movementHistory: [...prevHistory, newMovement],
       };
     });
 
@@ -868,10 +976,32 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                 type="date"
                 value={receivedDate}
                 onChange={(e) => setReceivedDate(e.target.value)}
-                onKeyDown={(e) => handleKeyDownStep(e, 'inward-dealer-name')}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-by-operator')}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono-code font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                 required
               />
+            </div>
+
+            {/* Inward By (Employee / Operator) Dropdown */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>Inward By (Operator / Inspector)</span>
+                <span className="text-rose-500">*</span>
+              </label>
+              <select
+                id="inward-by-operator"
+                value={inwardBy}
+                onChange={(e) => setInwardBy(e.target.value)}
+                onKeyDown={(e) => handleKeyDownStep(e, 'inward-dealer-name')}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                required
+              >
+                {availableOperators.map((op) => (
+                  <option key={op.username || op.name} value={op.name}>
+                    {op.name} ({op.role.toUpperCase()})
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Dealership Name with Predictive Autocomplete & Auto State/City Fill */}
