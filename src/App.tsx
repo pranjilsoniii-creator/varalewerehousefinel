@@ -58,6 +58,7 @@ import {
   mapRowToDailyStock,
   mapLotToDailyStock,
 } from './lib/supabaseClient';
+import { normalizeModelFamily } from './data/batteryCatalog';
 import { useAuth } from './context/AuthContext';
 import { Wrench, ShieldAlert } from 'lucide-react';
 
@@ -460,11 +461,12 @@ export function App() {
     const packsToSync: BatteryPack[] = [];
 
     newPacks.forEach((newP) => {
-      // Find matching dispatched pack by packNumber that was waiting for inward reconciliation
+      // Find matching dispatched pack by packNumber AND model family that was waiting for inward reconciliation
       const pendingMatch = Array.from(packsMap.values()).find(
         (p) =>
           p.status === 'DISPATCHED' &&
           p.packNumber === newP.packNumber &&
+          normalizeModelFamily(p.packType) === normalizeModelFamily(newP.packType) &&
           (p.pendingInwardReconciliation || p.sourceType === 'DIRECT_DISPATCH' || !p.inwardDate)
       );
 

@@ -84,18 +84,75 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
   // 100% PERMANENT INWARD DOCK LEDGER PRESERVATION:
   // All packs received through Inward Dock are permanently preserved here,
-  // even after subsequent allocation to storage lines or outward dispatch to EV plants.
+  // including current stock, dispatched packs, AND all historical cycles from lifecycleHistory!
   const inwardOnlyPacks = useMemo(() => {
-    return packs.filter((p) => {
+    const list: BatteryPack[] = [];
+    const seenKeys = new Set<string>();
+
+    // 1. Current packs
+    packs.forEach((p) => {
       // Exclude direct populate dummy lines
-      if (p.sourceType === 'LINE_POPULATE') return false;
-      if (p.sourceType === 'DIRECT_DISPATCH' && !p.inwardDate && (!p.documentNo || p.documentNo === 'DIRECT-DISPATCH')) return false;
-      if (p.documentNo === 'DIRECT-DISPATCH' && !p.inwardDate) return false;
-      if (p.dealershipName === 'Direct Plant Dispatch' && !p.inwardDate) return false;
-      if (p.documentNo?.startsWith('MATRIX-LOAD-') || p.documentNo?.startsWith('LINE-LOAD-')) return false;
+      if (p.sourceType === 'LINE_POPULATE') return;
+      if (p.sourceType === 'DIRECT_DISPATCH' && !p.inwardDate && (!p.documentNo || p.documentNo === 'DIRECT-DISPATCH')) return;
+      if (p.documentNo === 'DIRECT-DISPATCH' && !p.inwardDate) return;
+      if (p.dealershipName === 'Direct Plant Dispatch' && !p.inwardDate) return;
+      if (p.documentNo?.startsWith('MATRIX-LOAD-') || p.documentNo?.startsWith('LINE-LOAD-')) return;
 
       // Retain all packs that have Inward receipts, document numbers, or inward dock history
-      return Boolean(p.documentNo || p.inwardDate || p.dealershipName || p.sourceType === 'INWARD');
+      if (Boolean(p.documentNo || p.inwardDate || p.dealershipName || p.sourceType === 'INWARD')) {
+        list.push(p);
+        const key = `${p.packNumber.trim().toLowerCase()}_${(p.documentNo || '').trim().toLowerCase()}_${(p.inwardDate || '').slice(0, 10)}`;
+        seenKeys.add(key);
+      }
+
+      // 2. Also extract and restore any past completed cycles from lifecycleHistory (so past inward records like 12/10 are NEVER lost!)
+      if (p.lifecycleHistory && Array.isArray(p.lifecycleHistory) && p.lifecycleHistory.length > 0) {
+        p.lifecycleHistory.forEach((cycle) => {
+          const cycleKey = `${p.packNumber.trim().toLowerCase()}_${(cycle.documentNo || '').trim().toLowerCase()}_${(cycle.inwardDate || '').slice(0, 10)}`;
+          if (!seenKeys.has(cycleKey)) {
+            seenKeys.add(cycleKey);
+            list.push({
+              ...p,
+              id: `${p.id}-cycle-${cycle.cycleNumber}`,
+              packNumber: p.packNumber,
+              packType: p.packType,
+              status: 'DISPATCHED', // Past completed cycle was dispatched
+              locationArea: 'Dispatched to EV Plant',
+              currentLocation: `Dispatched to ${cycle.dispatchToCustomer || 'Customer'}`,
+              inwardDate: cycle.inwardDate || p.inwardDate,
+              documentNo: cycle.documentNo || '—',
+              dealershipName: cycle.dealershipName || p.dealershipName || '—',
+              receivedState: cycle.receivedState || p.receivedState,
+              transportName: cycle.transportName || p.transportName,
+              inwardBy: cycle.inwardBy || p.inwardBy || 'Staff',
+              remark: cycle.remark || p.remark,
+              hasInwardStamp: cycle.hasInwardStamp ?? p.hasInwardStamp,
+              isWithoutPlate: Boolean(cycle.isWithoutPlate),
+              isDifferentSerial: Boolean(cycle.isDifferentSerial),
+              challanPackNumber: cycle.challanPackNumber,
+              mismatchReason: cycle.mismatchReason,
+              dispatchedAt: cycle.dispatchedAt,
+              dispatchedBy: cycle.dispatchedBy,
+              dispatchLotId: cycle.dispatchLotId,
+              dispatchDocNo: cycle.dispatchDocNo,
+              dispatchLrNo: cycle.dispatchLrNo,
+              dispatchVehicleNo: cycle.dispatchVehicleNo,
+              dispatchTransporter: cycle.dispatchTransporter,
+              dispatchToCustomer: cycle.dispatchToCustomer,
+              dispatchToAddress: cycle.dispatchToAddress,
+              lifecycleCount: cycle.cycleNumber,
+              notes: `[Historical Cycle #${cycle.cycleNumber}] ${p.notes || ''}`.trim(),
+            });
+          }
+        });
+      }
+    });
+
+    // Sort newest inward date first so re-inwards appear on top and past cycles directly below
+    return list.sort((a, b) => {
+      const timeA = new Date(a.inwardDate || 0).getTime();
+      const timeB = new Date(b.inwardDate || 0).getTime();
+      return timeB - timeA;
     });
   }, [packs]);
 
@@ -760,6 +817,11 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                           <span className="font-mono-code font-extrabold text-slate-900 text-sm">
                             #{pack.packNumber}
                           </span>
+                          {((pack.lifecycleCount && pack.lifecycleCount > 1) || pack.id.includes('-cycle-')) && (
+                            <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 border border-blue-300 text-[9px] font-extrabold">
+                              CYCLE #{pack.lifecycleCount || 1}
+                            </span>
+                          )}
                           {pack.isWithoutPlate && (
                             <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
                               NO-PLATE

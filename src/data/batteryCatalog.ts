@@ -525,6 +525,78 @@ export function getShortPackTypeName(packType: string | BatteryPackType): string
   return 'AIO';
 }
 
+/**
+ * Strict Model Family Normalizer:
+ * Normalizes any packType enum, string, or shorthand into a canonical model family
+ * E.g.:
+ * - 'Kanger2.0', 'Kanger2.0_Ais', 'k2' -> 'K2'
+ * - 'Limber_Ais', 'Limber_Non_Ais', 'limber' -> 'LIMBER'
+ * - 'Kanger1.0_CKD', 'ckd' -> 'CKD'
+ * - 'Kanger1.0_FBU', 'fbu' -> 'FBU'
+ * - 'Kanger1.0_AIO', 'aio' -> 'AIO'
+ * - 'Kanger1.0_Gen3', 'gen3' -> 'GEN3'
+ * - 'Kanger3.0', 'k3' -> 'K3'
+ * - 'Tamor_ELR' -> 'TAMOR'
+ * - 'Nova_LRP' -> 'NOVA'
+ * - 'Challenger_LR' -> 'CHAL-LR'
+ * - 'Challenger_MR' -> 'CHAL-MR'
+ */
+export function normalizeModelFamily(packType?: string): string {
+  if (!packType) return 'UNKNOWN';
+  return getShortPackTypeName(packType);
+}
+
+/**
+ * Formats a clean human-friendly display name for pack models
+ */
+export function formatPackDisplayName(packType?: string): string {
+  if (!packType) return '—';
+  const norm = normalizeModelFamily(packType);
+  switch (norm) {
+    case 'CKD':
+      return 'Kanger 1.0 CKD';
+    case 'FBU':
+      return 'Kanger 1.0 FBU';
+    case 'AIO':
+      return 'Kanger 1.0 AIO';
+    case 'GEN3':
+      return 'Kanger 1.0 Gen3';
+    case 'K2':
+      return 'Kanger 2.0';
+    case 'K3':
+      return 'Kanger 3.0';
+    case 'LIMBER':
+      return 'Limber';
+    case 'TAMOR':
+      return 'Tamor ELR';
+    case 'NOVA':
+      return 'Nova LRP';
+    case 'CHAL-LR':
+      return 'Challenger LR';
+    case 'CHAL-MR':
+      return 'Challenger MR';
+    default:
+      return packType.replace(/_/g, ' ');
+  }
+}
+
+/**
+ * Standard Indian Date Formatter (DD/MM/YYYY)
+ */
+export function formatIndianDate(d?: string | Date): string {
+  if (!d) return '—';
+  try {
+    const dt = typeof d === 'string' ? new Date(d) : d;
+    if (isNaN(dt.getTime())) return String(d).slice(0, 10);
+    const day = String(dt.getDate()).padStart(2, '0');
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const year = dt.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return String(d).slice(0, 10);
+  }
+}
+
 export const COMMON_TRANSPORTERS = [
   'Sahyadri Enterprises',
   'Aai Saheb Freight Line',
