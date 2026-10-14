@@ -46,27 +46,34 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
 }) => {
   const { currentUser, canDirectApprove, users } = useAuth();
 
-  // Inward Operator List derived from registered users + active staff
+  // Inward Operator List derived strictly from registered employees and supervisors
   const availableOperators = useMemo(() => {
     const list: { name: string; username: string; role: string }[] = [];
     const seen = new Set<string>();
 
     const allUsers = users && users.length > 0 ? users : DEFAULT_USERS;
     allUsers.forEach((u) => {
+      // Inward can ONLY be performed by employees or supervisors
+      const isAllowedRole = u.role === 'employee' || u.role === 'supervisor';
+      if (!isAllowedRole) return;
+
       const val = u.name || u.username;
       if (val && !seen.has(val.toLowerCase()) && u.active !== false) {
         seen.add(val.toLowerCase());
-        list.push({ name: u.name || u.username, username: u.username, role: u.role || 'Staff' });
+        list.push({
+          name: u.name || u.username,
+          username: u.username,
+          role: u.role === 'supervisor' ? 'Supervisor' : 'Employee',
+        });
       }
     });
 
+    // Default employees & supervisors fallback
     const defaults = [
-      { name: 'Jitendra Soni', username: 'Jitendra', role: 'Staff' },
-      { name: 'Deepak Kumar', username: 'Deepak', role: 'Staff' },
+      { name: 'Jitendra Soni', username: 'Jitendra', role: 'Employee' },
+      { name: 'Deepak Kumar', username: 'Deepak', role: 'Employee' },
       { name: 'Nitin Pawar', username: 'Nitin', role: 'Supervisor' },
       { name: 'Vikas Kumar Bharti', username: 'Vikas', role: 'Supervisor' },
-      { name: 'Suresh Chavan', username: 'Sureshchavan', role: 'Manager' },
-      { name: 'Pranjil Soni', username: 'Pranjils0ni', role: 'Superadmin' },
     ];
     defaults.forEach((d) => {
       if (!seen.has(d.name.toLowerCase())) {
@@ -78,11 +85,16 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
     return list;
   }, [users]);
 
-  // Operator Inward By State
-  const [inwardBy, setInwardBy] = useState<string>(() => currentUser?.name || currentUser?.username || 'Jitendra Soni');
+  // Operator Inward By State (defaults to current user if employee/supervisor, else Jitendra Soni)
+  const [inwardBy, setInwardBy] = useState<string>(() => {
+    if (currentUser && (currentUser.role === 'employee' || currentUser.role === 'supervisor')) {
+      return currentUser.name || currentUser.username;
+    }
+    return 'Jitendra Soni';
+  });
 
   useEffect(() => {
-    if (currentUser?.name || currentUser?.username) {
+    if (currentUser && (currentUser.role === 'employee' || currentUser.role === 'supervisor')) {
       setInwardBy(currentUser.name || currentUser.username);
     }
   }, [currentUser]);
@@ -982,10 +994,10 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               />
             </div>
 
-            {/* Inward By (Employee / Operator) Dropdown */}
+            {/* Inward By (Employee / Supervisor Only) Dropdown */}
             <div>
               <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
-                <span>Inward By (Operator / Inspector)</span>
+                <span>Inward By (Employee / Supervisor)</span>
                 <span className="text-rose-500">*</span>
               </label>
               <select
@@ -998,7 +1010,7 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
               >
                 {availableOperators.map((op) => (
                   <option key={op.username || op.name} value={op.name}>
-                    {op.name} ({op.role.toUpperCase()})
+                    {op.name} ({op.role})
                   </option>
                 ))}
               </select>

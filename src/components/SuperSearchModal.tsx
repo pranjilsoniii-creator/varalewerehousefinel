@@ -98,8 +98,6 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
     return packs.slice(0, 16);
   }, [packs]);
 
-  if (!isOpen) return null;
-
   const pack = selectedPack || exactMatch || (matchingPacks.length === 1 ? matchingPacks[0] : null);
   const model = pack ? BATTERY_MODELS[pack.packType] : null;
   const lot = pack?.dispatchLotId ? lotMap.get(pack.dispatchLotId) : null;
@@ -179,6 +177,8 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
     list.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     return list;
   }, [pack]);
+
+  if (!isOpen) return null;
 
   return (
     <div
