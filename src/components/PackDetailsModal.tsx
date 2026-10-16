@@ -318,9 +318,9 @@ export const PackDetailsModal: React.FC<PackDetailsModalProps> = ({
               {pack.movementHistory && pack.movementHistory.length > 0 ? (
                 pack.movementHistory.map((mov) => {
                   const cleanReason = (mov.reason || '')
-                    .replace(/30-Day/gi, '60-Day')
-                    .replace(/30 Day/gi, '60 Day')
-                    .replace(/30 days/gi, '60 days');
+                    .replace(/30-Day|60-Day/gi, '7-Day')
+                    .replace(/30 Day|60 Day/gi, '7 Day')
+                    .replace(/30 days|60 days/gi, '7 days');
 
                   return (
                     <div

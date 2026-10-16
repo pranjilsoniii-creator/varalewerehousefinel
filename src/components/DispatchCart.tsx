@@ -376,7 +376,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
     setDirectPasteText(newText);
   };
 
-  // Submit Fast Direct Dispatch (60-Day Inward Auto Reconciliation Active)
+  // Submit Fast Direct Dispatch (7-Day Inward Auto Reconciliation Active)
   const handleAuthorizeDirectFastDispatch = () => {
     if (parsedDirectPacks.length === 0) {
       alert('Please enter or paste at least 1 battery pack code to dispatch.');
@@ -409,7 +409,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
     const finalTransport = transportName === 'Other' ? (customTransport || 'Other') : transportName;
     const operatorName = currentUser?.name || currentUser?.username || 'Dispatch Lead';
     const autoApproved = canDirectApprove;
-    const validUntil = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+    const validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const directPacksToCreate: BatteryPack[] = parsedDirectPacks.map((dp, idx) => {
       const existing = availableStoragePacks.find((p) => p.packNumber === dp.packNumber);
@@ -465,7 +465,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
         dispatchTransporter: finalTransport,
         dispatchToCustomer: consigneeName.trim(),
         dispatchToAddress: consigneeAddress.trim(),
-        notes: 'High-Load Direct Dispatch (60-Day Auto-Reconciliation Window Active)',
+        notes: 'High-Load Direct Dispatch (7-Day Auto-Reconciliation Window Active)',
         movementHistory: [
           {
             id: `mov-${Date.now()}-${idx}`,
@@ -473,7 +473,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
             fromLocation: 'Direct Plant Dispatch Bay',
             toLocation: `Dispatched to ${consigneeName.trim()}`,
             movedBy: operatorName,
-            reason: 'Fast Direct Bulk Outward Dispatch (60-Day Inward Window)',
+            reason: 'Fast Direct Bulk Outward Dispatch (7-Day Inward Window)',
           },
         ],
       };
@@ -499,7 +499,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
       dispatchedBy: operatorName,
       approvedBy: autoApproved ? operatorName : 'Pending Supervisor Approval',
       approvedAt: autoApproved ? finalDispatchIso : undefined,
-      notes: (notes.trim() ? `${notes.trim()} • ` : '') + '⚡ Direct Fast Dispatch (60-Day Auto-Reconciliation Window Active)',
+      notes: (notes.trim() ? `${notes.trim()} • ` : '') + '⚡ Direct Fast Dispatch (7-Day Auto-Reconciliation Window Active)',
     };
 
     onApproveDispatchLot(newLot, directPacksToCreate.map((p) => p.id));
@@ -583,7 +583,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
             Outward Dispatch Staging & Fast Manifest System
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Dispatch battery packs immediately with vehicle logistics and 60-day automatic inward reconciliation.
+            Dispatch battery packs immediately with vehicle logistics and 7-day automatic inward reconciliation.
           </p>
         </div>
 

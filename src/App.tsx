@@ -449,7 +449,7 @@ export function App() {
     };
   }, []);
 
-  // Handler: Add Inward Packs (with 60-Day Auto Reconciliation for Direct Dispatches)
+  // Handler: Add Inward Packs (with 7-Day Auto Reconciliation for Direct Dispatches)
   const handleAddInwardPacks = async (
     newPacks: BatteryPack[],
     shipmentRecord: InwardShipmentRecord
@@ -478,7 +478,7 @@ export function App() {
           fromLocation: 'Receiving Dock',
           toLocation: pendingMatch.currentLocation || `Dispatched to ${pendingMatch.dispatchToCustomer || 'EV Plant'}`,
           movedBy: shipmentRecord.inwardBy || 'Inward Clerk',
-          reason: `60-Day Auto-Reconciled with Inward Challan #${shipmentRecord.documentNo} (${shipmentRecord.dealershipName})`,
+          reason: `7-Day Auto-Reconciled with Inward Challan #${shipmentRecord.documentNo} (${shipmentRecord.dealershipName})`,
         };
 
         const reconciledPack: BatteryPack = {
@@ -522,7 +522,7 @@ export function App() {
     }
 
     if (reconciledCount > 0) {
-      alert(`⚡ 60-Day Auto-Reconciliation Complete: ${reconciledCount} inward pack(s) were automatically matched & linked with previously dispatched records!`);
+      alert(`⚡ 7-Day Auto-Reconciliation Complete: ${reconciledCount} inward pack(s) were automatically matched & linked with previously dispatched records!`);
     }
   };
 
@@ -862,7 +862,7 @@ export function App() {
         dispatchedPacksToSync.push(updated);
       } else {
         // Brand new direct dispatched pack (Pre-inward direct dispatch)
-        const validUntil = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+        const validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const newDirectPack: BatteryPack = {
           ...lotPack,
           id: lotPack.id || `pack-direct-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -895,7 +895,7 @@ export function App() {
               fromLocation: 'High-Load Direct Dispatch',
               toLocation: `Dispatched to ${lot.consigneeName}`,
               movedBy: lot.dispatchedBy || 'Dispatcher',
-              reason: 'Direct Bulk Dispatch (60-Day Auto-Reconciliation Window)',
+              reason: 'Direct Bulk Dispatch (7-Day Auto-Reconciliation Window)',
             },
           ],
         };

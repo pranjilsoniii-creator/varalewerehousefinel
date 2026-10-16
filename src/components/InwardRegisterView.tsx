@@ -16,9 +16,20 @@ import {
   Filter,
   Download,
   Truck,
+  RefreshCw,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, INITIAL_SAVED_ADDRESSES, getProductNameAndType } from '../data/batteryCatalog';
+import {
+  ALL_PACK_TYPES,
+  BATTERY_MODELS,
+  INITIAL_SAVED_ADDRESSES,
+  getProductNameAndType,
+  normalizeModelFamily,
+  formatPackDisplayName,
+  formatIndianDate,
+} from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 import { exportInwardRegisterPacksToExcel } from '../utils/excelExport';
 
@@ -51,6 +62,12 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'CUSTOM'>('ALL');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  // Lifecycle Cycle Filter: 'ALL' | 'FIRST_TIME' | 'RE_INWARD'
+  const [lifecycleFilter, setLifecycleFilter] = useState<'ALL' | 'FIRST_TIME' | 'RE_INWARD'>('ALL');
+
+  // Pack selected for full Lifecycle Journey & First Inward Modal inspection
+  const [selectedLifecyclePack, setSelectedLifecyclePack] = useState<BatteryPack | null>(null);
 
   // Multi-Select Pack IDs for Batch Actions
   const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
@@ -173,6 +190,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     let diffCount = 0;
     let inWarehouseCount = 0;
     let dispatchedCount = 0;
+    let reInwardCount = 0;
 
     inwardOnlyPacks.forEach((p) => {
       if (p.status === 'DISPATCHED') {
@@ -182,6 +200,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       }
       if (p.status === 'PENDING_APPROVAL') pendingCount += 1;
       if (p.isDifferentSerial) diffCount += 1;
+      if ((p.lifecycleCount && p.lifecycleCount > 1) || (p.lifecycleHistory && p.lifecycleHistory.length > 0) || p.id.includes('-cycle-')) {
+        reInwardCount += 1;
+      }
       if (p.packType.startsWith('Kanger1.0')) k1Count += 1;
       else if (p.packType.startsWith('Kanger2.0')) k2Count += 1;
       else if (p.packType.startsWith('Limber')) limberCount += 1;
@@ -191,6 +212,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       total: inwardOnlyPacks.length,
       inWarehouse: inWarehouseCount,
       dispatched: dispatchedCount,
+      reInward: reInwardCount,
       k1: k1Count,
       k2: k2Count,
       limber: limberCount,
@@ -250,9 +272,18 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
         if (customEndDate && packDateStr > customEndDate) return false;
       }
 
+      // 5. Lifecycle Filter
+      if (lifecycleFilter === 'FIRST_TIME') {
+        const isMultiCycle = (p.lifecycleCount && p.lifecycleCount > 1) || (p.lifecycleHistory && p.lifecycleHistory.length > 0) || p.id.includes('-cycle-');
+        if (isMultiCycle) return false;
+      } else if (lifecycleFilter === 'RE_INWARD') {
+        const isMultiCycle = (p.lifecycleCount && p.lifecycleCount > 1) || (p.lifecycleHistory && p.lifecycleHistory.length > 0) || p.id.includes('-cycle-');
+        if (!isMultiCycle) return false;
+      }
+
       return true;
     });
-  }, [inwardOnlyPacks, searchQuery, modelFilter, statusFilter, dateFilter, customStartDate, customEndDate, todayStr]);
+  }, [inwardOnlyPacks, searchQuery, modelFilter, statusFilter, dateFilter, lifecycleFilter, customStartDate, customEndDate, todayStr]);
 
   // Dynamic Dealership Info Map for Auto-Filling State & City
   const { dealershipSuggestions, dealershipInfoMap } = useMemo(() => {
@@ -307,6 +338,171 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     const doc = editDocumentNo.trim().toLowerCase();
     return packs.filter((p) => p.documentNo && p.documentNo.trim().toLowerCase() === doc);
   }, [editingPack, editDocumentNo, packs]);
+
+  // Helper to extract complete chronologically-ordered lifecycle cycles for a pack
+  const getCompletePackCycles = (targetPack: BatteryPack) => {
+    const cleanNum = targetPack.packNumber.trim().toLowerCase();
+    const targetModelFamily = normalizeModelFamily(targetPack.packType);
+
+    type MergedCycle = {
+      cycleNumber: number;
+      inwardDate?: string;
+      documentNo?: string;
+      dealershipName?: string;
+      receivedState?: string;
+      transportName?: string;
+      inwardBy?: string;
+      remark?: string;
+      hasInwardStamp?: boolean;
+      isWithoutPlate?: boolean;
+      isDifferentSerial?: boolean;
+      challanPackNumber?: string;
+      mismatchReason?: string;
+      dispatchedAt?: string;
+      dispatchedBy?: string;
+      dispatchLotId?: string;
+      dispatchDocNo?: string;
+      dispatchLrNo?: string;
+      dispatchVehicleNo?: string;
+      dispatchTransporter?: string;
+      dispatchToCustomer?: string;
+      dispatchToAddress?: string;
+      status?: string;
+      currentLocation?: string;
+      lineId?: string;
+      rackNumber?: number;
+      rackSlot?: number;
+    };
+
+    const cyclesMap = new Map<string, MergedCycle>();
+
+    // 1. Gather historical cycles stored inside targetPack
+    if (targetPack.lifecycleHistory && Array.isArray(targetPack.lifecycleHistory)) {
+      targetPack.lifecycleHistory.forEach((c) => {
+        const key = `${(c.documentNo || '').trim().toLowerCase()}_${(c.inwardDate || '').slice(0, 10)}`;
+        cyclesMap.set(key, {
+          cycleNumber: c.cycleNumber,
+          inwardDate: c.inwardDate,
+          documentNo: c.documentNo,
+          dealershipName: c.dealershipName,
+          receivedState: c.receivedState,
+          transportName: c.transportName,
+          inwardBy: c.inwardBy,
+          remark: c.remark,
+          hasInwardStamp: c.hasInwardStamp,
+          isWithoutPlate: c.isWithoutPlate,
+          isDifferentSerial: c.isDifferentSerial,
+          challanPackNumber: c.challanPackNumber,
+          mismatchReason: c.mismatchReason,
+          dispatchedAt: c.dispatchedAt,
+          dispatchedBy: c.dispatchedBy,
+          dispatchLotId: c.dispatchLotId,
+          dispatchDocNo: c.dispatchDocNo,
+          dispatchLrNo: c.dispatchLrNo,
+          dispatchVehicleNo: c.dispatchVehicleNo,
+          dispatchTransporter: c.dispatchTransporter,
+          dispatchToCustomer: c.dispatchToCustomer,
+          dispatchToAddress: c.dispatchToAddress,
+          status: 'DISPATCHED',
+          currentLocation: `Dispatched to ${c.dispatchToCustomer || 'Customer'}`,
+          lineId: c.lineId,
+          rackNumber: c.rackNumber,
+          rackSlot: c.rackSlot,
+        });
+      });
+    }
+
+    // 2. Scan all packs in warehouse matching pack number and model family
+    packs.forEach((p) => {
+      if (p.packNumber.trim().toLowerCase() !== cleanNum) return;
+      if (normalizeModelFamily(p.packType) !== targetModelFamily) return;
+
+      // Also gather this pack's lifecycleHistory if any
+      if (p.lifecycleHistory && Array.isArray(p.lifecycleHistory)) {
+        p.lifecycleHistory.forEach((c) => {
+          const key = `${(c.documentNo || '').trim().toLowerCase()}_${(c.inwardDate || '').slice(0, 10)}`;
+          if (!cyclesMap.has(key)) {
+            cyclesMap.set(key, {
+              cycleNumber: c.cycleNumber,
+              inwardDate: c.inwardDate,
+              documentNo: c.documentNo,
+              dealershipName: c.dealershipName,
+              receivedState: c.receivedState,
+              transportName: c.transportName,
+              inwardBy: c.inwardBy,
+              remark: c.remark,
+              hasInwardStamp: c.hasInwardStamp,
+              isWithoutPlate: c.isWithoutPlate,
+              isDifferentSerial: c.isDifferentSerial,
+              challanPackNumber: c.challanPackNumber,
+              mismatchReason: c.mismatchReason,
+              dispatchedAt: c.dispatchedAt,
+              dispatchedBy: c.dispatchedBy,
+              dispatchLotId: c.dispatchLotId,
+              dispatchDocNo: c.dispatchDocNo,
+              dispatchLrNo: c.dispatchLrNo,
+              dispatchVehicleNo: c.dispatchVehicleNo,
+              dispatchTransporter: c.dispatchTransporter,
+              dispatchToCustomer: c.dispatchToCustomer,
+              dispatchToAddress: c.dispatchToAddress,
+              status: 'DISPATCHED',
+              currentLocation: `Dispatched to ${c.dispatchToCustomer || 'Customer'}`,
+              lineId: c.lineId,
+              rackNumber: c.rackNumber,
+              rackSlot: c.rackSlot,
+            });
+          }
+        });
+      }
+
+      // Add the pack record itself
+      const selfKey = `${(p.documentNo || '').trim().toLowerCase()}_${(p.inwardDate || '').slice(0, 10)}`;
+      if (!cyclesMap.has(selfKey)) {
+        cyclesMap.set(selfKey, {
+          cycleNumber: p.lifecycleCount || 1,
+          inwardDate: p.inwardDate,
+          documentNo: p.documentNo,
+          dealershipName: p.dealershipName,
+          receivedState: p.receivedState,
+          transportName: p.transportName,
+          inwardBy: p.inwardBy,
+          remark: p.remark,
+          hasInwardStamp: p.hasInwardStamp,
+          isWithoutPlate: p.isWithoutPlate,
+          isDifferentSerial: p.isDifferentSerial,
+          challanPackNumber: p.challanPackNumber,
+          mismatchReason: p.mismatchReason,
+          dispatchedAt: p.dispatchedAt,
+          dispatchedBy: p.dispatchedBy,
+          dispatchLotId: p.dispatchLotId,
+          dispatchDocNo: p.dispatchDocNo,
+          dispatchLrNo: p.dispatchLrNo,
+          dispatchVehicleNo: p.dispatchVehicleNo,
+          dispatchTransporter: p.dispatchTransporter,
+          dispatchToCustomer: p.dispatchToCustomer,
+          dispatchToAddress: p.dispatchToAddress,
+          status: p.status,
+          currentLocation: p.currentLocation,
+          lineId: p.lineId,
+          rackNumber: p.rackNumber,
+          rackSlot: p.rackSlot,
+        });
+      }
+    });
+
+    // Sort chronologically (oldest inward date first)
+    const sorted = Array.from(cyclesMap.values()).sort((a, b) => {
+      const tA = new Date(a.inwardDate || 0).getTime();
+      const tB = new Date(b.inwardDate || 0).getTime();
+      return tA - tB;
+    });
+
+    // Re-number cycles cleanly 1..N
+    return sorted.map((cycle, idx) => ({
+      ...cycle,
+      cycleNumber: idx + 1,
+    }));
+  };
 
   // Multi-Select Handlers
   const toggleSelectPack = (packId: string) => {
@@ -548,50 +744,62 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
       )}
 
       {/* Inward Series KPI Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-xs">
-        <div className="bg-white border-2 border-blue-300 p-3.5 rounded-xl shadow-2xs space-y-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2.5 text-xs">
+        <div className="bg-white border-2 border-blue-300 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-blue-900 font-bold uppercase tracking-wider text-[10px]">Total Inwarded</p>
           <p className="text-2xl font-black font-mono-code text-blue-800">{inwardSeriesSummary.total}</p>
           <p className="text-[10px] text-slate-400 font-medium">100% Inward Ledger</p>
         </div>
 
-        <div className="bg-white border border-emerald-300 p-3.5 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-emerald-300 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">In Warehouse</p>
           <p className="text-2xl font-black font-mono-code text-emerald-700">{inwardSeriesSummary.inWarehouse}</p>
           <p className="text-[10px] text-emerald-600 font-medium">Available in Stock</p>
         </div>
 
-        <div className="bg-white border border-blue-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-blue-200 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-blue-600 font-bold uppercase tracking-wider text-[10px]">Dispatched</p>
           <p className="text-2xl font-black font-mono-code text-blue-600">{inwardSeriesSummary.dispatched}</p>
           <p className="text-[10px] text-blue-500 font-medium">Outward to Plants</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+        <div
+          onClick={() => setLifecycleFilter(prev => prev === 'RE_INWARD' ? 'ALL' : 'RE_INWARD')}
+          className={`bg-white border p-3 rounded-xl shadow-2xs space-y-1 cursor-pointer transition ${lifecycleFilter === 'RE_INWARD' ? 'border-indigo-600 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-indigo-200 hover:border-indigo-400'}`}
+          title="Click to toggle filter for Re-Inwards / Multi-cycle packs"
+        >
+          <p className="text-indigo-700 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+            <RefreshCw className="w-2.5 h-2.5 text-indigo-600" /> Re-Inwards
+          </p>
+          <p className="text-2xl font-black font-mono-code text-indigo-800">{inwardSeriesSummary.reInward}</p>
+          <p className="text-[10px] text-indigo-600 font-medium">Multi-Cycle Packs</p>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-slate-600 font-bold uppercase tracking-wider text-[10px]">Kanger 1.0 Series</p>
           <p className="text-2xl font-extrabold font-mono-code text-slate-800">{inwardSeriesSummary.k1}</p>
           <p className="text-[10px] text-slate-400">AIO / Gen3 / CKD / FBU</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-purple-600 font-bold uppercase tracking-wider text-[10px]">Kanger 2.0 Series</p>
           <p className="text-2xl font-extrabold font-mono-code text-purple-700">{inwardSeriesSummary.k2}</p>
           <p className="text-[10px] text-slate-400">Kanger 2.0</p>
         </div>
 
-        <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-emerald-600 font-bold uppercase tracking-wider text-[10px]">Limber Series</p>
           <p className="text-2xl font-extrabold font-mono-code text-emerald-700">{inwardSeriesSummary.limber}</p>
           <p className="text-[10px] text-slate-400">Limber Series</p>
         </div>
 
-        <div className="bg-white border border-amber-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-amber-200 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-amber-600 font-bold uppercase tracking-wider text-[10px]">Pending Approval</p>
           <p className="text-2xl font-extrabold font-mono-code text-amber-600">{inwardSeriesSummary.pending}</p>
           <p className="text-[10px] text-slate-400">Supervisor Check</p>
         </div>
 
-        <div className="bg-white border border-purple-200 p-3.5 rounded-xl shadow-2xs space-y-1">
+        <div className="bg-white border border-purple-200 p-3 rounded-xl shadow-2xs space-y-1">
           <p className="text-purple-700 font-bold uppercase tracking-wider text-[10px]">Diff / Mismatch</p>
           <p className="text-2xl font-extrabold font-mono-code text-purple-700">{inwardSeriesSummary.diff}</p>
           <p className="text-[10px] text-slate-400">Challan Mismatches</p>
@@ -600,9 +808,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
       {/* Filter Controls Bar */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
-        {/* Row 1: Search & Model & Status Filters */}
+        {/* Row 1: Search & Model & Status & Lifecycle Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
-          <div className="sm:col-span-5 relative">
+          <div className="sm:col-span-4 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -613,7 +821,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
             />
           </div>
 
-          <div className="sm:col-span-4">
+          <div className="sm:col-span-3">
             <select
               value={modelFilter}
               onChange={(e) => setModelFilter(e.target.value)}
@@ -639,6 +847,18 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
               <option value="IN_STORAGE">Allocated to Lines / Storage</option>
               <option value="DISPATCHED">Dispatched Outward</option>
               <option value="PENDING_APPROVAL">Pending Approval</option>
+            </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <select
+              value={lifecycleFilter}
+              onChange={(e) => setLifecycleFilter(e.target.value as any)}
+              className="w-full bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs font-bold text-indigo-900 focus:bg-white focus:border-indigo-500 focus:outline-none"
+            >
+              <option value="ALL">All Cycles</option>
+              <option value="FIRST_TIME">Cycle #1 (Initial)</option>
+              <option value="RE_INWARD">Cycle #2+ (Re-Inwards)</option>
             </select>
           </div>
         </div>
@@ -799,6 +1019,10 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                 const { productName, productType } = getProductNameAndType(pack.packType);
                 const isPending = pack.status === 'PENDING_APPROVAL';
                 const isSelected = selectedPackIds.has(pack.id);
+                const packCycles = getCompletePackCycles(pack);
+                const isMultiCycle = packCycles.length > 1 || Boolean(pack.lifecycleHistory && pack.lifecycleHistory.length > 0) || pack.id.includes('-cycle-');
+                const firstCycle = packCycles.length > 0 ? packCycles[0] : null;
+                const displayCycleNum = pack.lifecycleCount || (packCycles.length > 0 ? packCycles.length : 1);
 
                 return (
                   <tr key={pack.id} className={`hover:bg-slate-50/80 transition ${isSelected ? 'bg-blue-50/50' : ''}`}>
@@ -813,14 +1037,25 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                     <td className="p-3 font-mono-code text-slate-400">{index + 1}</td>
                     <td className="p-3">
                       <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono-code font-extrabold text-slate-900 text-sm">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => onOpenPackDetails(pack)}
+                            className="font-mono-code font-extrabold text-slate-900 text-sm hover:text-blue-600 transition text-left cursor-pointer"
+                            title="Click to view full pack details & Janamkundli"
+                          >
                             #{pack.packNumber}
-                          </span>
-                          {((pack.lifecycleCount && pack.lifecycleCount > 1) || pack.id.includes('-cycle-')) && (
-                            <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 border border-blue-300 text-[9px] font-extrabold">
-                              CYCLE #{pack.lifecycleCount || 1}
-                            </span>
+                          </button>
+                          {isMultiCycle && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLifecyclePack(pack)}
+                              className="px-1.5 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-300 text-[9px] font-extrabold flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                              title="Click to view complete journey & 1st inward details"
+                            >
+                              <RefreshCw className="w-2.5 h-2.5 text-blue-600" />
+                              CYCLE #{displayCycleNum}
+                            </button>
                           )}
                           {pack.isWithoutPlate && (
                             <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold">
@@ -841,6 +1076,22 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                             Challan: #{pack.challanPackNumber}
                           </div>
                         )}
+                        {/* Clickable First Inward Link */}
+                        {isMultiCycle && firstCycle && firstCycle.inwardDate && (
+                          <div className="pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLifecyclePack(pack)}
+                              className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 hover:underline cursor-pointer text-left"
+                              title="Click to inspect 1st inward arrival origin and documents"
+                            >
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                              <span className="truncate max-w-[200px]">
+                                1st Inward: {formatIndianDate(firstCycle.inwardDate)} ({firstCycle.dealershipName || 'Origin'})
+                              </span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="p-3 font-bold text-slate-900 whitespace-nowrap">
@@ -852,13 +1103,25 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                       </span>
                     </td>
                     <td className="p-3">
-                      {pack.remark ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 max-w-[150px] truncate" title={pack.remark}>
-                          {pack.remark}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-xs">—</span>
-                      )}
+                      <div className="space-y-1">
+                        {pack.status === 'DISPATCHED' && (
+                          <div
+                            className="text-[10px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded inline-block max-w-[180px] truncate"
+                            title={`Dispatched to ${pack.dispatchToCustomer || 'Customer'}${pack.dispatchDocNo ? ` (Doc #${pack.dispatchDocNo})` : ''}`}
+                          >
+                            🚚 Dispatched: {pack.dispatchToCustomer || 'Plant'}
+                          </div>
+                        )}
+                        {pack.remark ? (
+                          <div>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 max-w-[150px] truncate" title={pack.remark}>
+                              {pack.remark}
+                            </span>
+                          </div>
+                        ) : (
+                          pack.status !== 'DISPATCHED' && <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 font-mono-code text-slate-900 font-bold">{pack.documentNo || '—'}</td>
                     <td className="p-3 font-medium text-slate-800 max-w-[180px] truncate">{pack.dealershipName || '—'}</td>
@@ -904,6 +1167,17 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                             className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold cursor-pointer"
                           >
                             Approve
+                          </button>
+                        )}
+
+                        {isMultiCycle && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLifecyclePack(pack)}
+                            className="p-1 text-indigo-600 hover:text-indigo-800 rounded hover:bg-indigo-50 transition cursor-pointer"
+                            title="View Multi-Cycle Inward & Dispatch Journey"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
                           </button>
                         )}
 
@@ -1222,6 +1496,226 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Pack Lifecycle Journey & First Inward History Modal */}
+      {selectedLifecyclePack && (() => {
+        const targetCycles = getCompletePackCycles(selectedLifecyclePack);
+        const firstCycle = targetCycles.length > 0 ? targetCycles[0] : null;
+        const { productName, productType } = getProductNameAndType(selectedLifecyclePack.packType);
+        const model = BATTERY_MODELS[selectedLifecyclePack.packType];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold flex-shrink-0 shadow-2xs">
+                    <RefreshCw className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-mono-code font-black text-slate-900">
+                        Pack #{selectedLifecyclePack.packNumber}
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-300 text-[10px] font-extrabold">
+                        {targetCycles.length} Cycle{targetCycles.length > 1 ? 's' : ''} Recorded
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${model?.badgeBg || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                        {productType}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {productName} • Comprehensive Inward Origin & Dispatch History
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedLifecyclePack(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
+                {/* 1. Origin / First Inward Milestone Banner */}
+                {firstCycle && (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                        <Building className="w-3.5 h-3.5 text-blue-600" /> First Ever Inward Origin (Cycle #1)
+                      </span>
+                      <span className="text-[10px] font-mono-code font-bold text-blue-800 bg-white/80 px-2 py-0.5 rounded border border-blue-200">
+                        First Arrived: {formatIndianDate(firstCycle.inwardDate)}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-slate-700">
+                      <div className="bg-white/80 p-2.5 rounded-lg border border-blue-100 space-y-0.5">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Original Dealership / Supplier</span>
+                        <span className="font-bold text-slate-900 text-xs">{firstCycle.dealershipName || '—'}</span>
+                        <span className="text-[10px] text-slate-500 block">{firstCycle.receivedState || 'Maharashtra'}</span>
+                      </div>
+
+                      <div className="bg-white/80 p-2.5 rounded-lg border border-blue-100 space-y-0.5">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Original Document / Challan</span>
+                        <span className="font-mono-code font-bold text-blue-800 text-xs">#{firstCycle.documentNo || '—'}</span>
+                        <span className="text-[10px] text-slate-500 block">Inwarded by: {firstCycle.inwardBy || 'Staff'}</span>
+                      </div>
+                    </div>
+
+                    {firstCycle.remark && (
+                      <div className="text-[11px] text-amber-900 bg-amber-50/80 border border-amber-200 p-2 rounded-lg">
+                        <strong>First Inward Remark:</strong> {firstCycle.remark}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. Current Warehouse Live State */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Current Physical Warehouse State
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${selectedLifecyclePack.status === 'DISPATCHED' ? 'bg-blue-100 text-blue-800' : selectedLifecyclePack.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {selectedLifecyclePack.status === 'DISPATCHED' ? 'DISPATCHED OUTWARD' : selectedLifecyclePack.status === 'PENDING_APPROVAL' ? 'PENDING APPROVAL' : 'IN WAREHOUSE STOCK'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-slate-800 pt-0.5">
+                    <span>
+                      Location: <strong>{selectedLifecyclePack.status === 'DISPATCHED' ? `Dispatched to ${selectedLifecyclePack.dispatchToCustomer || 'Plant'}` : (selectedLifecyclePack.currentLocation || 'Inward Area')}</strong>
+                    </span>
+                    <span className="font-mono-code text-[11px] text-slate-500">
+                      Active Cycle: #{selectedLifecyclePack.lifecycleCount || (targetCycles.length > 0 ? targetCycles.length : 1)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Chronological Step-by-Step Cycle Journey */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" /> Complete Journey Log ({targetCycles.length} Inward Event{targetCycles.length > 1 ? 's' : ''})
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {targetCycles.map((cycle, cIdx) => (
+                      <div
+                        key={cIdx}
+                        className={`p-3.5 rounded-xl border space-y-2 transition ${cIdx === targetCycles.length - 1 ? 'border-indigo-300 bg-indigo-50/20 shadow-2xs' : 'border-slate-200 bg-slate-50/60'}`}
+                      >
+                        {/* Cycle Title Bar */}
+                        <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-mono-code font-bold text-[10px]">
+                              CYCLE #{cycle.cycleNumber}
+                            </span>
+                            <span className="font-bold text-slate-900 text-xs">
+                              {cIdx === 0 ? 'Initial Inward Arrival' : `Re-Inward Arrival #${cycle.cycleNumber}`}
+                            </span>
+                          </div>
+                          <span className="font-mono-code text-[11px] font-bold text-slate-600">
+                            {formatIndianDate(cycle.inwardDate)}
+                          </span>
+                        </div>
+
+                        {/* Inward Details Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700">
+                          <div>
+                            <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Inward Challan / Document</span>
+                            <span className="font-mono-code font-bold text-blue-700">#{cycle.documentNo || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Source Supplier / Dealership</span>
+                            <span className="font-semibold text-slate-900">{cycle.dealershipName || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Received State</span>
+                            <span>{cycle.receivedState || 'Maharashtra'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[9.5px] uppercase font-bold">Inward Operator</span>
+                            <span className="font-medium text-slate-800">{cycle.inwardBy || 'Staff'}</span>
+                          </div>
+                        </div>
+
+                        {/* Condition & Remarks */}
+                        {cycle.remark && (
+                          <div className="text-[10.5px] text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">
+                            <strong>Note / Remark:</strong> {cycle.remark}
+                          </div>
+                        )}
+
+                        {cycle.isDifferentSerial && cycle.challanPackNumber && (
+                          <div className="text-[10.5px] text-purple-900 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-md font-mono-code">
+                            ⚠️ Challan Document Serial: #{cycle.challanPackNumber} {cycle.mismatchReason ? `(${cycle.mismatchReason})` : ''}
+                          </div>
+                        )}
+
+                        {/* Dispatch Outcome (if this cycle had a dispatch) */}
+                        {cycle.dispatchedAt ? (
+                          <div className="mt-1 pt-2 border-t border-slate-200/80 bg-blue-50/50 p-2.5 rounded-lg border border-blue-100 space-y-1 text-[11px]">
+                            <div className="flex items-center justify-between text-blue-950 font-bold">
+                              <span className="flex items-center gap-1.5 text-blue-800">
+                                <Truck className="w-3.5 h-3.5 text-blue-600" /> Dispatched to {cycle.dispatchToCustomer || 'Customer Plant'}
+                              </span>
+                              <span className="font-mono-code text-[10px] text-blue-600">
+                                {formatIndianDate(cycle.dispatchedAt)}
+                              </span>
+                            </div>
+                            <div className="text-[10.5px] text-slate-600 flex flex-wrap gap-x-3 gap-y-0.5">
+                              {cycle.dispatchDocNo && <span>Gate Pass / Doc: <strong>#{cycle.dispatchDocNo}</strong></span>}
+                              {cycle.dispatchVehicleNo && <span>Vehicle: <strong>{cycle.dispatchVehicleNo}</strong></span>}
+                              {cycle.dispatchLrNo && <span>LR #: <strong>{cycle.dispatchLrNo}</strong></span>}
+                              {cycle.dispatchedBy && <span>By: <strong>{cycle.dispatchedBy}</strong></span>}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded flex items-center gap-1 font-semibold">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Currently Active in Warehouse Inventory</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLifecyclePack(null)}
+                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg font-bold border border-slate-200 cursor-pointer text-xs"
+                >
+                  Close
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = selectedLifecyclePack;
+                    setSelectedLifecyclePack(null);
+                    onOpenPackDetails(p);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer text-xs shadow-xs"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Open Full Janamkundli 📜</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

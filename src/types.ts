@@ -95,7 +95,7 @@ export interface BatteryPack {
   mismatchReason?: string;            // Notes on serial discrepancy
   sourceType?: 'INWARD' | 'LINE_POPULATE' | 'DIRECT_DISPATCH'; // Source: Inward Dock vs Direct Line Matrix vs Fast Direct Dispatch
 
-  // 60-Day Auto Reconciliation (For Direct Fast Dispatch before Inward)
+  // 7-Day Auto Reconciliation (For Direct Fast Dispatch before Inward)
   pendingInwardReconciliation?: boolean;
   reconciliationValidUntil?: string;
   reconciledAt?: string;

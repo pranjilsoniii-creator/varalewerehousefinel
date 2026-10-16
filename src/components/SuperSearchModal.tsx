@@ -143,9 +143,12 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
         else if (rLower.includes('storage') || rLower.includes('line') || rLower.includes('rack')) evType = 'STORAGE';
 
         const cleanReason = (mov.reason || '')
-          .replace(/30-Day/gi, '60-Day')
-          .replace(/30 Day/gi, '60 Day')
-          .replace(/30 days/gi, '60 days');
+          .replace(/60-Day/gi, '7-Day')
+          .replace(/60 Day/gi, '7 Day')
+          .replace(/60 days/gi, '7 days')
+          .replace(/30-Day/gi, '7-Day')
+          .replace(/30 Day/gi, '7 Day')
+          .replace(/30 days/gi, '7 days');
 
         list.push({
           id: mov.id || `mov-${idx}`,
