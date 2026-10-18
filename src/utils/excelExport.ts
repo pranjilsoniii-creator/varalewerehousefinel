@@ -1,9 +1,19 @@
 import * as XLSX from 'xlsx';
 import { BatteryPack, DispatchLot, InwardShipmentRecord, InvoiceData } from '../types';
-import { BATTERY_MODELS, getShortPackTypeName } from '../data/batteryCatalog';
+import { BATTERY_MODELS, getShortPackTypeName, formatExcelDate, formatExcelDateTime } from '../data/batteryCatalog';
 
 export function exportInventoryToExcel(packs: BatteryPack[], filename = 'Tata_Battery_Warehouse_Inventory.xlsx') {
-  const data = packs.map((p, index) => {
+  // Sort chronologically ascending by inward date (01-09-2026, 02-09-2026...)
+  const sortedPacks = [...packs].sort((a, b) => {
+    const timeA = a.inwardDate ? new Date(a.inwardDate).getTime() : (a.scannedAt ? new Date(a.scannedAt).getTime() : 0);
+    const timeB = b.inwardDate ? new Date(b.inwardDate).getTime() : (b.scannedAt ? new Date(b.scannedAt).getTime() : 0);
+    if (timeA !== timeB) return timeA - timeB;
+    const numA = parseInt(a.packNumber.replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt(b.packNumber.replace(/\D/g, ''), 10) || 0;
+    return numA - numB;
+  });
+
+  const data = sortedPacks.map((p, index) => {
     const model = BATTERY_MODELS[p.packType];
     return {
       'Sr No': index + 1,
@@ -15,14 +25,14 @@ export function exportInventoryToExcel(packs: BatteryPack[], filename = 'Tata_Ba
       'Rack No': p.status === 'IN_STORAGE' ? 'R-' + (p.rackNumber || 1) : '-',
       'Slot (Level 1-4)': p.status === 'IN_STORAGE' ? 'Level ' + (p.rackSlot || 1) : '-',
       'Status': p.status,
-      'Inward Date': p.inwardDate ? new Date(p.inwardDate).toLocaleString('en-IN') : '-',
+      'Inward Date': formatExcelDate(p.inwardDate || p.scannedAt),
       'Document / Challan No': p.documentNo || '-',
       'Dealership / Source': p.dealershipName || '-',
       'Transport Company': p.transportName || '-',
       'Tata Stamp Verified': p.hasInwardStamp ? 'YES' : 'NO',
       'Inwarded By': p.inwardBy || '-',
       'Approved By': p.inwardApprovedBy || '-',
-      'Dispatched Date': p.dispatchedAt ? new Date(p.dispatchedAt).toLocaleString('en-IN') : '-',
+      'Dispatched Date': p.dispatchedAt ? formatExcelDate(p.dispatchedAt) : '-',
       'Destination Consignee': p.dispatchToCustomer || p.dispatchToAddress || '-',
       'Vehicle Number': p.dispatchVehicleNo || '-',
       'LR Number': p.dispatchLrNo || '-',
@@ -37,9 +47,16 @@ export function exportInventoryToExcel(packs: BatteryPack[], filename = 'Tata_Ba
 }
 
 export function exportInwardShipmentsToExcel(shipments: InwardShipmentRecord[], filename = 'Tata_Inward_Shipment_Log.xlsx') {
-  const data = shipments.map((s, index) => ({
+  // Sort chronologically ascending (01-09-2026, 02-09-2026...)
+  const sortedShipments = [...shipments].sort((a, b) => {
+    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return timeA - timeB;
+  });
+
+  const data = sortedShipments.map((s, index) => ({
     'Sr No': index + 1,
-    'Inward Date & Time': new Date(s.timestamp).toLocaleString('en-IN'),
+    'Inward Date': formatExcelDate(s.timestamp),
     'Document / Invoice No': s.documentNo,
     'Dealership / Source': s.dealershipName,
     'Received State': s.receivedState,
@@ -60,7 +77,17 @@ export function exportInwardShipmentsToExcel(shipments: InwardShipmentRecord[], 
 }
 
 export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename = 'Tata_Inward_Packs_Ledger.xlsx') {
-  const data = packs.map((p, index) => {
+  // Sort chronologically ascending by inward date (01-09-2026, 02-09-2026...)
+  const sortedPacks = [...packs].sort((a, b) => {
+    const timeA = a.inwardDate ? new Date(a.inwardDate).getTime() : (a.scannedAt ? new Date(a.scannedAt).getTime() : 0);
+    const timeB = b.inwardDate ? new Date(b.inwardDate).getTime() : (b.scannedAt ? new Date(b.scannedAt).getTime() : 0);
+    if (timeA !== timeB) return timeA - timeB;
+    const numA = parseInt(a.packNumber.replace(/\D/g, ''), 10) || 0;
+    const numB = parseInt(b.packNumber.replace(/\D/g, ''), 10) || 0;
+    return numA - numB;
+  });
+
+  const data = sortedPacks.map((p, index) => {
     const model = BATTERY_MODELS[p.packType];
     const modelName = p.packType === 'Limber_Non_Ais' || p.packType === 'Limber_Ais' 
       ? 'Limber_Ais' 
@@ -82,7 +109,7 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
       'Dealership / Source Supplier': p.dealershipName || '—',
       'Received State & City': p.receivedState || 'Maharashtra',
       'Transporter Carrier': p.transportName || '—',
-      'Inward Date': p.inwardDate ? new Date(p.inwardDate).toLocaleString('en-IN') : '—',
+      'Inward Date': formatExcelDate(p.inwardDate || p.scannedAt),
       'Tata Inward Stamp Verified': p.hasInwardStamp ? 'YES' : 'NO',
       'Current Status': statusLabel,
       'Location Area': p.status === 'DISPATCHED'
@@ -90,7 +117,7 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
         : p.status === 'IN_STORAGE'
         ? `Line ${p.lineId} (R-${p.rackNumber || 1}, Slot ${p.rackSlot || 1})`
         : (p.locationArea || 'Inward Area'),
-      'Dispatched Date': p.dispatchedAt ? new Date(p.dispatchedAt).toLocaleString('en-IN') : '—',
+      'Dispatched Date': p.dispatchedAt ? formatExcelDate(p.dispatchedAt) : '—',
       'Dispatched Customer': p.dispatchToCustomer || '—',
       'Inwarded By': p.inwardBy || '—',
       'Approved By': p.inwardApprovedBy || '—',
@@ -98,20 +125,48 @@ export function exportInwardRegisterPacksToExcel(packs: BatteryPack[], filename 
   });
 
   const ws = XLSX.utils.json_to_sheet(data);
+
+  // Auto-width columns for neat layout
+  ws['!cols'] = [
+    { wch: 8 },  // Sr No
+    { wch: 14 }, // Pack Number
+    { wch: 18 }, // Model
+    { wch: 16 }, // Remark
+    { wch: 22 }, // Document / Challan No
+    { wch: 28 }, // Dealership
+    { wch: 22 }, // Received State
+    { wch: 22 }, // Transporter
+    { wch: 14 }, // Inward Date (DD-MM-YYYY)
+    { wch: 14 }, // Stamp
+    { wch: 22 }, // Status
+    { wch: 24 }, // Location Area
+    { wch: 14 }, // Dispatched Date (DD-MM-YYYY)
+    { wch: 28 }, // Dispatched Customer
+    { wch: 16 }, // Inwarded By
+    { wch: 16 }, // Approved By
+  ];
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Inward Packs Ledger');
   XLSX.writeFile(wb, filename);
 }
 
 export function exportDispatchLotsToExcel(lots: DispatchLot[], filename = 'Tata_Battery_Dispatch_Lots.xlsx') {
+  // Sort chronologically ascending by dispatch lot date (01-09-2026, 02-09-2026...)
+  const sortedLots = [...lots].sort((a, b) => {
+    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return timeA - timeB;
+  });
+
   const rows: any[] = [];
   
-  lots.forEach((lot) => {
+  sortedLots.forEach((lot) => {
     (lot.packs || []).forEach((pack) => {
       const model = BATTERY_MODELS[pack.packType];
       rows.push({
         'Lot Number': lot.lotNumber,
-        'Dispatch Date': new Date(lot.timestamp).toLocaleString('en-IN'),
+        'Dispatch Date': formatExcelDate(lot.timestamp),
         'Consignee Name': lot.consigneeName,
         'Destination Address': lot.consigneeAddress,
         'Consignee GSTIN': lot.consigneeGstin || '-',

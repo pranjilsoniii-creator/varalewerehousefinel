@@ -16,7 +16,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, DispatchLot } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, COMMON_TRANSPORTERS, getProductNameAndType, filterPacksStrictSearch } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, COMMON_TRANSPORTERS, getProductNameAndType, filterPacksStrictSearch, formatExcelDate } from '../data/batteryCatalog';
 import * as XLSX from 'xlsx';
 
 interface OutwardDispatchRegisterProps {
@@ -266,7 +266,19 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
 
   // Export to Excel matching exact column layout
   const handleExportExcel = () => {
-    const rows = filteredDispatches.map((p, index) => {
+    // Sort chronologically ascending (01-09-2026, 02-09-2026...)
+    const sortedDispatches = [...filteredDispatches].sort((a, b) => {
+      const lotA = a.dispatchLotId ? lotMap.get(a.dispatchLotId) : undefined;
+      const lotB = b.dispatchLotId ? lotMap.get(b.dispatchLotId) : undefined;
+      const timeA = new Date(a.dispatchedAt || lotA?.timestamp || 0).getTime();
+      const timeB = new Date(b.dispatchedAt || lotB?.timestamp || 0).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      const numA = parseInt(a.packNumber.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.packNumber.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    const rows = sortedDispatches.map((p, index) => {
       const lot = p.dispatchLotId ? lotMap.get(p.dispatchLotId) : undefined;
       const { productName, productType } = getProductNameAndType(p.packType);
       const destination = p.dispatchToCustomer || lot?.consigneeName || 'TATA AUTOCOMP SYSTEMS LTD';
@@ -278,7 +290,7 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
         'Product Name': productName,
         'Product Type': productType,
         'Remark': p.remark || '—',
-        'Dispatch Date': formatIndianDate(p.dispatchedAt || lot?.timestamp),
+        'Dispatch Date': formatExcelDate(p.dispatchedAt || lot?.timestamp),
         'Document Number': p.dispatchDocNo || lot?.transportDocNo || lot?.lotNumber || 'DCVRL/26-27-0001',
         'LR Number': p.dispatchLrNo || lot?.lrNumber || '32997',
         'Transporter Name': p.dispatchTransporter || lot?.transportName || 'Sahyadri Enterprises',

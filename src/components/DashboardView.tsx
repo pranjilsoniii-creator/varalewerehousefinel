@@ -22,7 +22,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { BatteryPack, DispatchLot, InwardShipmentRecord } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType, filterPacksStrictSearch } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType, filterPacksStrictSearch, formatExcelDate } from '../data/batteryCatalog';
 import * as XLSX from 'xlsx';
 
 interface DashboardViewProps {
@@ -315,11 +315,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Excel Export Handler: Inward Register in Period
   const handleExportInwardExcel = () => {
-    const data = filteredInwardTablePacks.map((p, idx) => {
+    // Sort chronologically ascending by inward date (01-09-2026, 02-09-2026...)
+    const sortedPacks = [...filteredInwardTablePacks].sort((a, b) => {
+      const timeA = a.inwardDate ? new Date(a.inwardDate).getTime() : (a.scannedAt ? new Date(a.scannedAt).getTime() : 0);
+      const timeB = b.inwardDate ? new Date(b.inwardDate).getTime() : (b.scannedAt ? new Date(b.scannedAt).getTime() : 0);
+      if (timeA !== timeB) return timeA - timeB;
+      const numA = parseInt(a.packNumber.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.packNumber.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    const data = sortedPacks.map((p, idx) => {
       const info = getProductNameAndType(p.packType);
       return {
         'Sr No': idx + 1,
-        'Inward Date & Time': formatIndianDate(p.inwardDate || p.scannedAt),
+        'Inward Date': formatExcelDate(p.inwardDate || p.scannedAt),
         'Pack Number': p.packNumber,
         'Product Name': info.productName,
         'Product Type': info.productType,
@@ -341,11 +351,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Excel Export Handler: Dispatch Register in Period
   const handleExportDispatchExcel = () => {
-    const data = filteredDispatchTablePacks.map((p, idx) => {
+    // Sort chronologically ascending by dispatch date (01-09-2026, 02-09-2026...)
+    const sortedPacks = [...filteredDispatchTablePacks].sort((a, b) => {
+      const timeA = a.dispatchedAt ? new Date(a.dispatchedAt).getTime() : 0;
+      const timeB = b.dispatchedAt ? new Date(b.dispatchedAt).getTime() : 0;
+      if (timeA !== timeB) return timeA - timeB;
+      const numA = parseInt(a.packNumber.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.packNumber.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    const data = sortedPacks.map((p, idx) => {
       const info = getProductNameAndType(p.packType);
       return {
         'Sr No': idx + 1,
-        'Dispatch Date & Time': formatIndianDate(p.dispatchedAt),
+        'Dispatch Date': formatExcelDate(p.dispatchedAt),
         'Pack Number': p.packNumber,
         'Product Name': info.productName,
         'Product Type': info.productType,

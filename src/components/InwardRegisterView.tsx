@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import {
   FileSpreadsheet,
   Search,
@@ -57,6 +57,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
   const { currentUser, isSuperAdmin, isManager, isSupervisor, isEmployee } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [modelFilter, setModelFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'INWARD_AREA' | 'IN_STORAGE' | 'DISPATCHED' | 'PENDING_APPROVAL'>('ALL');
   
@@ -230,8 +231,8 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     const ms30Days = 30 * 24 * 60 * 60 * 1000;
 
     // 1. Strict Search across pack number and other fields (exact pack number match prioritized)
-    const searchedList = searchQuery.trim()
-      ? filterPacksStrictSearch(inwardOnlyPacks, searchQuery)
+    const searchedList = deferredSearchQuery.trim()
+      ? filterPacksStrictSearch(inwardOnlyPacks, deferredSearchQuery)
       : inwardOnlyPacks;
 
     return searchedList.filter((p) => {
@@ -278,7 +279,7 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
 
       return true;
     });
-  }, [inwardOnlyPacks, searchQuery, modelFilter, statusFilter, dateFilter, lifecycleFilter, customStartDate, customEndDate, todayStr]);
+  }, [inwardOnlyPacks, deferredSearchQuery, modelFilter, statusFilter, dateFilter, lifecycleFilter, customStartDate, customEndDate, todayStr]);
 
   // Dynamic Dealership Info Map for Auto-Filling State & City
   const { dealershipSuggestions, dealershipInfoMap } = useMemo(() => {
@@ -1014,10 +1015,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                 const { productName, productType } = getProductNameAndType(pack.packType);
                 const isPending = pack.status === 'PENDING_APPROVAL';
                 const isSelected = selectedPackIds.has(pack.id);
-                const packCycles = getCompletePackCycles(pack);
-                const isMultiCycle = packCycles.length > 1 || Boolean(pack.lifecycleHistory && pack.lifecycleHistory.length > 0) || pack.id.includes('-cycle-');
-                const firstCycle = packCycles.length > 0 ? packCycles[0] : null;
-                const displayCycleNum = pack.lifecycleCount || (packCycles.length > 0 ? packCycles.length : 1);
+                const isMultiCycle = (pack.lifecycleCount && pack.lifecycleCount > 1) || Boolean(pack.lifecycleHistory && pack.lifecycleHistory.length > 0) || pack.id.includes('-cycle-');
+                const firstCycle = (pack.lifecycleHistory && pack.lifecycleHistory.length > 0) ? pack.lifecycleHistory[0] : null;
+                const displayCycleNum = pack.lifecycleCount || (pack.lifecycleHistory ? pack.lifecycleHistory.length + 1 : 1);
 
                 return (
                   <tr key={pack.id} className={`hover:bg-slate-50/80 transition ${isSelected ? 'bg-blue-50/50' : ''}`}>

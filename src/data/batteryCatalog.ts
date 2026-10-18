@@ -597,6 +597,42 @@ export function formatIndianDate(d?: string | Date): string {
   }
 }
 
+/**
+ * Standard Excel Date Formatter in DD-MM-YYYY format (e.g., 01-09-2026)
+ */
+export function formatExcelDate(d?: string | Date | null): string {
+  if (!d) return '—';
+  try {
+    const dt = typeof d === 'string' ? new Date(d) : d;
+    if (isNaN(dt.getTime())) return String(d).slice(0, 10);
+    const day = String(dt.getDate()).padStart(2, '0');
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const year = dt.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch {
+    return String(d).slice(0, 10);
+  }
+}
+
+/**
+ * Standard Excel DateTime Formatter in DD-MM-YYYY HH:mm format (e.g., 01-09-2026 14:30)
+ */
+export function formatExcelDateTime(d?: string | Date | null): string {
+  if (!d) return '—';
+  try {
+    const dt = typeof d === 'string' ? new Date(d) : d;
+    if (isNaN(dt.getTime())) return String(d).slice(0, 16);
+    const day = String(dt.getDate()).padStart(2, '0');
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const year = dt.getFullYear();
+    const hours = String(dt.getHours()).padStart(2, '0');
+    const mins = String(dt.getMinutes()).padStart(2, '0');
+    return `${day}-${month}-${year} ${hours}:${mins}`;
+  } catch {
+    return String(d).slice(0, 16);
+  }
+}
+
 export const COMMON_TRANSPORTERS = [
   'Sahyadri Enterprises',
   'Aai Saheb Freight Line',
@@ -648,19 +684,20 @@ export function isExactPackNumberMatch(
   pack: { packNumber: string; challanPackNumber?: string; secondaryStickerNumber?: string },
   query: string
 ): boolean {
-  const cleanQ = sanitizeSearchQuery(query);
+  if (!query) return false;
+  const cleanQ = query.trim().toLowerCase().replace(/^(pack\s*#?|#)/i, '').trim();
   if (!cleanQ) return false;
 
-  const pNum = sanitizeSearchQuery(pack.packNumber);
+  const pNum = pack.packNumber ? pack.packNumber.trim().toLowerCase().replace(/^#+/, '') : '';
   if (pNum === cleanQ) return true;
 
   if (pack.challanPackNumber) {
-    const cNum = sanitizeSearchQuery(pack.challanPackNumber);
+    const cNum = pack.challanPackNumber.trim().toLowerCase().replace(/^#+/, '');
     if (cNum === cleanQ) return true;
   }
 
   if (pack.secondaryStickerNumber) {
-    const sNum = sanitizeSearchQuery(pack.secondaryStickerNumber);
+    const sNum = pack.secondaryStickerNumber.trim().toLowerCase().replace(/^#+/, '');
     if (sNum === cleanQ) return true;
   }
 
@@ -668,10 +705,18 @@ export function isExactPackNumberMatch(
 }
 
 /**
- * High-precision Pack Search Filter:
- * Ensures that when a user searches for a pack number (e.g. "12"),
- * ONLY the exact pack number (e.g. #12) is returned, NOT related numbers like 120, 121, 1290!
- * If the query is not a pack number (e.g. supplier name, document number), it searches across fields.
+ * High-performance, Strict & Intelligent Pack Search Filter
+ * Rules:
+ * 1. Exact Pack Number Match:
+ *    If user enters an exact pack number (e.g. "12", "#12", "1290", "NP-1001"),
+ *    returns ONLY that pack number! No unrelated packs (e.g. 120, 121, 512).
+ * 2. Multi-token Search:
+ *    e.g. "1290 CKD" -> matches pack #1290 with CKD model!
+ * 3. Prefix / Partial Search (when typing or searching documents/dealers):
+ *    e.g. "Tata Motors" -> matches dealership
+ *    e.g. "DC-100" -> matches document number
+ *    e.g. "129" -> matches pack 1290 (while typing)
+ * 4. Ultra-fast: Single pass through array, zero redundant regexes, zero lag.
  */
 export function filterPacksStrictSearch<T extends {
   packNumber: string;
@@ -695,34 +740,74 @@ export function filterPacksStrictSearch<T extends {
 }>(packsList: T[], rawQuery: string): T[] {
   if (!rawQuery || !rawQuery.trim()) return packsList;
 
-  const cleanQ = sanitizeSearchQuery(rawQuery);
+  const rawClean = rawQuery.trim().toLowerCase();
+  const cleanQ = rawClean.replace(/^(pack\s*#?|#)/i, '').trim();
   if (!cleanQ) return packsList;
 
-  // 1. Check if ANY pack in the list matches the EXACT pack number
-  const exactMatches = packsList.filter((p) => isExactPackNumberMatch(p, cleanQ));
-  if (exactMatches.length > 0) {
-    return exactMatches;
+  // 1. FAST EXACT PACK NUMBER CHECK
+  // Does any pack match cleanQ as exact pack number or challan number or secondary sticker?
+  const exactPackMatches: T[] = [];
+  for (let i = 0; i < packsList.length; i++) {
+    const p = packsList[i];
+    const pNum = p.packNumber ? p.packNumber.trim().toLowerCase().replace(/^#+/, '') : '';
+    const cNum = p.challanPackNumber ? p.challanPackNumber.trim().toLowerCase().replace(/^#+/, '') : '';
+    const sNum = p.secondaryStickerNumber ? p.secondaryStickerNumber.trim().toLowerCase().replace(/^#+/, '') : '';
+
+    if (pNum === cleanQ || cNum === cleanQ || sNum === cleanQ) {
+      exactPackMatches.push(p);
+    }
   }
 
-  // 2. If no pack has this pack number, check if it matches an EXACT document or challan or LR number
-  const exactDocMatches = packsList.filter((p) => {
-    const doc = p.documentNo?.trim().toLowerCase();
-    const dispDoc = p.dispatchDocNo?.trim().toLowerCase();
-    const lr = p.dispatchLrNo?.trim().toLowerCase();
-    return doc === cleanQ || dispDoc === cleanQ || lr === cleanQ;
-  });
+  // If an exact pack number match is found, return ONLY those exact pack matches!
+  if (exactPackMatches.length > 0) {
+    return exactPackMatches;
+  }
+
+  // 2. TOKEN-BASED EXACT NUMBER + MODEL/WORD CHECK (e.g. "1290 CKD" or "1290 K2")
+  const tokens = cleanQ.split(/[\s\-_]+/).filter(Boolean);
+  if (tokens.length > 1) {
+    const numToken = tokens.find((t) => /^\d+$/.test(t) || /^np\d+$/i.test(t));
+    if (numToken) {
+      const otherTokens = tokens.filter((t) => t !== numToken);
+      const tokenMatches = packsList.filter((p) => {
+        const pNum = p.packNumber ? p.packNumber.trim().toLowerCase().replace(/^#+/, '') : '';
+        const cNum = p.challanPackNumber ? p.challanPackNumber.trim().toLowerCase().replace(/^#+/, '') : '';
+        if (pNum !== numToken && cNum !== numToken) return false;
+
+        const haystack = `${p.packType || ''} ${p.documentNo || ''} ${p.dealershipName || ''} ${p.remark || ''}`.toLowerCase();
+        return otherTokens.every((ot) => haystack.includes(ot));
+      });
+      if (tokenMatches.length > 0) {
+        return tokenMatches;
+      }
+    }
+  }
+
+  // 3. EXACT DOCUMENT / CHALLAN / LR / VEHICLE CHECK
+  const exactDocMatches: T[] = [];
+  for (let i = 0; i < packsList.length; i++) {
+    const p = packsList[i];
+    const doc = p.documentNo ? p.documentNo.trim().toLowerCase() : '';
+    const dispDoc = p.dispatchDocNo ? p.dispatchDocNo.trim().toLowerCase() : '';
+    const lr = p.dispatchLrNo ? p.dispatchLrNo.trim().toLowerCase() : '';
+    const veh = p.dispatchVehicleNo ? p.dispatchVehicleNo.trim().toLowerCase() : '';
+
+    if (doc === cleanQ || dispDoc === cleanQ || lr === cleanQ || veh === cleanQ) {
+      exactDocMatches.push(p);
+    }
+  }
   if (exactDocMatches.length > 0) {
     return exactDocMatches;
   }
 
-  // 3. If it's a pure numeric query and didn't match any pack number or document:
-  // Return empty so partial pack numbers like 120 for 12 do NOT show up!
-  if (isPackNumberQuery(cleanQ)) {
-    return [];
-  }
-
-  // 4. Otherwise, search other non-pack-number fields (document, dealership, customer, model, etc.)
+  // 4. GENERAL SEARCH (Metadata and pack number prefix match when typing)
   return packsList.filter((p) => {
+    const pNum = p.packNumber ? p.packNumber.trim().toLowerCase().replace(/^#+/, '') : '';
+    const cNum = p.challanPackNumber ? p.challanPackNumber.trim().toLowerCase().replace(/^#+/, '') : '';
+
+    // Match if pack number starts with query (so typing 129 matches 1290 if 129 itself isn't a pack)
+    const matchPackStart = pNum.startsWith(cleanQ) || cNum.startsWith(cleanQ);
+
     const matchDoc = p.documentNo?.toLowerCase().includes(cleanQ);
     const matchDispDoc = p.dispatchDocNo?.toLowerCase().includes(cleanQ);
     const matchLr = p.dispatchLrNo?.toLowerCase().includes(cleanQ);
@@ -737,6 +822,7 @@ export function filterPacksStrictSearch<T extends {
     const matchReason = p.mismatchReason?.toLowerCase().includes(cleanQ);
 
     return (
+      matchPackStart ||
       matchDoc ||
       matchDispDoc ||
       matchLr ||

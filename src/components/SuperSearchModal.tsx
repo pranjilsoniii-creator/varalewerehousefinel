@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import {
   Search,
   X,
@@ -41,6 +41,7 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
   initialQuery = '',
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const deferredQuery = useDeferredValue(searchQuery);
   const [selectedPack, setSelectedPack] = useState<BatteryPack | null>(initialPack || null);
 
   // Sync with initial props when opened
@@ -67,8 +68,8 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
 
   // Clean sanitized query
   const cleanQ = useMemo(() => {
-    return sanitizeSearchQuery(searchQuery);
-  }, [searchQuery]);
+    return sanitizeSearchQuery(deferredQuery);
+  }, [deferredQuery]);
 
   // Search matching packs strictly (exact pack number match prioritized)
   const matchingPacks = useMemo(() => {
