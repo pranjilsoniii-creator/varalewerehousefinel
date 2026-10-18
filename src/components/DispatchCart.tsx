@@ -34,6 +34,7 @@ import {
   DEFAULT_PLANT_LOCATION,
   DEFAULT_SAVED_ADDRESSES,
   parseBoxCodeAndModel,
+  filterPacksStrictSearch,
 } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 
@@ -236,13 +237,7 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
   // Filter available stock for quick adding into cart
   const filteredAvailableStock = useMemo(() => {
     if (!stockSearchQuery.trim()) return availableStoragePacks.slice(0, 30);
-    const q = stockSearchQuery.toLowerCase().trim();
-    return availableStoragePacks.filter(
-      (p) =>
-        p.packNumber.toLowerCase().includes(q) ||
-        p.packType.toLowerCase().includes(q) ||
-        p.documentNo?.toLowerCase().includes(q)
-    );
+    return filterPacksStrictSearch(availableStoragePacks, stockSearchQuery);
   }, [availableStoragePacks, stockSearchQuery]);
 
   // Selected packs for current staged dispatch lot

@@ -16,7 +16,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, DispatchLot } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, COMMON_TRANSPORTERS, getProductNameAndType } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, COMMON_TRANSPORTERS, getProductNameAndType, filterPacksStrictSearch } from '../data/batteryCatalog';
 import * as XLSX from 'xlsx';
 
 interface OutwardDispatchRegisterProps {
@@ -129,28 +129,18 @@ export const OutwardDispatchRegister: React.FC<OutwardDispatchRegisterProps> = (
     const ms7Days = 7 * 24 * 60 * 60 * 1000;
     const ms30Days = 30 * 24 * 60 * 60 * 1000;
 
-    return dispatchedPacks.filter((p) => {
+    // 1. Strict Search across pack number and other fields (exact pack number match prioritized)
+    const searchedList = searchQuery.trim()
+      ? filterPacksStrictSearch(dispatchedPacks, searchQuery)
+      : dispatchedPacks;
+
+    return searchedList.filter((p) => {
       const lot = p.dispatchLotId ? lotMap.get(p.dispatchLotId) : undefined;
       const docNo = p.dispatchDocNo || lot?.transportDocNo || lot?.lotNumber || '—';
       const lrNo = p.dispatchLrNo || lot?.lrNumber || '—';
       const transportName = p.dispatchTransporter || lot?.transportName || 'Sahyadri Enterprises';
       const vehicleNo = p.dispatchVehicleNo || lot?.vehicleNumber || '—';
       const destination = p.dispatchToCustomer || lot?.consigneeName || 'TATA AUTOCOMP SYSTEMS LTD - Chakan';
-
-      // Text Search
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchPack = p.packNumber.toLowerCase().includes(q);
-        const matchDoc = docNo.toLowerCase().includes(q);
-        const matchLr = lrNo.toLowerCase().includes(q);
-        const matchTrans = transportName.toLowerCase().includes(q);
-        const matchVeh = vehicleNo.toLowerCase().includes(q);
-        const matchDest = destination.toLowerCase().includes(q);
-        const matchType = p.packType.toLowerCase().includes(q);
-        if (!matchPack && !matchDoc && !matchLr && !matchTrans && !matchVeh && !matchDest && !matchType) {
-          return false;
-        }
-      }
 
       // Date Filter
       const dispDate = p.dispatchedAt || lot?.timestamp;

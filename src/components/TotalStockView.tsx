@@ -18,7 +18,7 @@ import {
   Table,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, DispatchLot } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType, filterPacksStrictSearch } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 import { OutwardDispatchRegister } from './OutwardDispatchRegister';
 
@@ -196,35 +196,25 @@ export const TotalStockView: React.FC<TotalStockViewProps> = ({
       if (!isNaN(numPart)) maxThreshold = numPart;
     }
 
-    return packs.filter((p) => {
-      const cleanSerial = p.packNumber.replace(/[^0-9]/g, '');
-      const serialNum = parseInt(cleanSerial, 10);
+    if (minThreshold !== null || maxThreshold !== null) {
+      return packs.filter((p) => {
+        const cleanSerial = p.packNumber.replace(/[^0-9]/g, '');
+        const serialNum = parseInt(cleanSerial, 10);
+        if (minThreshold !== null && !isNaN(serialNum) && serialNum < minThreshold) return false;
+        if (maxThreshold !== null && !isNaN(serialNum) && serialNum > maxThreshold) return false;
+        return true;
+      });
+    }
 
-      if (minThreshold !== null && !isNaN(serialNum)) {
-        return serialNum >= minThreshold;
-      }
-      if (maxThreshold !== null && !isNaN(serialNum)) {
-        return serialNum <= maxThreshold;
-      }
-
-      const matchesPack = p.packNumber.toLowerCase().includes(query);
-      const matchesDoc = p.documentNo?.toLowerCase().includes(query);
-      const matchesType = p.packType.toLowerCase().includes(query);
-      const matchesLine = p.lineId?.toLowerCase().includes(query);
-      return matchesPack || matchesDoc || matchesType || matchesLine;
-    });
+    return filterPacksStrictSearch(packs, search1PackNumber);
   }, [packs, hasExecutedSearch1, search1PackNumber]);
 
-  // Search 2 Results
+  // Search 2 Results (Filtered by Model and strict pack number)
   const search2Results = useMemo(() => {
     if (!hasExecutedSearch2) return [];
-    return packs.filter((p) => {
-      if (p.packType !== search2ProductName) return false;
-      if (search2PackNumber.trim()) {
-        return p.packNumber.toLowerCase().includes(search2PackNumber.trim().toLowerCase());
-      }
-      return true;
-    });
+    const filteredByModel = packs.filter((p) => p.packType === search2ProductName);
+    if (!search2PackNumber.trim()) return filteredByModel;
+    return filterPacksStrictSearch(filteredByModel, search2PackNumber);
   }, [packs, hasExecutedSearch2, search2PackNumber, search2ProductName]);
 
   const handleExecuteSearch1 = (e: React.FormEvent) => {

@@ -16,7 +16,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, filterPacksStrictSearch } from '../data/batteryCatalog';
 
 interface PackLocatorSearchProps {
   packs: BatteryPack[];
@@ -38,23 +38,16 @@ export const PackLocatorSearch: React.FC<PackLocatorSearchProps> = ({
 
   // Filter packs based on query & model
   const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return packs.filter((p) => {
+    const searchedList = searchQuery.trim()
+      ? filterPacksStrictSearch(packs, searchQuery)
+      : packs;
+
+    return searchedList.filter((p) => {
       // Model match
       const modelMatch = selectedModel === 'ALL' || p.packType === selectedModel;
       // Status match
       const statusMatch = statusFilter === 'ALL' || p.status === statusFilter;
-      // Query match (pack number, lr, document, line, vehicle)
-      const queryMatch =
-        !q ||
-        p.packNumber.toLowerCase().includes(q) ||
-        p.lineId.toLowerCase().includes(q) ||
-        `r-${p.rackNumber}`.toLowerCase().includes(q) ||
-        p.lrNumber.toLowerCase().includes(q) ||
-        p.transportDocNo.toLowerCase().includes(q) ||
-        p.vehicleNumber.toLowerCase().includes(q);
-
-      return modelMatch && statusMatch && queryMatch;
+      return modelMatch && statusMatch;
     });
   }, [packs, searchQuery, selectedModel, statusFilter]);
 

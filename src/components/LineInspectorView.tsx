@@ -28,7 +28,15 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType, parseBoxCodeAndModel } from '../data/batteryCatalog';
+import {
+  ALL_PACK_TYPES,
+  BATTERY_MODELS,
+  getProductNameAndType,
+  parseBoxCodeAndModel,
+  sanitizeSearchQuery,
+  isExactPackNumberMatch,
+  isPackNumberQuery,
+} from '../data/batteryCatalog';
 import {
   getStoredWarehouseLines,
   saveStoredWarehouseLines,
@@ -167,15 +175,28 @@ export const LineInspectorView: React.FC<LineInspectorViewProps> = ({
 
     if (!lineSearchQuery.trim()) return items;
     const q = lineSearchQuery.toLowerCase().trim();
+    const cleanQ = sanitizeSearchQuery(lineSearchQuery);
+
+    // If an exact pack number match exists on this line, return ONLY that pack's rack slot!
+    const hasExactPack = items.some((item) => item.pack && isExactPackNumberMatch(item.pack, cleanQ));
+    if (hasExactPack) {
+      return items.filter((item) => item.pack && isExactPackNumberMatch(item.pack, cleanQ));
+    }
+
+    // If it's a pure pack number query (e.g. "99999") and not found:
+    if (isPackNumberQuery(cleanQ) && !cleanQ.startsWith('r')) {
+      return [];
+    }
 
     return items.filter((item) => {
-      if (!item.pack) return false;
-      const matchesPack = item.pack.packNumber.toLowerCase().includes(q);
+      if (!item.pack) {
+        return ('r-' + item.rackNumber).includes(q);
+      }
       const matches2nd = item.pack.secondaryStickerNumber?.toLowerCase().includes(q);
       const matchesType = item.pack.packType.toLowerCase().includes(q);
       const matchesRemark = item.pack.remark?.toLowerCase().includes(q);
       const matchesRack = ('r-' + item.rackNumber).includes(q);
-      return matchesPack || matches2nd || matchesType || matchesRemark || matchesRack;
+      return matches2nd || matchesType || matchesRemark || matchesRack;
     });
   }, [rackMap, lineSearchQuery]);
 

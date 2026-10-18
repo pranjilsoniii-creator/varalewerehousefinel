@@ -28,7 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType, DispatchLot, InwardShipmentRecord } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, filterPacksStrictSearch } from '../data/batteryCatalog';
 import { OutwardDispatchRegister } from './OutwardDispatchRegister';
 
 interface AnalyticsViewProps {
@@ -257,15 +257,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   // Search Results for Instant Traceability Audit
   const traceSearchResults = useMemo(() => {
     if (!tracePackQuery.trim()) return [];
-    const q = tracePackQuery.toLowerCase().trim();
-    return packs.filter((p) =>
-      p.packNumber.toLowerCase().includes(q) ||
-      p.documentNo?.toLowerCase().includes(q) ||
-      p.dispatchDocNo?.toLowerCase().includes(q) ||
-      p.dispatchLrNo?.toLowerCase().includes(q) ||
-      p.dispatchToCustomer?.toLowerCase().includes(q) ||
-      p.dealershipName?.toLowerCase().includes(q)
-    ).slice(0, 10);
+    return filterPacksStrictSearch(packs, tracePackQuery).slice(0, 10);
   }, [packs, tracePackQuery]);
 
   // Time Filter Label

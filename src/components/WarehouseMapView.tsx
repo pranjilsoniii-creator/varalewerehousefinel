@@ -15,7 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { BatteryPack, BatteryPackType } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, isExactPackNumberMatch } from '../data/batteryCatalog';
 
 interface WarehouseMapViewProps {
   warehouseLines: string[];
@@ -293,7 +293,7 @@ export const WarehouseMapView: React.FC<WarehouseMapViewProps> = ({
                     const matchesModel = modelFilter === 'ALL' || (pack && pack.packType === modelFilter);
                     const matchesSearch =
                       !searchInLine ||
-                      (pack && pack.packNumber.toLowerCase().includes(searchInLine.toLowerCase()));
+                      (pack && isExactPackNumberMatch(pack, searchInLine));
 
                     const isDimmed = (modelFilter !== 'ALL' && !matchesModel) || (searchInLine && !matchesSearch);
 

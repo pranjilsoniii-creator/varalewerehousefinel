@@ -20,7 +20,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { BatteryPack, DispatchLot } from '../types';
-import { BATTERY_MODELS } from '../data/batteryCatalog';
+import { BATTERY_MODELS, filterPacksStrictSearch, sanitizeSearchQuery } from '../data/batteryCatalog';
 import { formatIndianDate, formatPackDisplayName } from './OutwardDispatchRegister';
 
 interface SuperSearchModalProps {
@@ -67,30 +67,23 @@ export const SuperSearchModal: React.FC<SuperSearchModalProps> = ({
 
   // Clean sanitized query
   const cleanQ = useMemo(() => {
-    return searchQuery.trim().toLowerCase().replace(/^#+/, '');
+    return sanitizeSearchQuery(searchQuery);
   }, [searchQuery]);
 
-  // Search matching packs
+  // Search matching packs strictly (exact pack number match prioritized)
   const matchingPacks = useMemo(() => {
     if (!cleanQ) return [];
-    return packs.filter((p) => {
-      const matchPack = p.packNumber.toLowerCase().includes(cleanQ);
-      const matchDoc = p.documentNo?.toLowerCase().includes(cleanQ);
-      const matchDispDoc = p.dispatchDocNo?.toLowerCase().includes(cleanQ);
-      const matchLr = p.dispatchLrNo?.toLowerCase().includes(cleanQ);
-      const matchModel = p.packType.toLowerCase().includes(cleanQ);
-      const matchDealership = p.dealershipName?.toLowerCase().includes(cleanQ);
-      const matchTransport = p.transportName?.toLowerCase().includes(cleanQ);
-      const matchLocation = p.currentLocation?.toLowerCase().includes(cleanQ) || p.lineId?.toLowerCase().includes(cleanQ);
-      const matchChallan = p.challanPackNumber?.toLowerCase().includes(cleanQ);
-      return matchPack || matchDoc || matchDispDoc || matchLr || matchModel || matchDealership || matchTransport || matchLocation || matchChallan;
-    });
+    return filterPacksStrictSearch(packs, cleanQ);
   }, [packs, cleanQ]);
 
   // Exact matching pack
   const exactMatch = useMemo(() => {
     if (!cleanQ) return null;
-    return packs.find((p) => p.packNumber.toLowerCase() === cleanQ);
+    return packs.find((p) => {
+      const pNum = sanitizeSearchQuery(p.packNumber);
+      const cNum = p.challanPackNumber ? sanitizeSearchQuery(p.challanPackNumber) : '';
+      return pNum === cleanQ || cNum === cleanQ;
+    });
   }, [packs, cleanQ]);
 
   // Recent/Active packs for quick 1-click selection when search is empty

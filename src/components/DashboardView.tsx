@@ -22,7 +22,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { BatteryPack, DispatchLot, InwardShipmentRecord } from '../types';
-import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType } from '../data/batteryCatalog';
+import { ALL_PACK_TYPES, BATTERY_MODELS, getProductNameAndType, filterPacksStrictSearch } from '../data/batteryCatalog';
 import * as XLSX from 'xlsx';
 
 interface DashboardViewProps {
@@ -304,38 +304,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Filtered Inward Packs for table view
   const filteredInwardTablePacks = useMemo(() => {
     if (!searchQuery.trim()) return inwardPacksInPeriod;
-    const q = searchQuery.toLowerCase().trim();
-    return inwardPacksInPeriod.filter((p) => {
-      const info = getProductNameAndType(p.packType);
-      return (
-        p.packNumber.toLowerCase().includes(q) ||
-        info.productName.toLowerCase().includes(q) ||
-        info.productType.toLowerCase().includes(q) ||
-        (p.documentNo && p.documentNo.toLowerCase().includes(q)) ||
-        (p.dealershipName && p.dealershipName.toLowerCase().includes(q)) ||
-        (p.receivedState && p.receivedState.toLowerCase().includes(q)) ||
-        (p.transportName && p.transportName.toLowerCase().includes(q))
-      );
-    });
+    return filterPacksStrictSearch(inwardPacksInPeriod, searchQuery);
   }, [inwardPacksInPeriod, searchQuery]);
 
   // Filtered Dispatch Packs for table view
   const filteredDispatchTablePacks = useMemo(() => {
     if (!searchQuery.trim()) return dispatchedPacksInPeriod;
-    const q = searchQuery.toLowerCase().trim();
-    return dispatchedPacksInPeriod.filter((p) => {
-      const info = getProductNameAndType(p.packType);
-      return (
-        p.packNumber.toLowerCase().includes(q) ||
-        info.productName.toLowerCase().includes(q) ||
-        info.productType.toLowerCase().includes(q) ||
-        (p.dispatchDocNo && p.dispatchDocNo.toLowerCase().includes(q)) ||
-        (p.dispatchLrNo && p.dispatchLrNo.toLowerCase().includes(q)) ||
-        (p.dispatchToCustomer && p.dispatchToCustomer.toLowerCase().includes(q)) ||
-        (p.dispatchVehicleNo && p.dispatchVehicleNo.toLowerCase().includes(q)) ||
-        (p.dispatchTransporter && p.dispatchTransporter.toLowerCase().includes(q))
-      );
-    });
+    return filterPacksStrictSearch(dispatchedPacksInPeriod, searchQuery);
   }, [dispatchedPacksInPeriod, searchQuery]);
 
   // Excel Export Handler: Inward Register in Period

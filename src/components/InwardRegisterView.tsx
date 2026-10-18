@@ -29,6 +29,8 @@ import {
   normalizeModelFamily,
   formatPackDisplayName,
   formatIndianDate,
+  filterPacksStrictSearch,
+  sanitizeSearchQuery,
 } from '../data/batteryCatalog';
 import { useAuth } from '../context/AuthContext';
 import { exportInwardRegisterPacksToExcel } from '../utils/excelExport';
@@ -227,19 +229,12 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
     const ms7Days = 7 * 24 * 60 * 60 * 1000;
     const ms30Days = 30 * 24 * 60 * 60 * 1000;
 
-    return inwardOnlyPacks.filter((p) => {
-      // 1. Text Search
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesPack = p.packNumber.toLowerCase().includes(q);
-        const matchesChallan = p.challanPackNumber?.toLowerCase().includes(q);
-        const matchesDoc = p.documentNo?.toLowerCase().includes(q);
-        const matchesDealer = p.dealershipName?.toLowerCase().includes(q);
-        const matchesModel = p.packType.toLowerCase().includes(q);
-        const matchesReason = p.mismatchReason?.toLowerCase().includes(q);
-        const matchesCustomer = p.dispatchToCustomer?.toLowerCase().includes(q);
-        if (!matchesPack && !matchesChallan && !matchesDoc && !matchesDealer && !matchesModel && !matchesReason && !matchesCustomer) return false;
-      }
+    // 1. Strict Search across pack number and other fields (exact pack number match prioritized)
+    const searchedList = searchQuery.trim()
+      ? filterPacksStrictSearch(inwardOnlyPacks, searchQuery)
+      : inwardOnlyPacks;
+
+    return searchedList.filter((p) => {
 
       // 2. Model Filter
       if (modelFilter !== 'ALL' && p.packType !== modelFilter) {

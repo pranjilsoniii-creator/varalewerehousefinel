@@ -622,3 +622,134 @@ export const DEFAULT_PLANT_LOCATION = {
 };
 
 export const COMMON_DESTINATIONS: { name: string; address: string; gstin: string; state: string }[] = [];
+
+/**
+ * Clean & sanitize a pack number or search query
+ * Strips leading '#' or 'pack #' or extra whitespace.
+ */
+export function sanitizeSearchQuery(raw: string): string {
+  if (!raw) return '';
+  return raw.trim().toLowerCase().replace(/^(pack\s*#?|#)/i, '').trim();
+}
+
+/**
+ * Checks if a query is strictly intended as a specific pack number (digits or NP-...).
+ */
+export function isPackNumberQuery(query: string): boolean {
+  const clean = sanitizeSearchQuery(query);
+  if (!clean) return false;
+  return /^\d+$/.test(clean) || /^np-?\d+$/i.test(clean);
+}
+
+/**
+ * Checks if a pack has an EXACT match for a given pack number query.
+ */
+export function isExactPackNumberMatch(
+  pack: { packNumber: string; challanPackNumber?: string; secondaryStickerNumber?: string },
+  query: string
+): boolean {
+  const cleanQ = sanitizeSearchQuery(query);
+  if (!cleanQ) return false;
+
+  const pNum = sanitizeSearchQuery(pack.packNumber);
+  if (pNum === cleanQ) return true;
+
+  if (pack.challanPackNumber) {
+    const cNum = sanitizeSearchQuery(pack.challanPackNumber);
+    if (cNum === cleanQ) return true;
+  }
+
+  if (pack.secondaryStickerNumber) {
+    const sNum = sanitizeSearchQuery(pack.secondaryStickerNumber);
+    if (sNum === cleanQ) return true;
+  }
+
+  return false;
+}
+
+/**
+ * High-precision Pack Search Filter:
+ * Ensures that when a user searches for a pack number (e.g. "12"),
+ * ONLY the exact pack number (e.g. #12) is returned, NOT related numbers like 120, 121, 1290!
+ * If the query is not a pack number (e.g. supplier name, document number), it searches across fields.
+ */
+export function filterPacksStrictSearch<T extends {
+  packNumber: string;
+  packType?: string;
+  documentNo?: string;
+  dealershipName?: string;
+  receivedState?: string;
+  transportName?: string;
+  currentLocation?: string;
+  lineId?: string;
+  rackNumber?: number;
+  challanPackNumber?: string;
+  secondaryStickerNumber?: string;
+  mismatchReason?: string;
+  remark?: string;
+  dispatchDocNo?: string;
+  dispatchLrNo?: string;
+  dispatchVehicleNo?: string;
+  dispatchTransporter?: string;
+  dispatchToCustomer?: string;
+}>(packsList: T[], rawQuery: string): T[] {
+  if (!rawQuery || !rawQuery.trim()) return packsList;
+
+  const cleanQ = sanitizeSearchQuery(rawQuery);
+  if (!cleanQ) return packsList;
+
+  // 1. Check if ANY pack in the list matches the EXACT pack number
+  const exactMatches = packsList.filter((p) => isExactPackNumberMatch(p, cleanQ));
+  if (exactMatches.length > 0) {
+    return exactMatches;
+  }
+
+  // 2. If no pack has this pack number, check if it matches an EXACT document or challan or LR number
+  const exactDocMatches = packsList.filter((p) => {
+    const doc = p.documentNo?.trim().toLowerCase();
+    const dispDoc = p.dispatchDocNo?.trim().toLowerCase();
+    const lr = p.dispatchLrNo?.trim().toLowerCase();
+    return doc === cleanQ || dispDoc === cleanQ || lr === cleanQ;
+  });
+  if (exactDocMatches.length > 0) {
+    return exactDocMatches;
+  }
+
+  // 3. If it's a pure numeric query and didn't match any pack number or document:
+  // Return empty so partial pack numbers like 120 for 12 do NOT show up!
+  if (isPackNumberQuery(cleanQ)) {
+    return [];
+  }
+
+  // 4. Otherwise, search other non-pack-number fields (document, dealership, customer, model, etc.)
+  return packsList.filter((p) => {
+    const matchDoc = p.documentNo?.toLowerCase().includes(cleanQ);
+    const matchDispDoc = p.dispatchDocNo?.toLowerCase().includes(cleanQ);
+    const matchLr = p.dispatchLrNo?.toLowerCase().includes(cleanQ);
+    const matchModel = p.packType?.toLowerCase().includes(cleanQ);
+    const matchDealership = p.dealershipName?.toLowerCase().includes(cleanQ);
+    const matchTransport = p.transportName?.toLowerCase().includes(cleanQ);
+    const matchLocation = p.currentLocation?.toLowerCase().includes(cleanQ) || p.lineId?.toLowerCase().includes(cleanQ);
+    const matchCustomer = p.dispatchToCustomer?.toLowerCase().includes(cleanQ);
+    const matchVeh = p.dispatchVehicleNo?.toLowerCase().includes(cleanQ);
+    const matchState = p.receivedState?.toLowerCase().includes(cleanQ);
+    const matchRemark = p.remark?.toLowerCase().includes(cleanQ);
+    const matchReason = p.mismatchReason?.toLowerCase().includes(cleanQ);
+
+    return (
+      matchDoc ||
+      matchDispDoc ||
+      matchLr ||
+      matchModel ||
+      matchDealership ||
+      matchTransport ||
+      matchLocation ||
+      matchCustomer ||
+      matchVeh ||
+      matchState ||
+      matchRemark ||
+      matchReason
+    );
+  });
+}
+

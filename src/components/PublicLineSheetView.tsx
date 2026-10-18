@@ -13,7 +13,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { BatteryPack } from '../types';
-import { getProductNameAndType } from '../data/batteryCatalog';
+import { getProductNameAndType, sanitizeSearchQuery, isExactPackNumberMatch } from '../data/batteryCatalog';
 import { RACKS_PER_LINE } from '../data/seedWarehouse';
 
 interface PublicLineSheetViewProps {
@@ -99,10 +99,10 @@ export const PublicLineSheetView: React.FC<PublicLineSheetViewProps> = ({
       const pList = rackMap[i] || [];
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
+        const cleanQ = sanitizeSearchQuery(searchQuery);
         const matchesPack = pList.some(
           (p) =>
-            p.packNumber.toLowerCase().includes(q) ||
-            (p.secondaryStickerNumber && p.secondaryStickerNumber.toLowerCase().includes(q)) ||
+            isExactPackNumberMatch(p, cleanQ) ||
             p.packType.toLowerCase().includes(q) ||
             (p.remark && p.remark.toLowerCase().includes(q))
         );
