@@ -224,16 +224,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setMaintenanceMode = (active: boolean) => {
     setIsMaintenanceMode(active);
-    localStorage.setItem('tata_wms_maintenance_mode', active ? 'true' : 'false');
+    try {
+      localStorage.setItem('tata_wms_maintenance_mode', active ? 'true' : 'false');
+    } catch {}
   };
 
   // Synchronize active session with sessionStorage
   useEffect(() => {
-    if (currentUser) {
-      sessionStorage.setItem('tata_wms_session_user_v1', JSON.stringify(currentUser));
-    } else {
-      sessionStorage.removeItem('tata_wms_session_user_v1');
-    }
+    try {
+      if (currentUser) {
+        sessionStorage.setItem('tata_wms_session_user_v1', JSON.stringify(currentUser));
+      } else {
+        sessionStorage.removeItem('tata_wms_session_user_v1');
+      }
+    } catch {}
   }, [currentUser]);
 
   // Initial cloud fetch & multi-tab BroadcastChannel listener for real-time synchronization

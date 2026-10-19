@@ -211,7 +211,9 @@ export const DispatchCart: React.FC<DispatchCartProps> = ({
 
   // Sync saved addresses
   useEffect(() => {
-    localStorage.setItem('tata_wms_saved_addresses_v3', JSON.stringify(savedAddresses));
+    try {
+      localStorage.setItem('tata_wms_saved_addresses_v3', JSON.stringify(savedAddresses));
+    } catch {}
   }, [savedAddresses]);
 
   // Handle Preset Address Selection

@@ -60,6 +60,7 @@ import {
 } from './lib/supabaseClient';
 import { normalizeModelFamily } from './data/batteryCatalog';
 import { useAuth } from './context/AuthContext';
+import { safeLocalStorageSet, safeLocalStorageGet, saveToIndexedDB, loadFromIndexedDB } from './utils/safeStorage';
 import { Wrench, ShieldAlert } from 'lucide-react';
 
 // Route Helper Mappings
@@ -139,7 +140,7 @@ export function App() {
 
   // Core Warehouse State initialized with clean local cache
   const [packs, setPacks] = useState<BatteryPack[]>(() => {
-    const saved = localStorage.getItem('tata_wms_packs_v4');
+    const saved = safeLocalStorageGet('tata_wms_packs_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -149,7 +150,7 @@ export function App() {
   });
 
   const [inwardShipments, setInwardShipments] = useState<InwardShipmentRecord[]>(() => {
-    const saved = localStorage.getItem('tata_wms_inwards_v4');
+    const saved = safeLocalStorageGet('tata_wms_inwards_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -159,7 +160,7 @@ export function App() {
   });
 
   const [dispatchLots, setDispatchLots] = useState<DispatchLot[]>(() => {
-    const saved = localStorage.getItem('tata_wms_lots_v4');
+    const saved = safeLocalStorageGet('tata_wms_lots_v4');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -169,7 +170,7 @@ export function App() {
   });
 
   const [dailyStockRecords, setDailyStockRecords] = useState<DailyStockRecord[]>(() => {
-    const saved = localStorage.getItem('tata_wms_daily_stock_v1');
+    const saved = safeLocalStorageGet('tata_wms_daily_stock_v1');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -236,26 +237,57 @@ export function App() {
     }
   };
 
-  // Synchronize LocalStorage as offline fallback
+  // Synchronize storage safely: IndexedDB for complete catalog, safeLocalStorage for quick recovery
   useEffect(() => {
-    localStorage.setItem('tata_wms_packs_v4', JSON.stringify(packs));
+    if (packs.length > 0) {
+      saveToIndexedDB('tata_wms_packs_v4', packs);
+      safeLocalStorageSet('tata_wms_packs_v4', JSON.stringify(packs));
+    }
   }, [packs]);
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_inwards_v4', JSON.stringify(inwardShipments));
+    if (inwardShipments.length > 0) {
+      saveToIndexedDB('tata_wms_inwards_v4', inwardShipments);
+      safeLocalStorageSet('tata_wms_inwards_v4', JSON.stringify(inwardShipments));
+    }
   }, [inwardShipments]);
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_lots_v4', JSON.stringify(dispatchLots));
+    if (dispatchLots.length > 0) {
+      saveToIndexedDB('tata_wms_lots_v4', dispatchLots);
+      safeLocalStorageSet('tata_wms_lots_v4', JSON.stringify(dispatchLots));
+    }
   }, [dispatchLots]);
 
   useEffect(() => {
-    localStorage.setItem('tata_wms_daily_stock_v1', JSON.stringify(dailyStockRecords));
+    if (dailyStockRecords.length > 0) {
+      saveToIndexedDB('tata_wms_daily_stock_v1', dailyStockRecords);
+      safeLocalStorageSet('tata_wms_daily_stock_v1', JSON.stringify(dailyStockRecords));
+    }
   }, [dailyStockRecords]);
 
   useEffect(() => {
     saveStoredWarehouseLines(warehouseLines);
   }, [warehouseLines]);
+
+  // Offline startup hydration: if in-memory arrays are empty, hydrate from IndexedDB
+  useEffect(() => {
+    loadFromIndexedDB<BatteryPack[]>('tata_wms_packs_v4').then((idbPacks) => {
+      if (idbPacks && idbPacks.length > 0) {
+        setPacks((prev) => (prev.length === 0 ? idbPacks : prev));
+      }
+    });
+    loadFromIndexedDB<InwardShipmentRecord[]>('tata_wms_inwards_v4').then((idbInwards) => {
+      if (idbInwards && idbInwards.length > 0) {
+        setInwardShipments((prev) => (prev.length === 0 ? idbInwards : prev));
+      }
+    });
+    loadFromIndexedDB<DispatchLot[]>('tata_wms_lots_v4').then((idbLots) => {
+      if (idbLots && idbLots.length > 0) {
+        setDispatchLots((prev) => (prev.length === 0 ? idbLots : prev));
+      }
+    });
+  }, []);
 
   // Master Cloud Refresh (Pulls source of truth directly from Supabase Cloud)
   const refreshFromCloud = useCallback(async () => {
@@ -631,7 +663,8 @@ export function App() {
     
     // 1. Immediately update React state and LocalStorage
     setPacks(remainingPacks);
-    localStorage.setItem('tata_wms_packs_v4', JSON.stringify(remainingPacks));
+    safeLocalStorageSet('tata_wms_packs_v4', JSON.stringify(remainingPacks));
+    saveToIndexedDB('tata_wms_packs_v4', remainingPacks);
 
     // 2. Enqueue offline actions for guaranteed sync
     for (const pId of packIdsToRemove) {
