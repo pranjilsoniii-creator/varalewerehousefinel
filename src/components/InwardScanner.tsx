@@ -20,6 +20,7 @@ import {
 import { BatteryPack, BatteryPackType, InwardShipmentRecord, PackCycle, MovementLog } from '../types';
 import {
   ALL_PACK_TYPES,
+  getAllBatteryModelOptions,
   COMMON_TRANSPORTERS,
   deriveModelFromShorthand,
   parseBoxCodeAndModel,
@@ -1378,9 +1379,9 @@ export const InwardScanner: React.FC<InwardScannerProps> = ({
                           onChange={(e) => handleRowChange(row.id, 'packType', e.target.value as BatteryPackType)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
                         >
-                          {ALL_PACK_TYPES.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
+                          {getAllBatteryModelOptions().map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.name}
                             </option>
                           ))}
                         </select>

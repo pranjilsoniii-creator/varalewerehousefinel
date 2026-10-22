@@ -23,6 +23,7 @@ import {
 import { BatteryPack, BatteryPackType } from '../types';
 import {
   ALL_PACK_TYPES,
+  getAllBatteryModelOptions,
   BATTERY_MODELS,
   INITIAL_SAVED_ADDRESSES,
   getProductNameAndType,
@@ -824,9 +825,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none"
             >
               <option value="ALL">All Battery Models</option>
-              {ALL_PACK_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              {getAllBatteryModelOptions().map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.name}
                 </option>
               ))}
             </select>
@@ -1413,9 +1414,9 @@ export const InwardRegisterView: React.FC<InwardRegisterViewProps> = ({
                   onChange={(e) => setEditPackType(e.target.value as BatteryPackType)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-900"
                 >
-                  {ALL_PACK_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
+                  {getAllBatteryModelOptions().map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
                     </option>
                   ))}
                 </select>

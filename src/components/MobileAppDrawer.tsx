@@ -21,6 +21,8 @@ import {
   Sparkles,
   Smartphone,
   Calendar,
+  MessageSquare,
+  Boxes,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getOfflineQueue, processOfflineQueue } from '../utils/offlineSyncEngine';
@@ -117,6 +119,8 @@ export const MobileAppDrawer: React.FC<MobileAppDrawerProps> = ({
     { id: 'LINE_INSPECTOR', label: 'Storage Lines Matrix', icon: Layers, color: 'text-indigo-600', count: null },
     { id: 'TOTAL_STOCK', label: 'Total Stock Inventory', icon: Box, color: 'text-purple-600', count: totalStockCount },
     { id: 'DISPATCH_CART', label: 'Outward Dispatch Staging', icon: Truck, color: 'text-orange-600', count: cartPacksCount },
+    { id: 'SHIFT_CHAT', label: 'Shift Operations Chat (8h)', icon: MessageSquare, color: 'text-emerald-500', count: null },
+    { id: 'CUSTOM_PACKS', label: 'Custom Pack Types & Catalog', icon: Boxes, color: 'text-indigo-400', count: null },
     { id: 'DAILY_STOCK', label: 'Daily Stock Maintenance', icon: Calendar, color: 'text-emerald-600', count: null },
     { id: 'ANALYTICS', label: 'Reports & Analytics', icon: TrendingUp, color: 'text-cyan-600', count: null },
   ];

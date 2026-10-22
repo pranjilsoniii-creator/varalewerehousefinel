@@ -1,4 +1,6 @@
-import { BatteryModelInfo, BatteryPackType, SavedAddress } from '../types';
+import { BatteryModelInfo, BatteryPackType, CustomBatteryModel, SavedAddress } from '../types';
+import { safeLocalStorageGet, safeLocalStorageSet } from '../utils/safeStorage';
+import { getSupabase } from '../lib/supabaseClient';
 
 export const ALL_PACK_TYPES: BatteryPackType[] = [
   'Kanger1.0_AIO',
@@ -508,6 +510,11 @@ export function getProductNameAndType(packType: string | BatteryPackType): {
  */
 export function getShortPackTypeName(packType: string | BatteryPackType): string {
   const raw = String(packType || 'AIO').toUpperCase();
+  const customList = getCustomBatteryModels();
+  const matchedCustom = customList.find(
+    (c) => c.id.toUpperCase() === raw || c.name.toUpperCase() === raw || c.shortCode.toUpperCase() === raw
+  );
+  if (matchedCustom) return matchedCustom.shortCode;
   if (raw.includes('CKD')) return 'CKD';
   if (raw.includes('FBU')) return 'FBU';
   if (raw.includes('GEN3') || raw.includes('GEN 3') || raw.includes('G3')) return 'GEN3';
@@ -839,3 +846,133 @@ export function filterPacksStrictSearch<T extends {
   });
 }
 
+
+
+// ==========================================
+// CUSTOM PACK TYPES & MODELS ENGINE
+// ==========================================
+const CUSTOM_MODELS_STORAGE_KEY = 'tata_wms_custom_models_v1';
+let cachedCustomModels: CustomBatteryModel[] = [];
+
+export function getCustomBatteryModels(): CustomBatteryModel[] {
+  if (cachedCustomModels.length > 0) return cachedCustomModels;
+  try {
+    const raw = safeLocalStorageGet(CUSTOM_MODELS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        cachedCustomModels = parsed;
+        return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
+export function saveCustomBatteryModel(model: CustomBatteryModel): CustomBatteryModel[] {
+  const current = getCustomBatteryModels();
+  const existingIdx = current.findIndex(
+    (m) => m.id.toLowerCase() === model.id.toLowerCase() || m.name.toLowerCase() === model.name.toLowerCase()
+  );
+  let updated: CustomBatteryModel[];
+  if (existingIdx >= 0) {
+    updated = [...current];
+    updated[existingIdx] = model;
+  } else {
+    updated = [...current, model];
+  }
+  cachedCustomModels = updated;
+  safeLocalStorageSet(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(updated));
+  syncCustomModelsToCloud(updated).catch(() => {});
+  return updated;
+}
+
+export function deleteCustomBatteryModel(id: string): CustomBatteryModel[] {
+  const current = getCustomBatteryModels();
+  const updated = current.filter((m) => m.id !== id);
+  cachedCustomModels = updated;
+  safeLocalStorageSet(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(updated));
+  syncCustomModelsToCloud(updated).catch(() => {});
+  return updated;
+}
+
+export async function fetchCustomModelsFromCloud(): Promise<CustomBatteryModel[]> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return getCustomBatteryModels();
+    const { data } = await sb
+      .from('dispatch_lots')
+      .select('*')
+      .eq('id', 'tata-wms-custom-models')
+      .maybeSingle();
+
+    if (data && data.notes) {
+      const parsed = JSON.parse(data.notes);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        cachedCustomModels = parsed;
+        safeLocalStorageSet(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(parsed));
+        return parsed;
+      }
+    }
+  } catch {}
+  return getCustomBatteryModels();
+}
+
+export async function syncCustomModelsToCloud(models: CustomBatteryModel[]): Promise<boolean> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return false;
+    await sb.from('dispatch_lots').upsert(
+      {
+        id: 'tata-wms-custom-models',
+        lot_number: 'CUSTOM-MODELS-REGISTRY',
+        timestamp: new Date().toISOString(),
+        consignee_name: 'CUSTOM_PACK_TYPES',
+        consignee_address: 'WMS Model Registry',
+        notes: JSON.stringify(models),
+        packs: [],
+        pack_count: models.length,
+        status: 'DISPATCHED',
+        transport_name: 'Internal Registry',
+      },
+      { onConflict: 'id' }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getAllBatteryModelOptions(): {
+  id: string;
+  name: string;
+  shortCode: string;
+  category: string;
+  badgeBg: string;
+  color: string;
+  isCustom?: boolean;
+}[] {
+  const custom = getCustomBatteryModels();
+  const standard = ALL_PACK_TYPES.map((pt) => {
+    const m = BATTERY_MODELS[pt as BatteryPackType];
+    return {
+      id: pt,
+      name: m?.name || pt,
+      shortCode: m?.shortCode || pt,
+      category: m?.category || 'Standard',
+      badgeBg: m?.badgeBg || 'bg-slate-100 text-slate-800 border-slate-300',
+      color: m?.color || '#2563eb',
+      isCustom: false,
+    };
+  });
+  const customConverted = custom.map((c) => ({
+    id: c.id,
+    name: c.name,
+    shortCode: c.shortCode,
+    category: c.category || 'Custom Series',
+    badgeBg: c.badgeBg || 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    color: c.color || '#6366f1',
+    isCustom: true,
+  }));
+  return [...standard, ...customConverted];
+}

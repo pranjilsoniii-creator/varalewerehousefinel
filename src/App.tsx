@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
+import { RazorpayLayout } from './components/RazorpayLayout';
+import { ShiftChatView } from './components/ShiftChatView';
+import { CustomPackManagerView } from './components/CustomPackManagerView';
+import {
+  initLocalChat,
+  subscribeToShiftChat,
+  getUnreadShiftMessagesCount,
+  markShiftChatAsRead,
+} from './lib/shiftChatService';
 import { DashboardView } from './components/DashboardView';
 import { InwardScanner } from './components/InwardScanner';
 import { InwardRegisterView } from './components/InwardRegisterView';
@@ -74,6 +83,8 @@ function getTabFromPath(path: string): string {
   if (cleanPath === 'dispatch' || cleanPath === 'dispatch-staging') return 'DISPATCH_CART';
   if (cleanPath === 'analytics' || cleanPath === 'reports') return 'ANALYTICS';
   if (cleanPath === 'daily-stock' || cleanPath === 'daily-stock-maintenance' || cleanPath === 'stock-maintenance') return 'DAILY_STOCK';
+  if (cleanPath === 'chat' || cleanPath === 'shift-chat' || cleanPath === 'operations-chat') return 'SHIFT_CHAT';
+  if (cleanPath === 'custom-packs' || cleanPath === 'pack-types' || cleanPath === 'custom-models' || cleanPath === 'models') return 'CUSTOM_PACKS';
   return 'DASHBOARD';
 }
 
@@ -187,6 +198,27 @@ export function App() {
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+
+  // Shift chat real-time notification & unread count badge
+  useEffect(() => {
+    initLocalChat().then((msgs) => {
+      setUnreadChatCount(getUnreadShiftMessagesCount(msgs));
+    });
+    const unsubscribe = subscribeToShiftChat(() => {
+      if (activeTab !== 'SHIFT_CHAT') {
+        setUnreadChatCount((prev) => prev + 1);
+      }
+    });
+    return () => unsubscribe();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'SHIFT_CHAT') {
+      markShiftChatAsRead();
+      setUnreadChatCount(0);
+    }
+  }, [activeTab]);
 
   // Handle URL changes & browser back/forward buttons
   useEffect(() => {

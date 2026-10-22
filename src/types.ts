@@ -1,4 +1,4 @@
-export type BatteryPackType =
+export type StandardBatteryPackType =
   | 'Kanger1.0_AIO'
   | 'Kanger1.0_AIO_Ais'
   | 'Kanger1.0_Gen3'
@@ -16,6 +16,46 @@ export type BatteryPackType =
   | 'Challenger_MR'
   | 'Limber_Ais'
   | 'Limber_Non_Ais';
+
+export type BatteryPackType = StandardBatteryPackType | (string & {});
+
+export interface CustomBatteryModel {
+  id: string;
+  name: string;
+  shortCode: string;
+  category: string;
+  color: string;
+  badgeBg: string;
+  borderColor: string;
+  description?: string;
+  energyKwh?: string;
+  hsnCode?: string;
+  nominalVoltage?: string;
+  capacityAh?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface ShiftChatAttachment {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  fileDataUrl?: string;
+  fileExpiresAt: string;
+  isExpiredInCloud?: boolean;
+}
+
+export interface ShiftChatMessage {
+  id: string;
+  senderUsername: string;
+  senderName: string;
+  senderRole: UserRole;
+  message: string;
+  createdAt: string;
+  expiresAt: string;
+  fileAttachment?: ShiftChatAttachment;
+  systemNote?: boolean;
+}
 
 export type UserRole = 'superadmin' | 'manager' | 'supervisor' | 'employee';
 
@@ -93,7 +133,8 @@ export interface BatteryPack {
   challanPackNumber?: string;         // Serial number stated on delivery challan / invoice
   secondaryStickerNumber?: string;    // Second barcode sticker number (for packs with 2 serial numbers)
   mismatchReason?: string;            // Notes on serial discrepancy
-  sourceType?: 'INWARD' | 'LINE_POPULATE' | 'DIRECT_DISPATCH'; // Source: Inward Dock vs Direct Line Matrix vs Fast Direct Dispatch
+  sourceType?: 'INWARD' | 'LINE_POPULATE' | 'DIRECT_DISPATCH';
+  scannedAt?: string; // Source: Inward Dock vs Direct Line Matrix vs Fast Direct Dispatch
 
   // 7-Day Auto Reconciliation (For Direct Fast Dispatch before Inward)
   pendingInwardReconciliation?: boolean;
