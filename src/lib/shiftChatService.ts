@@ -235,12 +235,13 @@ export async function sendShiftMessage(params: {
       await sb.from('dispatch_lots').upsert(row, { onConflict: 'id' });
 
       // Realtime Broadcast to all connected clients
-      const channel = sb.channel('warehouse-shift-chat-realtime');
-      channel.send({
-        type: 'broadcast',
-        event: 'NEW_SHIFT_MESSAGE',
-        payload: newMessage,
-      });
+      if (activeShiftChatChannel) {
+        activeShiftChatChannel.send({
+          type: 'broadcast',
+          event: 'NEW_SHIFT_MESSAGE',
+          payload: newMessage,
+        });
+      }
     } catch (err) {
       console.warn('[ShiftChat] Error syncing message to cloud:', err);
     }
@@ -249,48 +250,85 @@ export async function sendShiftMessage(params: {
   return newMessage;
 }
 
+// Single Global Realtime Subscription Hub (Prevents duplicate channel and .on() after subscribe errors)
+const chatListeners = new Set<(msg: ShiftChatMessage) => void>();
+let activeShiftChatChannel: any = null;
+
+function ensureShiftChatSubscribed() {
+  const sb = getSupabase();
+  if (!sb || activeShiftChatChannel) return;
+
+  try {
+    const channelTopic = 'warehouse-shift-chat-hub-' + Date.now();
+    activeShiftChatChannel = sb
+      .channel(channelTopic)
+      .on('broadcast', { event: 'NEW_SHIFT_MESSAGE' }, (payload: any) => {
+        if (payload && payload.payload && payload.payload.id) {
+          const incoming: ShiftChatMessage = payload.payload;
+          if (!localChatMemory.some((m) => m && m.id === incoming.id)) {
+            const updated = [...localChatMemory, incoming];
+            persistLocalMessages(updated);
+            chatListeners.forEach((listener) => {
+              try {
+                listener(incoming);
+              } catch (e) {
+                console.warn('[ShiftChat] Listener error:', e);
+              }
+            });
+          }
+        }
+      })
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'dispatch_lots' },
+        (payload: any) => {
+          if (payload && payload.new && payload.new.consignee_name === 'SHIFT_CHAT_MESSAGE' && payload.new.notes) {
+            try {
+              const parsed: ShiftChatMessage = JSON.parse(payload.new.notes);
+              if (parsed && parsed.id && !localChatMemory.some((m) => m && m.id === parsed.id)) {
+                const updated = [...localChatMemory, parsed];
+                persistLocalMessages(updated);
+                chatListeners.forEach((listener) => {
+                  try {
+                    listener(parsed);
+                  } catch (e) {
+                    console.warn('[ShiftChat] Listener error:', e);
+                  }
+                });
+              }
+            } catch {}
+          }
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn('[ShiftChat] Subscription init error:', err);
+    activeShiftChatChannel = null;
+  }
+}
+
 /**
  * Subscribe to Live Real-Time Shift Messages across warehouse devices
  */
 export function subscribeToShiftChat(
   onNewMessage: (msg: ShiftChatMessage) => void
 ): () => void {
-  const sb = getSupabase();
-  if (!sb) return () => {};
-
-  const channel = sb
-    .channel('warehouse-shift-chat-realtime')
-    .on('broadcast', { event: 'NEW_SHIFT_MESSAGE' }, (payload: any) => {
-      if (payload && payload.payload && payload.payload.id) {
-        const incoming: ShiftChatMessage = payload.payload;
-        // Check if already in local
-        if (!localChatMemory.some((m) => m.id === incoming.id)) {
-          const updated = [...localChatMemory, incoming];
-          persistLocalMessages(updated);
-          onNewMessage(incoming);
-        }
-      }
-    })
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'dispatch_lots' },
-      (payload: any) => {
-        if (payload.new && payload.new.consignee_name === 'SHIFT_CHAT_MESSAGE' && payload.new.notes) {
-          try {
-            const parsed: ShiftChatMessage = JSON.parse(payload.new.notes);
-            if (parsed && parsed.id && !localChatMemory.some((m) => m.id === parsed.id)) {
-              const updated = [...localChatMemory, parsed];
-              persistLocalMessages(updated);
-              onNewMessage(parsed);
-            }
-          } catch {}
-        }
-      }
-    )
-    .subscribe();
+  chatListeners.add(onNewMessage);
+  ensureShiftChatSubscribed();
 
   return () => {
-    sb.removeChannel(channel);
+    chatListeners.delete(onNewMessage);
+    if (chatListeners.size === 0 && activeShiftChatChannel) {
+      try {
+        const sb = getSupabase();
+        if (sb) {
+          sb.removeChannel(activeShiftChatChannel);
+        }
+      } catch (e) {
+        console.warn('[ShiftChat] Error removing channel:', e);
+      }
+      activeShiftChatChannel = null;
+    }
   };
 }
 
