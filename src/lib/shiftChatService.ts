@@ -10,7 +10,7 @@
  */
 
 import { getSupabase } from './supabaseClient';
-import { ShiftChatMessage, ShiftChatAttachment, UserRole } from '../types';
+import { ShiftChatMessage, ShiftChatAttachment, UserRole, ShiftChatPackShare, ShiftChatTableData, ShiftCallSignal, ShiftChatScope } from '../types';
 import { safeLocalStorageGet, safeLocalStorageSet, saveToIndexedDB, loadFromIndexedDB } from '../utils/safeStorage';
 
 export const MESSAGE_TTL_MS = 8 * 60 * 60 * 1000; // 8 Hours
@@ -181,6 +181,12 @@ export async function sendShiftMessage(params: {
     fileSize: number;
     fileDataUrl?: string;
   };
+  scope?: ShiftChatScope;
+  channelId?: string;
+  recipientUsername?: string;
+  recipientName?: string;
+  packShare?: ShiftChatPackShare;
+  tableData?: ShiftChatTableData;
 }): Promise<ShiftChatMessage> {
   const now = new Date();
   const createdAt = now.toISOString();
@@ -200,10 +206,16 @@ export async function sendShiftMessage(params: {
     senderUsername: params.senderUsername,
     senderName: params.senderName,
     senderRole: params.senderRole,
-    message: params.message.trim(),
+    message: (params.message || '').trim(),
     createdAt,
     expiresAt,
     fileAttachment: attachment,
+    scope: params.scope || 'CHANNEL',
+    channelId: params.channelId || (params.scope === 'DIRECT' ? undefined : 'general'),
+    recipientUsername: params.recipientUsername,
+    recipientName: params.recipientName,
+    packShare: params.packShare,
+    tableData: params.tableData,
   };
 
   // 1. Immediately store in local memory and IndexedDB
@@ -352,4 +364,127 @@ export function getUnreadShiftMessagesCount(messages: ShiftChatMessage[]): numbe
  */
 export function markShiftChatAsRead(): void {
   safeLocalStorageSet(CHAT_LAST_READ_KEY, new Date().toISOString());
+}
+
+/**
+ * Delete a Shift Message (soft delete with 'This message was deleted')
+ */
+export async function deleteShiftMessage(messageId: string): Promise<boolean> {
+  localChatMemory = localChatMemory.map((m) => {
+    if (m.id === messageId) {
+      return {
+        ...m,
+        isDeleted: true,
+        message: 'This message was deleted',
+        fileAttachment: undefined,
+        packShare: undefined,
+        tableData: undefined,
+      };
+    }
+    return m;
+  });
+  await persistLocalMessages(localChatMemory);
+
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const target = localChatMemory.find((m) => m.id === messageId);
+      if (target) {
+        await sb
+          .from('dispatch_lots')
+          .update({ notes: JSON.stringify(target) })
+          .eq('id', messageId);
+      }
+
+      if (activeShiftChatChannel) {
+        activeShiftChatChannel.send({
+          type: 'broadcast',
+          event: 'SHIFT_MESSAGE_DELETED',
+          payload: { messageId },
+        });
+      }
+    } catch (err) {
+      console.warn('[ShiftChat] Error deleting message:', err);
+    }
+  }
+  return true;
+}
+
+/**
+ * Parses tab-separated or table paste data copied from Microsoft Excel / Google Sheets
+ */
+export function parseExcelPaste(text: string): ShiftChatTableData | null {
+  if (!text || typeof text !== 'string') return null;
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 1) return null;
+
+  const hasTabs = lines.some((l) => l.includes('\t'));
+  const separator = hasTabs ? '\t' : (lines[0].includes(',') && lines.length > 1 ? ',' : null);
+  if (!separator) return null;
+
+  const matrix = lines.map((l) => l.split(separator).map((c) => c.trim()));
+  if (matrix.length < 1 || matrix[0].length < 2) return null;
+
+  const headers = matrix[0];
+  const rows = matrix.slice(1);
+  return { headers, rows };
+}
+
+// ==========================================
+// REALTIME WEBRTC CALL SIGNALING (MICROSOFT TEAMS STYLE)
+// ==========================================
+let activeCallChannel: any = null;
+const callListeners = new Set<(signal: ShiftCallSignal) => void>();
+
+export function subscribeToCallSignals(onSignal: (signal: ShiftCallSignal) => void): () => void {
+  callListeners.add(onSignal);
+
+  const sb = getSupabase();
+  if (sb && !activeCallChannel) {
+    try {
+      activeCallChannel = sb
+        .channel('warehouse-shift-call-signals-' + Date.now())
+        .on('broadcast', { event: 'CALL_SIGNAL' }, (payload: any) => {
+          if (payload && payload.payload) {
+            const sig: ShiftCallSignal = payload.payload;
+            callListeners.forEach((l) => {
+              try { l(sig); } catch (e) {}
+            });
+          }
+        })
+        .subscribe();
+    } catch (e) {
+      console.warn('[ShiftCall] Call channel setup error:', e);
+    }
+  }
+
+  return () => {
+    callListeners.delete(onSignal);
+    if (callListeners.size === 0 && activeCallChannel && sb) {
+      try {
+        sb.removeChannel(activeCallChannel);
+      } catch (e) {}
+      activeCallChannel = null;
+    }
+  };
+}
+
+export async function sendCallSignal(signal: ShiftCallSignal): Promise<void> {
+  const sb = getSupabase();
+  if (sb) {
+    if (!activeCallChannel) {
+      subscribeToCallSignals(() => {});
+    }
+    try {
+      if (activeCallChannel) {
+        activeCallChannel.send({
+          type: 'broadcast',
+          event: 'CALL_SIGNAL',
+          payload: signal,
+        });
+      }
+    } catch (e) {
+      console.warn('[ShiftCall] Error broadcasting call signal:', e);
+    }
+  }
 }

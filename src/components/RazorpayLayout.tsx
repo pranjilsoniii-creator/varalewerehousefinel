@@ -28,6 +28,8 @@ import {
   Shield,
   ChevronRight,
   Radio,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getCustomBatteryModels } from '../data/batteryCatalog';
@@ -75,6 +77,7 @@ export const RazorpayLayout: React.FC<RazorpayLayoutProps> = ({
   onOpenMobileDrawer,
   onOpenSuperSearch,
 }) => {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { currentUser, isSuperAdmin, isManager, isSupervisor, hasPermission, isMaintenanceMode, setMaintenanceMode, logout } = useAuth();
   const [customModelsCount, setCustomModelsCount] = useState<number>(0);
 
@@ -228,6 +231,16 @@ export const RazorpayLayout: React.FC<RazorpayLayoutProps> = ({
                 aria-label="Open navigation menu"
               >
                 <Menu className="w-5 h-5" />
+              </button>
+
+              {/* Desktop Sidebar Collapse Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className="hidden lg:flex p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                title={isSidebarCollapsed ? "Show Sidebar Menu" : "Hide Sidebar Menu (Full Screen View)"}
+              >
+                {isSidebarCollapsed ? <PanelLeftOpen className="w-5 h-5 text-blue-400" /> : <PanelLeftClose className="w-5 h-5" />}
               </button>
 
               {/* TATA Brand Logo */}
@@ -407,7 +420,7 @@ export const RazorpayLayout: React.FC<RazorpayLayoutProps> = ({
       <div className="flex-1 flex overflow-hidden">
         
         {/* DESKTOP LEFT SIDEBAR (Razorpay Dashboard Architecture) */}
-        <aside className="hidden lg:flex w-64 flex-col bg-white border-r border-slate-200 shrink-0 h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] sticky top-14 sm:top-16 select-none overflow-y-auto">
+        <aside className={`hidden lg:flex ${isSidebarCollapsed ? 'w-0 overflow-hidden border-none' : 'w-64'} flex-col transition-all duration-200 bg-white border-r border-slate-200 shrink-0 h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] sticky top-14 sm:top-16 select-none overflow-y-auto`}>
           
           <div className="p-3 space-y-6 flex-1">
             

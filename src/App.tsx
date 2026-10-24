@@ -1269,7 +1269,11 @@ export function App() {
 
         {/* 8-Hour Shift Operations Team Chat */}
         {activeTab === 'SHIFT_CHAT' && (
-          <ShiftChatView onUnreadChange={(cnt) => setUnreadChatCount(cnt)} />
+          <ShiftChatView
+            packs={packs}
+            onUnreadChange={(cnt) => setUnreadChatCount(cnt)}
+            onOpenJanamkundli={(packNo) => handleOpenSuperSearch(packNo)}
+          />
         )}
 
         {/* Dynamic Battery Pack Name & Pack Type Catalog Manager */}

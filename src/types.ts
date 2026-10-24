@@ -45,6 +45,32 @@ export interface ShiftChatAttachment {
   isExpiredInCloud?: boolean;
 }
 
+export type ShiftChatScope = 'DIRECT' | 'CHANNEL';
+
+export interface ShiftChatPackShare {
+  packNumber: string;
+  serialNumber?: string;
+  packType: string;
+  status: string;
+  line?: string;
+  rack?: string;
+  location?: string;
+  voltage?: number;
+  soc?: number;
+  soh?: number;
+  inwardDate?: string;
+  sourceType?: string;
+  supplierName?: string;
+  documentNo?: string;
+  remark?: string;
+}
+
+export interface ShiftChatTableData {
+  headers: string[];
+  rows: string[][];
+  caption?: string;
+}
+
 export interface ShiftChatMessage {
   id: string;
   senderUsername: string;
@@ -55,6 +81,31 @@ export interface ShiftChatMessage {
   expiresAt: string;
   fileAttachment?: ShiftChatAttachment;
   systemNote?: boolean;
+
+  // Microsoft Teams Style Direct & Channel Messaging
+  scope?: ShiftChatScope; // 'DIRECT' | 'CHANNEL' (default is 'CHANNEL')
+  channelId?: string;     // e.g. 'general', 'inward', 'dispatch', 'supervisors'
+  recipientUsername?: string; // For 1-on-1 private direct chat (e.g. 'Sureshchavan')
+  recipientName?: string;
+  isDeleted?: boolean;
+
+  // Rich Pack Share Card
+  packShare?: ShiftChatPackShare;
+
+  // Excel / Spreadsheet Pasted Table
+  tableData?: ShiftChatTableData;
+}
+
+export interface ShiftCallSignal {
+  id: string;
+  type: 'OFFER' | 'ANSWER' | 'CANDIDATE' | 'END' | 'REJECT' | 'BUSY';
+  callerUsername: string;
+  callerName: string;
+  recipientUsername: string;
+  isVideo: boolean;
+  sdp?: any;
+  candidate?: any;
+  timestamp: string;
 }
 
 export type UserRole = 'superadmin' | 'manager' | 'supervisor' | 'employee';
