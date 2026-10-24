@@ -106,6 +106,10 @@ function getPathFromTab(tab: string): string {
       return '/analytics';
     case 'DAILY_STOCK':
       return '/daily-stock';
+    case 'SHIFT_CHAT':
+      return '/shift-chat';
+    case 'CUSTOM_PACKS':
+      return '/custom-packs';
     default:
       return '/dashboard';
   }
@@ -1130,14 +1134,19 @@ export function App() {
       {/* Real-time Network Reconnection & Offline Sync Toast */}
       <OfflineSyncToast />
 
-      {/* Executive White Header Navbar */}
-      <Navbar
+      {/* Razorpay Executive Dashboard Layout (Dark Top Bar + Left Sidebar on Desktop) */}
+      <RazorpayLayout
         activeTab={activeTab}
         onTabChange={handleTabChange}
         inwardPacksCount={packs.filter((p) => p.sourceType !== 'LINE_POPULATE' && p.sourceType !== 'DIRECT_DISPATCH' && p.documentNo !== 'DIRECT-DISPATCH').length}
         totalStockCount={packs.filter((p) => p.status !== 'DISPATCHED').length}
         cartPacksCount={stagedCartPacks.length}
         dispatchedLotsCount={dispatchLots.length}
+        unreadChatCount={unreadChatCount}
+        isCloudConnected={isCloudConnected}
+        isCloudSyncing={isCloudSyncing}
+        lastSyncTime={lastSyncTime}
+        onRefreshCloud={refreshFromCloud}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenUserManagementModal={() => setIsUserManagementModalOpen(true)}
@@ -1145,7 +1154,7 @@ export function App() {
         onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
         onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
         onOpenSuperSearch={() => handleOpenSuperSearch()}
-      />
+      >
 
       {/* Dynamic Personalized Greeting & Live Realtime Cloud Sync Banner */}
       <div className="no-print">
@@ -1257,7 +1266,18 @@ export function App() {
             onDeleteDailyStockRecord={handleDeleteDailyStockRecord}
           />
         )}
+
+        {/* 8-Hour Shift Operations Team Chat */}
+        {activeTab === 'SHIFT_CHAT' && (
+          <ShiftChatView onUnreadChange={(cnt) => setUnreadChatCount(cnt)} />
+        )}
+
+        {/* Dynamic Battery Pack Name & Pack Type Catalog Manager */}
+        {activeTab === 'CUSTOM_PACKS' && (
+          <CustomPackManagerView />
+        )}
       </main>
+      </RazorpayLayout>
 
       {/* 1-Thumb Native Mobile Bottom Navigation Bar */}
       <div className="no-print">

@@ -81,7 +81,7 @@ export const RazorpayLayout: React.FC<RazorpayLayoutProps> = ({
   useEffect(() => {
     try {
       const customs = getCustomBatteryModels();
-      setCustomModelsCount(customs.length);
+      setCustomModelsCount(Array.isArray(customs) ? customs.length : 0);
     } catch {}
   }, [activeTab]);
 
@@ -99,10 +99,11 @@ export const RazorpayLayout: React.FC<RazorpayLayoutProps> = ({
 
   // User initials for Razorpay-style circle avatar (e.g. JS, SA, SU)
   const getUserInitials = (name?: string): string => {
-    if (!name) return 'TA';
-    const parts = name.trim().split(/\s+/);
+    if (!name || typeof name !== 'string') return 'TA';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'TA';
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return ((parts[0][0] || 'T') + (parts[parts.length - 1][0] || 'A')).toUpperCase();
   };
 
   const initials = getUserInitials(currentUser?.name || currentUser?.username);

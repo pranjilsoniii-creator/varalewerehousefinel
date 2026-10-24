@@ -99,9 +99,10 @@ export const ShiftChatView: React.FC<ShiftChatViewProps> = ({ onUnreadChange }) 
 
   // Filter messages based on active shift vs full history
   const displayedMessages = React.useMemo(() => {
+    if (!Array.isArray(messages)) return [];
     if (viewMode === 'LOCAL_HISTORY') return messages;
     const eightHoursAgo = Date.now() - MESSAGE_TTL_MS;
-    return messages.filter((m) => new Date(m.createdAt).getTime() > eightHoursAgo);
+    return messages.filter((m) => m && m.createdAt && new Date(m.createdAt).getTime() > eightHoursAgo);
   }, [messages, viewMode]);
 
   // Handle file select (up to 10 MB)

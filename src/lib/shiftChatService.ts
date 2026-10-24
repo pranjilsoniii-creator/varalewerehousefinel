@@ -299,10 +299,11 @@ export function subscribeToShiftChat(
  */
 export function getUnreadShiftMessagesCount(messages: ShiftChatMessage[]): number {
   try {
+    if (!messages || !Array.isArray(messages)) return 0;
     const lastRead = safeLocalStorageGet(CHAT_LAST_READ_KEY);
     if (!lastRead) return messages.length;
     const lastReadTime = new Date(lastRead).getTime();
-    return messages.filter((m) => new Date(m.createdAt).getTime() > lastReadTime).length;
+    return messages.filter((m) => m && m.createdAt && new Date(m.createdAt).getTime() > lastReadTime).length;
   } catch {
     return 0;
   }
